@@ -412,13 +412,28 @@ const MapPage = ({ accessToken, user }) => {
         const infoWindow = new window.google.maps.InfoWindow({
           content: createInfoWindowContent(userId, location),
           pixelOffset: new window.google.maps.Size(0, -40),
+          disableAutoPan: false,
         });
 
         marker.addListener('click', () => {
           console.log('Marker clicked:', userId);
-          // Close all other info windows
-          Object.values(markers).forEach(m => m.infoWindow && m.infoWindow.close());
+          
+          // Close the currently active info window
+          if (activeInfoWindow) {
+            activeInfoWindow.close();
+          }
+          
+          // Open new info window and set as active
           infoWindow.open(map, marker);
+          setActiveInfoWindow(infoWindow);
+        });
+
+        // Close info window when map is clicked
+        window.google.maps.event.addListener(map, 'click', () => {
+          if (activeInfoWindow) {
+            activeInfoWindow.close();
+            setActiveInfoWindow(null);
+          }
         });
 
         setMarkers((prev) => {
