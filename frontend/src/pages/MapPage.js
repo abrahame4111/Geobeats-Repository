@@ -710,6 +710,18 @@ const MapPage = ({ accessToken, user }) => {
     );
   };
 
+  const changeMapTheme = (theme) => {
+    setMapTheme(theme);
+    localStorage.setItem('mapTheme', theme);
+    
+    // Update map style
+    if (map && window.google && window.google.maps) {
+      map.setOptions({ styles: MAP_THEMES[theme] || MAP_THEMES[DEFAULT_THEME] });
+    }
+    
+    setShowThemeSelector(false);
+  };
+
   const toggleLocationSharing = () => {
     console.log('Toggle button clicked. Current state:', locationEnabled);
     
