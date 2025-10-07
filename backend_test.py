@@ -35,7 +35,7 @@ class WebSocketTester:
             for uri in uris_to_try:
                 try:
                     print(f"🔗 Attempting to connect {user_id} to {uri}")
-                    websocket = await websockets.connect(uri, timeout=10)
+                    websocket = await websockets.connect(uri)
                     self.connections[user_id] = websocket
                     self.received_messages[user_id] = []
                     print(f"✅ {user_id} connected successfully to {uri}")
