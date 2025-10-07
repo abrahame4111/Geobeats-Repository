@@ -229,12 +229,20 @@ const MapPage = ({ accessToken, user }) => {
   };
 
   const updateMarker = (userId, location) => {
-    if (!map) return;
+    console.log('updateMarker called for:', userId, 'isCurrentUser:', userId === user.id);
+    console.log('Location data:', location);
+    console.log('Map exists:', !!map);
+    
+    if (!map) {
+      console.error('Map not ready, cannot create marker');
+      return;
+    }
 
     const position = { lat: location.lat, lng: location.lng };
     const isCurrentUser = userId === user.id;
 
     if (markers[userId]) {
+      console.log('Updating existing marker for:', userId);
       // Smooth marker transition
       markers[userId].marker.setPosition(position);
       
