@@ -16,6 +16,7 @@ const MapPage = ({ accessToken, user }) => {
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [mapsKey, setMapsKey] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
+  const [activeInfoWindow, setActiveInfoWindow] = useState(null);
 
   // Load Google Maps API key and user profile
   useEffect(() => {
