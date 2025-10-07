@@ -454,10 +454,13 @@ const MapPage = ({ accessToken, user }) => {
 
         // Create music label overlay if playing
         let musicLabel = null;
-        if (location.current_track) {
-          const labelDiv = createMusicLabel(location.current_track.name, markerColor);
-          musicLabel = new MusicLabel(position, labelDiv);
-          musicLabel.setMap(map);
+        if (location.current_track && window.google && window.google.maps) {
+          const MusicLabel = createMusicLabelClass();
+          if (MusicLabel) {
+            const labelDiv = createMusicLabel(location.current_track.name, markerColor);
+            musicLabel = new MusicLabel(position, labelDiv);
+            musicLabel.setMap(map);
+          }
         }
 
         // Create info window
