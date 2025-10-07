@@ -337,102 +337,103 @@ const MapPage = ({ accessToken, user }) => {
 
         console.log('Marker created with profile image:', profileImage);
 
-      // Create custom overlay for the music label above marker
-      if (location.current_track) {
-        const labelDiv = document.createElement('div');
-        labelDiv.style.cssText = `
-          position: absolute;
-          background: rgba(0, 0, 0, 0.9);
-          color: white;
-          padding: 6px 12px;
-          border-radius: 16px;
-          font-size: 12px;
-          font-weight: 600;
-          white-space: nowrap;
-          pointer-events: none;
-          transform: translate(-50%, -100%);
-          margin-top: -35px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-          border: 1px solid ${markerColor};
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          max-width: 250px;
-          overflow: hidden;
-        `;
-        
-        labelDiv.innerHTML = `
-          <span style="font-size: 14px;">🎵</span>
-          <span style="overflow: hidden; text-overflow: ellipsis;">${location.current_track.name}</span>
-        `;
+        // Create custom overlay for the music label above marker
+        if (location.current_track) {
+          const labelDiv = document.createElement('div');
+          labelDiv.style.cssText = `
+            position: absolute;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            margin-top: -40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            border: 1px solid ${markerColor};
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            max-width: 250px;
+            overflow: hidden;
+          `;
+          
+          labelDiv.innerHTML = `
+            <span style="font-size: 14px;">🎵</span>
+            <span style="overflow: hidden; text-overflow: ellipsis;">${location.current_track.name}</span>
+          `;
 
-        // Create custom overlay
-        class MusicLabel extends window.google.maps.OverlayView {
-          constructor(position, element) {
-            super();
-            this.position = position;
-            this.element = element;
-          }
+          // Create custom overlay
+          class MusicLabel extends window.google.maps.OverlayView {
+            constructor(position, element) {
+              super();
+              this.position = position;
+              this.element = element;
+            }
 
-          onAdd() {
-            const panes = this.getPanes();
-            panes.floatPane.appendChild(this.element);
-          }
+            onAdd() {
+              const panes = this.getPanes();
+              panes.floatPane.appendChild(this.element);
+            }
 
-          draw() {
-            const projection = this.getProjection();
-            const point = projection.fromLatLngToDivPixel(this.position);
-            if (point) {
-              this.element.style.left = point.x + 'px';
-              this.element.style.top = point.y + 'px';
+            draw() {
+              const projection = this.getProjection();
+              const point = projection.fromLatLngToDivPixel(this.position);
+              if (point) {
+                this.element.style.left = point.x + 'px';
+                this.element.style.top = point.y + 'px';
+              }
+            }
+
+            onRemove() {
+              if (this.element.parentNode) {
+                this.element.parentNode.removeChild(this.element);
+              }
+            }
+
+            setPosition(newPosition) {
+              this.position = newPosition;
+              this.draw();
             }
           }
 
-          onRemove() {
-            if (this.element.parentNode) {
-              this.element.parentNode.removeChild(this.element);
-            }
-          }
-
-          setPosition(newPosition) {
-            this.position = newPosition;
-            this.draw();
-          }
+          const musicLabel = new MusicLabel(position, labelDiv);
+          musicLabel.setMap(map);
+          
+          // Store the label with the marker
+          marker.musicLabel = musicLabel;
         }
 
-        const musicLabel = new MusicLabel(position, labelDiv);
-        musicLabel.setMap(map);
+        // Simplified info window - just song details
+        const infoWindow = new window.google.maps.InfoWindow({
+          content: createInfoWindowContent(userId, location),
+          pixelOffset: new window.google.maps.Size(0, -40),
+        });
+
+        marker.addListener('click', () => {
+          console.log('Marker clicked:', userId);
+          // Close all other info windows
+          Object.values(markers).forEach(m => m.infoWindow && m.infoWindow.close());
+          infoWindow.open(map, marker);
+        });
+
+        setMarkers((prev) => {
+          const newMarkers = {
+            ...prev,
+            [userId]: {
+              marker: marker,
+              infoWindow: infoWindow,
+            },
+          };
+          console.log('Markers state updated, total markers:', Object.keys(newMarkers).length);
+          return newMarkers;
+        });
         
-        // Store the label with the marker
-        marker.musicLabel = musicLabel;
-      }
-
-      // Simplified info window - just song details
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: createInfoWindowContent(userId, location),
-        pixelOffset: new window.google.maps.Size(0, -35),
+        console.log('✅ Marker successfully created and added to map');
       });
-
-      marker.addListener('click', () => {
-        console.log('Marker clicked:', userId);
-        // Close all other info windows
-        Object.values(markers).forEach(m => m.infoWindow && m.infoWindow.close());
-        infoWindow.open(map, marker);
-      });
-
-      setMarkers((prev) => {
-        const newMarkers = {
-          ...prev,
-          [userId]: {
-            marker: marker,
-            infoWindow: infoWindow,
-          },
-        };
-        console.log('Markers state updated, total markers:', Object.keys(newMarkers).length);
-        return newMarkers;
-      });
-      
-      console.log('✅ Marker successfully created and added to map');
     }
   };
 
