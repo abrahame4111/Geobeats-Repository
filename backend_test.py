@@ -26,17 +26,28 @@ class WebSocketTester:
     async def connect_user(self, user_id):
         """Connect a user to WebSocket"""
         try:
-            uri = f"{WS_URL}/ws/{user_id}"
-            print(f"🔗 Connecting {user_id} to {uri}")
+            # Try both /ws/{user_id} and /api/ws/{user_id} endpoints
+            uris_to_try = [
+                f"{WS_URL}/ws/{user_id}",
+                f"{WS_URL}/api/ws/{user_id}"
+            ]
             
-            websocket = await websockets.connect(uri)
-            self.connections[user_id] = websocket
-            self.received_messages[user_id] = []
+            for uri in uris_to_try:
+                try:
+                    print(f"🔗 Attempting to connect {user_id} to {uri}")
+                    websocket = await websockets.connect(uri, timeout=10)
+                    self.connections[user_id] = websocket
+                    self.received_messages[user_id] = []
+                    print(f"✅ {user_id} connected successfully to {uri}")
+                    return True
+                except Exception as e:
+                    print(f"❌ Failed to connect {user_id} to {uri}: {e}")
+                    continue
             
-            print(f"✅ {user_id} connected successfully")
-            return True
+            print(f"❌ Failed to connect {user_id} to any WebSocket endpoint")
+            return False
         except Exception as e:
-            print(f"❌ Failed to connect {user_id}: {e}")
+            print(f"❌ Unexpected error connecting {user_id}: {e}")
             return False
     
     async def listen_for_messages(self, user_id, duration=5):
