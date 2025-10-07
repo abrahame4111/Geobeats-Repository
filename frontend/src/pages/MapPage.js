@@ -183,6 +183,29 @@ const MapPage = ({ accessToken, user }) => {
     };
   }, [user]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Close all info windows
+      if (activeInfoWindow) {
+        activeInfoWindow.close();
+      }
+      
+      // Remove all markers and overlays
+      Object.values(markers).forEach(markerData => {
+        if (markerData.marker) {
+          markerData.marker.setMap(null);
+        }
+        if (markerData.infoWindow) {
+          markerData.infoWindow.close();
+        }
+        if (markerData.musicLabel) {
+          markerData.musicLabel.setMap(null);
+        }
+      });
+    };
+  }, [markers, activeInfoWindow]);
+
   const connectWebSocket = () => {
     const ws = new WebSocket(`${WS_URL}/ws/${user.id}`);
 
