@@ -184,16 +184,23 @@ async def spotify_callback(code: str = Query(...)):
                 upsert=True
             )
             
-            return {
+            # Redirect to frontend with tokens
+            from fastapi.responses import RedirectResponse
+            from urllib.parse import urlencode
+            
+            # Create query parameters with auth data
+            auth_params = {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
-                "expires_in": expires_in,
-                "user": {
-                    "id": profile["id"],
-                    "name": profile.get("display_name"),
-                    "email": profile.get("email")
-                }
+                "expires_in": str(expires_in),
+                "user_id": profile["id"],
+                "user_name": profile.get("display_name", ""),
+                "user_email": profile.get("email", "")
             }
+            
+            # Redirect to frontend login page with auth data
+            redirect_url = f"/?{urlencode(auth_params)}"
+            return RedirectResponse(url=redirect_url)
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
