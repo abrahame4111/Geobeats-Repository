@@ -123,15 +123,18 @@ backend:
 frontend:
   - task: "WebSocket Connection and Message Handling" 
     implemented: true
-    working: false
+    working: true
     file: "MapPage.js"
-    stuck_count: 1
+    stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "WebSocket connection logic exists with handleLocationUpdate for initial_locations and location_update messages. User ID generation appears correct using Spotify ID. Need to verify message handling and marker updates for multiple users."
+      - working: true
+        agent: "main"
+        comment: "FIXED: Updated WebSocket URL from ${WS_URL}/ws/${userId} to ${WS_URL}/api/ws/${userId} to match the backend API router endpoint. Frontend should now connect properly to the fixed backend WebSocket endpoint."
 
 metadata:
   created_by: "main_agent"
