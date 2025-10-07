@@ -451,6 +451,12 @@ const MapPage = ({ accessToken, user }) => {
 
       // Create marker with canvas-drawn icon
       createMarkerIcon(profileImage, markerColor).then(iconUrl => {
+        // Safety check: ensure Google Maps is still available
+        if (!window.google || !window.google.maps || !map) {
+          console.warn('Google Maps not available when trying to create marker');
+          return;
+        }
+        
         const marker = new window.google.maps.Marker({
           position,
           map,
