@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { Music, MapPin, Users, Radio } from 'lucide-react';
+import { Music, MapPin, Users, Radio, Palette } from 'lucide-react';
+import { MAP_THEMES, THEME_NAMES, DEFAULT_THEME } from '@/utils/mapStyles';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
