@@ -200,7 +200,9 @@ const MapPage = ({ accessToken, user }) => {
 
       ws.onerror = (error) => {
         console.error('❌ WebSocket error:', error);
-        console.error('WebSocket URL:', `${WS_URL}/ws/${userId}`);
+        console.error('WebSocket URL:', `${WS_URL}/api/ws/${userId}`);
+        console.error('WebSocket state:', ws.readyState);
+        console.error('Error details:', JSON.stringify(error));
       };
 
       ws.onclose = (event) => {
