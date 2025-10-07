@@ -564,37 +564,11 @@ const MapPage = ({ accessToken, user }) => {
         return;
       }
       
-      // Test geolocation access first
-      navigator.geolocation.getCurrentPosition(
-        () => {
-          setLocationEnabled(true);
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
-          if (error.code === 1) {
-            alert(
-              'Location access is blocked by your browser.\n\n' +
-              'To fix this:\n' +
-              '1. Click the lock icon 🔒 in the address bar\n' +
-              '2. Allow "Location" access\n' +
-              '3. Refresh the page and try again\n\n' +
-              'Or open this page in a new tab (not in iframe):\n' +
-              window.location.href
-            );
-          } else if (error.code === 2) {
-            alert('Location information is unavailable. Please check your device settings.');
-          } else if (error.code === 3) {
-            alert('Location request timed out. Please try again.');
-          }
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 0
-        }
-      );
+      setLocationEnabled(true);
+      console.log('Location sharing enabled');
     } else {
       setLocationEnabled(false);
+      console.log('Location sharing disabled');
     }
   };
 
