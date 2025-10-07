@@ -150,3 +150,5 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Identified WebSocket broadcasting issue. Backend ConnectionManager appears to have correct logic for broadcasting to all connections, but multi-user visibility is failing. Need to add enhanced logging and debug the WebSocket message flow between users. Will add debugging logs and test with backend testing agent."
+  - agent: "testing"
+    message: "WebSocket broadcasting issue RESOLVED. Root cause: WebSocket endpoint was defined on main app instead of API router, causing routing conflicts with Kubernetes ingress rules. Fixed by moving @app.websocket('/ws/{user_id}') to @api_router.websocket('/ws/{user_id}'). All multi-user broadcasting functionality now working correctly. Backend testing complete - ready for frontend integration testing."
