@@ -510,6 +510,15 @@ const MapPage = ({ accessToken, user }) => {
             <MapPin size={18} />
             <span>{locationEnabled ? 'Stop Sharing' : 'Share Location'}</span>
           </button>
+          <button
+            className="btn-secondary"
+            onClick={() => window.open(window.location.href, '_blank')}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            title="Open in new tab for better location access"
+          >
+            <span>↗</span>
+            <span>Open in New Tab</span>
+          </button>
         </div>
       </div>
 
