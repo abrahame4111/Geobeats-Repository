@@ -487,9 +487,13 @@ const MapPage = ({ accessToken, user }) => {
   useEffect(() => {
     if (!locationEnabled || !websocket) return;
 
+    // Share location immediately when enabled
+    shareLocationAndSong();
+
+    // Then continue sharing every 5 seconds
     const interval = setInterval(() => {
       shareLocationAndSong();
-    }, 5000); // Update every 5 seconds
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [locationEnabled, websocket, accessToken]);
