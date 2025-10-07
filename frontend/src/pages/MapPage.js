@@ -383,42 +383,23 @@ const MapPage = ({ accessToken, user }) => {
   };
 
   const createInfoWindowContent = (userId, location) => {
-    const isCurrentUser = userId === user.id;
     const track = location.current_track;
-    const userName = isCurrentUser ? 'You' : (location.user_name || `User ${userId}`);
 
     return `
-      <div style="padding: 16px; min-width: 250px; max-width: 300px; background: #181818; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: ${track ? '16px' : '8px'};">
-          <img src="${location.profile_image || 'https://via.placeholder.com/40'}" 
-               style="width: 48px; height: 48px; border-radius: 50%; border: 3px solid ${isCurrentUser ? '#1DB954' : '#4A90E2'};" 
-               alt="Profile" />
-          <div>
-            <h3 style="color: ${isCurrentUser ? '#1DB954' : '#ffffff'}; margin: 0 0 4px 0; font-size: 16px; font-weight: 700;">
-              ${userName}
-            </h3>
-            <p style="margin: 0; color: #888888; font-size: 11px;">
-              ${new Date(location.last_updated).toLocaleTimeString()}
-            </p>
-          </div>
-        </div>
+      <div style="padding: 12px; min-width: 220px; max-width: 280px; background: #181818; border-radius: 10px;">
         ${track ? `
-          <div style="background: #282828; padding: 12px; border-radius: 8px; display: flex; gap: 12px; align-items: center;">
+          <div style="display: flex; gap: 10px; align-items: center;">
             ${track.album?.images?.[2]?.url ? `
-              <img src="${track.album.images[2].url}" alt="Album" style="width: 56px; height: 56px; border-radius: 6px; flex-shrink: 0;" />
+              <img src="${track.album.images[2].url}" alt="Album" style="width: 50px; height: 50px; border-radius: 6px; flex-shrink: 0;" />
             ` : ''}
             <div style="flex: 1; min-width: 0;">
-              <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-                <span style="font-size: 16px;">🎵</span>
-                <p style="margin: 0; color: #1DB954; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Now Playing</p>
-              </div>
-              <p style="margin: 0 0 4px 0; color: #ffffff; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.name || 'Unknown Track'}</p>
-              <p style="margin: 0; color: #b3b3b3; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.artists?.[0]?.name || 'Unknown Artist'}</p>
+              <p style="margin: 0 0 4px 0; color: #ffffff; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.name || 'Unknown Track'}</p>
+              <p style="margin: 0; color: #b3b3b3; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.artists?.[0]?.name || 'Unknown Artist'}</p>
             </div>
           </div>
         ` : `
-          <div style="text-align: center; padding: 12px; background: #282828; border-radius: 8px;">
-            <p style="margin: 0; color: #888888; font-size: 13px;">🎧 Not playing music</p>
+          <div style="text-align: center; padding: 8px;">
+            <p style="margin: 0; color: #888888; font-size: 12px;">Not playing music</p>
           </div>
         `}
       </div>
