@@ -56,8 +56,10 @@ class ConnectionManager:
     def disconnect(self, user_id: str):
         if user_id in self.active_connections:
             del self.active_connections[user_id]
+            logger.info(f"❌ User {user_id} disconnected. Remaining connections: {len(self.active_connections)}")
         if user_id in self.user_locations:
             del self.user_locations[user_id]
+            logger.info(f"📍 Removed location for {user_id}. Remaining locations: {len(self.user_locations)}")
     
     async def broadcast_update(self, user_id: str, location_data: Dict):
         self.user_locations[user_id] = location_data
