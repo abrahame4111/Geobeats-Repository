@@ -410,6 +410,18 @@ const MapPage = ({ accessToken, user }) => {
           console.log('Sharing location data:', locationData);
           setCurrentTrack(trackResponse.data.item);
 
+          // Center map on user's location
+          if (map) {
+            map.setCenter({ lat: locationData.lat, lng: locationData.lng });
+            map.setZoom(15);
+          }
+
+          // Create marker immediately for current user
+          locationData.last_updated = new Date().toISOString();
+          console.log('Creating marker for current user...');
+          updateMarker(user.id, locationData);
+
+          // Also send via WebSocket for other users
           if (websocket && websocket.readyState === WebSocket.OPEN) {
             websocket.send(JSON.stringify(locationData));
             console.log('Location data sent via WebSocket');
