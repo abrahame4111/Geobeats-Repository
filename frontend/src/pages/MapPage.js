@@ -351,8 +351,12 @@ const MapPage = ({ accessToken, user }) => {
 
   const removeMarker = (userId) => {
     if (markers[userId]) {
-      markers[userId].marker.setMap(null);
-      markers[userId].infoWindow.close();
+      if (markers[userId].marker) {
+        markers[userId].marker.setMap(null);
+      }
+      if (markers[userId].infoWindow) {
+        markers[userId].infoWindow.close();
+      }
       setMarkers((prev) => {
         const newMarkers = { ...prev };
         delete newMarkers[userId];
