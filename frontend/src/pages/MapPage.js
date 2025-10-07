@@ -546,7 +546,25 @@ const MapPage = ({ accessToken, user }) => {
       },
       (error) => {
         console.error('Geolocation error:', error);
-        alert('Unable to get accurate location. Please make sure:\n1. Location services are enabled on your device\n2. You are outdoors or near a window for better GPS signal\n3. Your browser has location permission');
+        
+        if (error.code === 1) {
+          // Permission denied - try to help the user
+          console.log('Location permission denied. Trying to help user enable it...');
+          alert(
+            'Location access is blocked.\n\n' +
+            'To enable:\n' +
+            '1. Click the lock icon 🔒 or info icon (i) in the address bar\n' +
+            '2. Find "Location" and set it to "Allow"\n' +
+            '3. Refresh the page\n' +
+            '4. Try "Share Location" again'
+          );
+        } else if (error.code === 2) {
+          console.log('Location unavailable');
+          alert('Location unavailable. Please check your device GPS settings.');
+        } else if (error.code === 3) {
+          console.log('Location timeout');
+          alert('Location request timed out. Please try again.');
+        }
       },
       {
         enableHighAccuracy: true,
