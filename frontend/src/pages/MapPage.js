@@ -53,7 +53,7 @@ const MapPage = ({ accessToken, user }) => {
 
   // Add map click listener to close info windows
   useEffect(() => {
-    if (map) {
+    if (map && window.google && window.google.maps) {
       const listener = window.google.maps.event.addListener(map, 'click', () => {
         if (activeInfoWindow) {
           activeInfoWindow.close();
@@ -62,7 +62,9 @@ const MapPage = ({ accessToken, user }) => {
       });
 
       return () => {
-        window.google.maps.event.removeListener(listener);
+        if (window.google && window.google.maps) {
+          window.google.maps.event.removeListener(listener);
+        }
       };
     }
   }, [map, activeInfoWindow]);
