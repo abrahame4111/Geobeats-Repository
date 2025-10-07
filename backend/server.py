@@ -359,6 +359,30 @@ async def get_maps_key():
     """Get Google Maps API key for frontend"""
     return {"api_key": GOOGLE_MAPS_API_KEY}
 
+# Proxy endpoint for profile images (to handle CORS)
+@api_router.get("/proxy/image")
+async def proxy_image(url: str = Query(...)):
+    """Proxy images to avoid CORS issues"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=5.0)
+            
+            if response.status_code == 200:
+                from fastapi.responses import Response
+                return Response(
+                    content=response.content,
+                    media_type=response.headers.get("content-type", "image/jpeg"),
+                    headers={
+                        "Cache-Control": "public, max-age=3600",
+                        "Access-Control-Allow-Origin": "*"
+                    }
+                )
+            else:
+                raise HTTPException(status_code=404, detail="Image not found")
+    except Exception as e:
+        logger.error(f"Failed to proxy image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load image")
+
 # WebSocket endpoint for real-time location sharing
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
