@@ -537,6 +537,12 @@ const MapPage = ({ accessToken, user }) => {
           console.log('Creating marker for current user...');
           updateMarker(user.id, locationData);
 
+          // Update userLocations state to reflect active user count
+          setUserLocations((prev) => ({
+            ...prev,
+            [user.id]: locationData,
+          }));
+
           // Also send via WebSocket for other users
           if (websocket && websocket.readyState === WebSocket.OPEN) {
             websocket.send(JSON.stringify(locationData));
