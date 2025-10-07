@@ -13,12 +13,30 @@ const LoginPage = ({ onLogin }) => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Handle OAuth callback
+    // Handle OAuth callback - now handled via direct redirect with parameters
     const urlParams = new URLSearchParams(location.search);
-    const code = urlParams.get('code');
+    const accessToken = urlParams.get('access_token');
+    const refreshToken = urlParams.get('refresh_token');
+    const userId = urlParams.get('user_id');
+    const userName = urlParams.get('user_name');
+    const userEmail = urlParams.get('user_email');
 
-    if (code) {
-      handleAuthCallback(code);
+    if (accessToken && refreshToken && userId) {
+      // Auth successful - create user object and login
+      const user = {
+        id: userId,
+        name: userName || userId,
+        email: userEmail || ""
+      };
+      
+      onLogin(accessToken, refreshToken, user);
+      navigate('/home');
+    } else {
+      // Check for OAuth code (fallback for old flow)
+      const code = urlParams.get('code');
+      if (code) {
+        handleAuthCallback(code);
+      }
     }
   }, [location]);
 
