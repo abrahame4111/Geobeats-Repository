@@ -268,27 +268,34 @@ const MapPage = ({ accessToken, user }) => {
       const profileImage = location.profile_image || 'https://via.placeholder.com/60?text=User';
       console.log('Profile image URL:', profileImage);
       
-      // Use a simpler approach - create a circular marker with colored border
       const markerColor = isCurrentUser ? '#1DB954' : '#4A90E2';
       
-      // Try using a simple circle first to test
+      // Create custom icon with profile picture
+      const iconSvg = `
+        <svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <clipPath id="clip-circle-${userId.replace(/[^a-zA-Z0-9]/g, '')}">
+              <circle cx="40" cy="40" r="32"/>
+            </clipPath>
+          </defs>
+          <!-- Outer border circle -->
+          <circle cx="40" cy="40" r="36" fill="${markerColor}" stroke="#ffffff" stroke-width="4"/>
+          <!-- Profile image -->
+          <image href="${profileImage}" x="8" y="8" width="64" height="64" clip-path="url(#clip-circle-${userId.replace(/[^a-zA-Z0-9]/g, '')})"/>
+        </svg>
+      `;
+      
+      const iconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(iconSvg);
+
       const marker = new window.google.maps.Marker({
         position,
         map,
         icon: {
-          path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 30,
-          fillColor: markerColor,
-          fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 3,
+          url: iconUrl,
+          scaledSize: new window.google.maps.Size(80, 80),
+          anchor: new window.google.maps.Point(40, 40),
         },
         title: location.user_name || userId,
-        label: {
-          text: isCurrentUser ? '😊' : '👤',
-          color: '#ffffff',
-          fontSize: '20px',
-        },
         optimized: false,
         zIndex: isCurrentUser ? 1000 : 100,
       });
@@ -297,7 +304,16 @@ const MapPage = ({ accessToken, user }) => {
 
       const infoWindow = new window.google.maps.InfoWindow({
         content: createInfoWindowContent(userId, location),
+        pixelOffset: new window.google.maps.Size(0, -50),
       });
+
+      // Auto-open info window for current user
+      if (isCurrentUser) {
+        setTimeout(() => {
+          infoWindow.open(map, marker);
+          console.log('Info window auto-opened for current user');
+        }, 500);
+      }
 
       marker.addListener('click', () => {
         console.log('Marker clicked:', userId);
