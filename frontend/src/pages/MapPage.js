@@ -383,11 +383,16 @@ const MapPage = ({ accessToken, user }) => {
   }, [locationEnabled, websocket, accessToken]);
 
   const shareLocationAndSong = async () => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      console.error('Geolocation not available');
+      return;
+    }
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
+          console.log('Got location:', position.coords.latitude, position.coords.longitude);
+          
           // Get currently playing track
           const trackResponse = await axios.get(
             `${API}/spotify/currently-playing?access_token=${accessToken}`
@@ -397,15 +402,19 @@ const MapPage = ({ accessToken, user }) => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             current_track: trackResponse.data.item || null,
-            profile_image: profileImage,
+            profile_image: profileImage || 'https://via.placeholder.com/60?text=User',
             user_name: user?.name || user?.id || 'User',
             timestamp: new Date().toISOString(),
           };
 
+          console.log('Sharing location data:', locationData);
           setCurrentTrack(trackResponse.data.item);
 
           if (websocket && websocket.readyState === WebSocket.OPEN) {
             websocket.send(JSON.stringify(locationData));
+            console.log('Location data sent via WebSocket');
+          } else {
+            console.error('WebSocket not ready:', websocket?.readyState);
           }
         } catch (error) {
           console.error('Failed to share location:', error);
@@ -413,6 +422,11 @@ const MapPage = ({ accessToken, user }) => {
       },
       (error) => {
         console.error('Geolocation error:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   };
