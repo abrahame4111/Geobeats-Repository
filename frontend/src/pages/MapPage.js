@@ -437,6 +437,17 @@ const MapPage = ({ accessToken, user }) => {
 
   return (
     <div style={styles.page} data-testid="map-page">
+      <style>{`
+        .gm-style-iw-d {
+          overflow: auto !important;
+        }
+        .gm-style-iw {
+          padding: 0 !important;
+        }
+        .gm-style-iw button {
+          display: none !important;
+        }
+      `}</style>
       <div style={styles.controls}>
         <div style={styles.controlsContent}>
           <div style={styles.stats}>
