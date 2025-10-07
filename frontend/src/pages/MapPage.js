@@ -603,6 +603,24 @@ const MapPage = ({ accessToken, user }) => {
     } else {
       setLocationEnabled(false);
       console.log('❌ Location sharing DISABLED');
+      
+      // Remove current user from active locations
+      removeMarker(user.id);
+      setUserLocations((prev) => {
+        const newLocations = { ...prev };
+        delete newLocations[user.id];
+        return newLocations;
+      });
+      
+      // Notify other users via WebSocket
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        websocket.send(JSON.stringify({
+          lat: 0,
+          lng: 0,
+          disconnected: true,
+        }));
+        console.log('Sent disconnect notification');
+      }
     }
   };
 
