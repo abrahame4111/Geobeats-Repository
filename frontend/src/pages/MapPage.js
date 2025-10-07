@@ -99,6 +99,16 @@ const MapPage = ({ accessToken, user }) => {
     const mapInstance = new window.google.maps.Map(mapRef.current, {
       center: { lat: 37.7749, lng: -122.4194 },
       zoom: 12,
+      disableDefaultUI: true, // Remove all default UI controls
+      zoomControl: true, // Keep zoom control but styled
+      zoomControlOptions: {
+        position: window.google.maps.ControlPosition.RIGHT_BOTTOM,
+      },
+      mapTypeControl: false,
+      scaleControl: false,
+      streetViewControl: false,
+      rotateControl: false,
+      fullscreenControl: false,
       styles: [
         { elementType: 'geometry', stylers: [{ color: '#242f3e' }] },
         { elementType: 'labels.text.stroke', stylers: [{ color: '#242f3e' }] },
