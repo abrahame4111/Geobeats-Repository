@@ -478,19 +478,37 @@ const MapPage = ({ accessToken, user }) => {
 
   const removeMarker = (userId) => {
     if (markers[userId]) {
+      // Remove marker from map
       if (markers[userId].marker) {
         markers[userId].marker.setMap(null);
       }
+      
+      // Close and remove info window
       if (markers[userId].infoWindow) {
         markers[userId].infoWindow.close();
+        
+        // If this is the active info window, clear it
+        if (activeInfoWindow === markers[userId].infoWindow) {
+          setActiveInfoWindow(null);
+        }
       }
+      
+      // Remove music label overlay
+      if (markers[userId].musicLabel) {
+        markers[userId].musicLabel.setMap(null);
+      }
+      
+      // Update markers state
       setMarkers((prev) => {
         const newMarkers = { ...prev };
         delete newMarkers[userId];
         return newMarkers;
       });
+      
+      console.log(`✅ Marker removed for user: ${userId}`);
     }
 
+    // Update user locations state
     setUserLocations((prev) => {
       const newLocations = { ...prev };
       delete newLocations[userId];
