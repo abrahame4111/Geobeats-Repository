@@ -300,39 +300,45 @@ const MapPage = ({ accessToken, user }) => {
     return labelDiv;
   };
 
-  // Custom overlay class for music labels
-  class MusicLabel extends window.google.maps.OverlayView {
-    constructor(position, element) {
-      super();
-      this.position = position;
-      this.element = element;
-    }
+  // Helper to create MusicLabel class (only when google maps is loaded)
+  const createMusicLabelClass = () => {
+    if (!window.google || !window.google.maps) return null;
+    
+    class MusicLabel extends window.google.maps.OverlayView {
+      constructor(position, element) {
+        super();
+        this.position = position;
+        this.element = element;
+      }
 
-    onAdd() {
-      const panes = this.getPanes();
-      panes.floatPane.appendChild(this.element);
-    }
+      onAdd() {
+        const panes = this.getPanes();
+        panes.floatPane.appendChild(this.element);
+      }
 
-    draw() {
-      const projection = this.getProjection();
-      const point = projection.fromLatLngToDivPixel(this.position);
-      if (point) {
-        this.element.style.left = point.x + 'px';
-        this.element.style.top = point.y + 'px';
+      draw() {
+        const projection = this.getProjection();
+        const point = projection.fromLatLngToDivPixel(this.position);
+        if (point) {
+          this.element.style.left = point.x + 'px';
+          this.element.style.top = point.y + 'px';
+        }
+      }
+
+      onRemove() {
+        if (this.element && this.element.parentNode) {
+          this.element.parentNode.removeChild(this.element);
+        }
+      }
+
+      setPosition(newPosition) {
+        this.position = newPosition;
+        this.draw();
       }
     }
-
-    onRemove() {
-      if (this.element && this.element.parentNode) {
-        this.element.parentNode.removeChild(this.element);
-      }
-    }
-
-    setPosition(newPosition) {
-      this.position = newPosition;
-      this.draw();
-    }
-  }
+    
+    return MusicLabel;
+  };
 
   const updateMarker = (userId, location) => {
     console.log('updateMarker called for:', userId, 'isCurrentUser:', userId === user.id);
