@@ -452,6 +452,8 @@ const MapPage = ({ accessToken, user }) => {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             current_track: trackResponse.data.item || null,
+            profile_image: profileImage,
+            user_name: user?.name || user?.id || 'User',
             timestamp: new Date().toISOString(),
           };
 
