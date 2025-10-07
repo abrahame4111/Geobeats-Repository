@@ -101,3 +101,49 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Multiple users (friends) cannot see each other's live locations and songs on the map when using different devices. While the current user can see their own marker, the broadcasting mechanism for other users' data appears to be failing."
+
+backend:
+  - task: "WebSocket Broadcasting Multi-User Locations"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "WebSocket endpoint and ConnectionManager exist but multi-user broadcasting not working. Users can't see each other's locations and songs. Need to debug broadcast_update method and connection handling."
+
+frontend:
+  - task: "WebSocket Connection and Message Handling" 
+    implemented: true
+    working: false
+    file: "MapPage.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "WebSocket connection logic exists with handleLocationUpdate for initial_locations and location_update messages. User ID generation appears correct using Spotify ID. Need to verify message handling and marker updates for multiple users."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "WebSocket Broadcasting Multi-User Locations"
+    - "WebSocket Connection and Message Handling"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: "Identified WebSocket broadcasting issue. Backend ConnectionManager appears to have correct logic for broadcasting to all connections, but multi-user visibility is failing. Need to add enhanced logging and debug the WebSocket message flow between users. Will add debugging logs and test with backend testing agent."
