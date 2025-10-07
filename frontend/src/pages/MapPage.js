@@ -534,7 +534,8 @@ const MapPage = ({ accessToken, user }) => {
       };
 
       // Create marker with canvas-drawn icon
-      createMarkerIcon(profileImage, markerColor).then(iconUrl => {
+      const userName = location.user_name || userId;
+      createMarkerIcon(profileImage, markerColor, userName).then(iconUrl => {
         // Safety check: ensure Google Maps is still available
         if (!window.google || !window.google.maps || !map) {
           console.warn('Google Maps not available when trying to create marker');
