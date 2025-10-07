@@ -219,33 +219,149 @@ const MapPage = ({ accessToken, user }) => {
     if (!map) return;
 
     const position = { lat: location.lat, lng: location.lng };
+    const isCurrentUser = userId === user.id;
 
     if (markers[userId]) {
-      markers[userId].setPosition(position);
+      // Smooth marker transition
+      const marker = markers[userId].marker;
+      marker.setPosition(position);
+      
+      // Update info window content
+      markers[userId].infoWindow.setContent(createInfoWindowContent(userId, location));
     } else {
-      const marker = new window.google.maps.Marker({
-        position,
-        map,
-        title: `User: ${userId}`,
-        icon: {
-          url: userId === user.id
-            ? 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
-            : 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-          scaledSize: new window.google.maps.Size(40, 40),
-        },
+      // Create custom marker with profile picture
+      const profileImage = location.profile_image || 'https://via.placeholder.com/80';
+      
+      // Create a custom HTML marker
+      const markerDiv = document.createElement('div');
+      markerDiv.style.cssText = `
+        position: relative;
+        width: 60px;
+        height: 60px;
+        cursor: pointer;
+        transform: translate(-50%, -50%);
+      `;
+
+      // Profile picture container with border
+      const imageContainer = document.createElement('div');
+      imageContainer.style.cssText = `
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: 3px solid ${isCurrentUser ? '#1DB954' : '#4A90E2'};
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        transition: transform 0.2s ease;
+      `;
+      
+      const img = document.createElement('img');
+      img.src = profileImage;
+      img.style.cssText = `
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      `;
+      
+      imageContainer.appendChild(img);
+      markerDiv.appendChild(imageContainer);
+
+      // Add song info bubble if playing music
+      if (location.current_track) {
+        const songBubble = document.createElement('div');
+        songBubble.style.cssText = `
+          position: absolute;
+          bottom: 100%;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(0, 0, 0, 0.9);
+          color: white;
+          padding: 8px 12px;
+          border-radius: 16px;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          margin-bottom: 8px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          max-width: 200px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        `;
+        
+        const musicIcon = document.createElement('span');
+        musicIcon.textContent = '🎵 ';
+        songBubble.appendChild(musicIcon);
+        
+        const songText = document.createElement('span');
+        songText.textContent = location.current_track.name || 'Playing music';
+        songBubble.appendChild(songText);
+        
+        markerDiv.appendChild(songBubble);
+      }
+
+      // Hover effect
+      imageContainer.addEventListener('mouseenter', () => {
+        imageContainer.style.transform = 'scale(1.1)';
       });
+      imageContainer.addEventListener('mouseleave', () => {
+        imageContainer.style.transform = 'scale(1)';
+      });
+
+      // Create custom overlay
+      class CustomMarker extends window.google.maps.OverlayView {
+        constructor(position, content) {
+          super();
+          this.position = position;
+          this.content = content;
+        }
+
+        onAdd() {
+          this.div = this.content;
+          const panes = this.getPanes();
+          panes.overlayMouseTarget.appendChild(this.div);
+        }
+
+        draw() {
+          const overlayProjection = this.getProjection();
+          const pos = overlayProjection.fromLatLngToDivPixel(this.position);
+          this.div.style.left = pos.x + 'px';
+          this.div.style.top = pos.y + 'px';
+          this.div.style.position = 'absolute';
+        }
+
+        onRemove() {
+          if (this.div && this.div.parentNode) {
+            this.div.parentNode.removeChild(this.div);
+          }
+        }
+
+        setPosition(newPosition) {
+          this.position = newPosition;
+          this.draw();
+        }
+      }
+
+      const customMarker = new CustomMarker(position, markerDiv);
+      customMarker.setMap(map);
 
       const infoWindow = new window.google.maps.InfoWindow({
         content: createInfoWindowContent(userId, location),
       });
 
-      marker.addListener('click', () => {
-        infoWindow.open(map, marker);
+      markerDiv.addEventListener('click', () => {
+        // Close all other info windows
+        Object.values(markers).forEach(m => m.infoWindow.close());
+        infoWindow.setPosition(position);
+        infoWindow.open(map);
       });
 
       setMarkers((prev) => ({
         ...prev,
-        [userId]: marker,
+        [userId]: {
+          marker: customMarker,
+          infoWindow: infoWindow,
+          element: markerDiv,
+        },
       }));
     }
   };
