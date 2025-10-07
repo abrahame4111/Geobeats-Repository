@@ -18,6 +18,8 @@ const MapPage = ({ accessToken, user }) => {
   const [mapsKey, setMapsKey] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
   const [activeInfoWindow, setActiveInfoWindow] = useState(null);
+  const [mapTheme, setMapTheme] = useState(localStorage.getItem('mapTheme') || DEFAULT_THEME);
+  const [showThemeSelector, setShowThemeSelector] = useState(false);
 
   // Load Google Maps API key and user profile
   useEffect(() => {
