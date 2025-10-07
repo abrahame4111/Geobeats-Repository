@@ -70,20 +70,32 @@ const MapPage = ({ accessToken, user }) => {
   }, [map, activeInfoWindow]);
 
   const initMap = () => {
-    if (!window.google) {
+    // Check if script is already loading
+    const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`);
+    
+    if (!window.google && !existingScript) {
       // Load Google Maps script
       const script = document.createElement('script');
       script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsKey}`;
       script.async = true;
       script.defer = true;
       script.onload = createMap;
+      script.onerror = () => {
+        console.error('Failed to load Google Maps script');
+      };
       document.head.appendChild(script);
-    } else {
+    } else if (window.google && window.google.maps) {
       createMap();
     }
   };
 
   const createMap = () => {
+    // Safety check before creating map
+    if (!window.google || !window.google.maps || !mapRef.current) {
+      console.error('Cannot create map: Google Maps not loaded or map ref not available');
+      return;
+    }
+    
     const mapInstance = new window.google.maps.Map(mapRef.current, {
       center: { lat: 37.7749, lng: -122.4194 },
       zoom: 12,
