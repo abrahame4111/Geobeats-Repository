@@ -402,7 +402,7 @@ async def proxy_image(url: str = Query(...)):
         raise HTTPException(status_code=500, detail="Failed to load image")
 
 # WebSocket endpoint for real-time location sharing
-@app.websocket("/ws/{user_id}")
+@api_router.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """WebSocket endpoint for real-time location and song updates"""
     logger.info(f"🚀 WebSocket connection requested for user: {user_id}")
