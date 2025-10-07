@@ -182,6 +182,11 @@ const MapPage = ({ accessToken, user }) => {
     console.log('Connecting WebSocket for user:', userId);
     
     try {
+      console.log('🔗 Attempting WebSocket connection...');
+      console.log('📍 Backend URL:', BACKEND_URL);
+      console.log('📍 WebSocket URL:', WS_URL);
+      console.log('📍 Full WebSocket URL:', `${WS_URL}/api/ws/${userId}`);
+      
       const ws = new WebSocket(`${WS_URL}/api/ws/${userId}`);
 
       ws.onopen = () => {
