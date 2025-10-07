@@ -458,10 +458,11 @@ const MapPage = ({ accessToken, user }) => {
       },
       (error) => {
         console.error('Geolocation error:', error);
+        alert('Unable to get accurate location. Please make sure:\n1. Location services are enabled on your device\n2. You are outdoors or near a window for better GPS signal\n3. Your browser has location permission');
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000,
         maximumAge: 0
       }
     );
