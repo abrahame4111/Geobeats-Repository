@@ -148,7 +148,7 @@ The Emergent platform automatically adds this attribute to preview iframes.
 ### 2. HTTPS Required
 
 Geolocation ONLY works over HTTPS, not HTTP:
-- ✅ `https://music-navigator.preview.emergentagent.com` → Works
+- ✅ `https://geobeats.preview.emergentagent.com` → Works
 - ❌ `http://localhost:3000` → Blocked by browser
 
 ### 3. User Must Still Allow
@@ -164,7 +164,7 @@ Even with all headers set correctly:
 
 **Check 1: Headers are being sent**
 ```bash
-curl -I https://music-navigator.preview.emergentagent.com/api/health
+curl -I https://geobeats.preview.emergentagent.com/api/health
 ```
 Look for: `Permissions-Policy: geolocation=*`
 
