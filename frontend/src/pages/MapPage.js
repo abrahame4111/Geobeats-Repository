@@ -51,6 +51,22 @@ const MapPage = ({ accessToken, user }) => {
     }
   }, [mapsKey, mapRef.current]);
 
+  // Add map click listener to close info windows
+  useEffect(() => {
+    if (map) {
+      const listener = window.google.maps.event.addListener(map, 'click', () => {
+        if (activeInfoWindow) {
+          activeInfoWindow.close();
+          setActiveInfoWindow(null);
+        }
+      });
+
+      return () => {
+        window.google.maps.event.removeListener(listener);
+      };
+    }
+  }, [map, activeInfoWindow]);
+
   const initMap = () => {
     if (!window.google) {
       // Load Google Maps script
