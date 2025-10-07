@@ -793,6 +793,26 @@ const MapPage = ({ accessToken, user }) => {
           border-radius: 50% !important;
           border: 3px solid #1DB954 !important;
         }
+        
+        /* Style Google Maps zoom controls to match dark theme */
+        .gm-bundled-control {
+          background: rgba(24, 24, 24, 0.95) !important;
+          border-radius: 8px !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+        }
+        
+        .gm-bundled-control button {
+          background: rgba(24, 24, 24, 0.95) !important;
+          border: 1px solid #282828 !important;
+        }
+        
+        .gm-bundled-control button:hover {
+          background: #282828 !important;
+        }
+        
+        .gm-bundled-control button img {
+          filter: invert(1) !important;
+        }
       `}</style>
       <div style={styles.controls}>
         <div style={styles.controlsContent}>
