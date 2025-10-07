@@ -814,15 +814,81 @@ const MapPage = ({ accessToken, user }) => {
               <span>{Object.keys(userLocations).length} Active</span>
             </div>
           </div>
-          <button
-            className={locationEnabled ? 'btn-spotify' : 'btn-secondary'}
-            onClick={toggleLocationSharing}
-            data-testid="share-location-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            <MapPin size={18} />
-            <span>{locationEnabled ? 'Stop Sharing' : 'Share Location'}</span>
-          </button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <div style={{ position: 'relative' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setShowThemeSelector(!showThemeSelector)}
+                data-testid="theme-selector-btn"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                title="Change map theme"
+              >
+                <Palette size={18} />
+              </button>
+              
+              {showThemeSelector && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  background: 'rgba(24, 24, 24, 0.98)',
+                  backdropFilter: 'blur(10px)',
+                  borderRadius: '8px',
+                  padding: '8px',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+                  border: '1px solid #282828',
+                  zIndex: 1000,
+                  minWidth: '200px',
+                }}>
+                  {Object.keys(MAP_THEMES).map((themeKey) => (
+                    <button
+                      key={themeKey}
+                      onClick={() => changeMapTheme(themeKey)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '10px 12px',
+                        background: mapTheme === themeKey ? '#1DB954' : 'transparent',
+                        color: mapTheme === themeKey ? '#ffffff' : '#b3b3b3',
+                        border: 'none',
+                        borderRadius: '6px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        fontWeight: mapTheme === themeKey ? '600' : '400',
+                        transition: 'all 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (mapTheme !== themeKey) {
+                          e.target.style.background = '#282828';
+                          e.target.style.color = '#ffffff';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (mapTheme !== themeKey) {
+                          e.target.style.background = 'transparent';
+                          e.target.style.color = '#b3b3b3';
+                        }
+                      }}
+                    >
+                      {THEME_NAMES[themeKey]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <button
+              className={locationEnabled ? 'btn-spotify' : 'btn-secondary'}
+              onClick={toggleLocationSharing}
+              data-testid="share-location-btn"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <MapPin size={18} />
+              <span>{locationEnabled ? 'Stop Sharing' : 'Share Location'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
