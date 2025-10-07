@@ -382,27 +382,33 @@ const MapPage = ({ accessToken, user }) => {
   const createInfoWindowContent = (userId, location) => {
     const isCurrentUser = userId === user.id;
     const track = location.current_track;
+    const userName = isCurrentUser ? 'You' : (location.user_name || `User ${userId}`);
 
     return `
       <div style="padding: 12px; min-width: 200px; background: #181818; border-radius: 8px;">
-        <h3 style="color: ${isCurrentUser ? '#1DB954' : '#ffffff'}; margin: 0 0 8px; font-size: 14px; font-weight: 600;">
-          ${isCurrentUser ? 'You' : `User ${userId}`}
-        </h3>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+          <img src="${location.profile_image || 'https://via.placeholder.com/40'}" 
+               style="width: 40px; height: 40px; border-radius: 50%; border: 2px solid ${isCurrentUser ? '#1DB954' : '#4A90E2'};" 
+               alt="Profile" />
+          <h3 style="color: ${isCurrentUser ? '#1DB954' : '#ffffff'}; margin: 0; font-size: 14px; font-weight: 600;">
+            ${userName}
+          </h3>
+        </div>
         ${track ? `
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="display: flex; gap: 8px; align-items: center; padding-top: 8px; border-top: 1px solid #282828;">
             ${track.album?.images?.[2]?.url ? `
               <img src="${track.album.images[2].url}" alt="Album" style="width: 48px; height: 48px; border-radius: 4px;" />
             ` : ''}
-            <div>
-              <p style="margin: 0; color: #ffffff; font-size: 13px; font-weight: 600;">${track.name || 'Unknown Track'}</p>
-              <p style="margin: 4px 0 0; color: #b3b3b3; font-size: 12px;">${track.artists?.[0]?.name || 'Unknown Artist'}</p>
+            <div style="flex: 1; min-width: 0;">
+              <p style="margin: 0; color: #ffffff; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.name || 'Unknown Track'}</p>
+              <p style="margin: 4px 0 0; color: #b3b3b3; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${track.artists?.[0]?.name || 'Unknown Artist'}</p>
             </div>
           </div>
         ` : `
-          <p style="margin: 0; color: #b3b3b3; font-size: 12px;">No music playing</p>
+          <p style="margin: 8px 0 0; color: #b3b3b3; font-size: 12px; padding-top: 8px; border-top: 1px solid #282828;">No music playing</p>
         `}
         <p style="margin: 8px 0 0; color: #888888; font-size: 11px;">
-          ${new Date(location.last_updated).toLocaleTimeString()}
+          Updated ${new Date(location.last_updated).toLocaleTimeString()}
         </p>
       </div>
     `;
