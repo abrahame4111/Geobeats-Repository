@@ -404,6 +404,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add middleware for Permissions-Policy header
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+class PermissionsPolicyMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Permissions-Policy"] = "geolocation=(self), camera=(), microphone=()"
+        return response
+
+app.add_middleware(PermissionsPolicyMiddleware)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
