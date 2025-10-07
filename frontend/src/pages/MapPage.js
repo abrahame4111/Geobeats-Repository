@@ -262,63 +262,63 @@ const MapPage = ({ accessToken, user }) => {
         markers[userId].marker.setLabel(null);
       }
     } else {
+      console.log('Creating NEW marker for:', userId);
+      
       // Create marker with profile picture icon
       const profileImage = location.profile_image || 'https://via.placeholder.com/60?text=User';
+      console.log('Profile image URL:', profileImage);
       
-      // Create custom icon SVG with profile picture
-      const iconSvg = `
-        <svg width="70" height="70" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <clipPath id="clip-${userId}">
-              <circle cx="35" cy="35" r="28"/>
-            </clipPath>
-          </defs>
-          <circle cx="35" cy="35" r="30" fill="${isCurrentUser ? '#1DB954' : '#4A90E2'}"/>
-          <image href="${profileImage}" x="7" y="7" width="56" height="56" clip-path="url(#clip-${userId})"/>
-        </svg>
-      `;
+      // Use a simpler approach - create a circular marker with colored border
+      const markerColor = isCurrentUser ? '#1DB954' : '#4A90E2';
       
-      const iconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(iconSvg);
-
+      // Try using a simple circle first to test
       const marker = new window.google.maps.Marker({
         position,
         map,
         icon: {
-          url: iconUrl,
-          scaledSize: new window.google.maps.Size(70, 70),
-          anchor: new window.google.maps.Point(35, 35),
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 30,
+          fillColor: markerColor,
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
         },
         title: location.user_name || userId,
+        label: {
+          text: isCurrentUser ? '😊' : '👤',
+          color: '#ffffff',
+          fontSize: '20px',
+        },
         optimized: false,
+        zIndex: isCurrentUser ? 1000 : 100,
       });
 
-      // Add label for currently playing song
-      if (location.current_track) {
-        marker.setLabel({
-          text: `🎵 ${location.current_track.name}`,
-          color: '#ffffff',
-          fontSize: '11px',
-          fontWeight: 'bold',
-        });
-      }
+      console.log('Marker created:', marker);
 
       const infoWindow = new window.google.maps.InfoWindow({
         content: createInfoWindowContent(userId, location),
       });
 
       marker.addListener('click', () => {
+        console.log('Marker clicked:', userId);
         // Close all other info windows
         Object.values(markers).forEach(m => m.infoWindow && m.infoWindow.close());
         infoWindow.open(map, marker);
       });
 
-      setMarkers((prev) => ({
-        ...prev,
-        [userId]: {
-          marker: marker,
-          infoWindow: infoWindow,
-        },
-      }));
+      setMarkers((prev) => {
+        const newMarkers = {
+          ...prev,
+          [userId]: {
+            marker: marker,
+            infoWindow: infoWindow,
+          },
+        };
+        console.log('Markers state updated, total markers:', Object.keys(newMarkers).length);
+        return newMarkers;
+      });
+      
+      console.log('✅ Marker successfully created and added to map');
     }
   };
 
