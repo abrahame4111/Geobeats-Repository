@@ -676,7 +676,7 @@ const MapPage = ({ accessToken, user }) => {
           // Update userLocations state to reflect active user count
           setUserLocations((prev) => ({
             ...prev,
-            [user.id]: locationData,
+            [userId]: locationData,
           }));
 
           // Also send via WebSocket for other users
