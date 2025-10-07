@@ -237,28 +237,56 @@ const MapPage = ({ accessToken, user }) => {
   }, [markers, activeInfoWindow]);
 
   const connectWebSocket = () => {
-    const ws = new WebSocket(`${WS_URL}/ws/${user.id}`);
+    // Generate a consistent user ID
+    const userId = user?.id || user?.name || localStorage.getItem('temp_user_id') || `user_${Date.now()}`;
+    
+    // Store temp ID if needed
+    if (!user?.id && !localStorage.getItem('temp_user_id')) {
+      localStorage.setItem('temp_user_id', userId);
+    }
+    
+    console.log('Connecting WebSocket for user:', userId);
+    
+    try {
+      const ws = new WebSocket(`${WS_URL}/ws/${userId}`);
 
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-    };
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected successfully for:', userId);
+      };
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      handleLocationUpdate(data);
-    };
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('WebSocket message received:', data);
+          handleLocationUpdate(data);
+        } catch (err) {
+          console.error('Error parsing WebSocket message:', err);
+        }
+      };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        console.error('WebSocket URL:', `${WS_URL}/ws/${userId}`);
+      };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      // Reconnect after 3 seconds
-      setTimeout(connectWebSocket, 3000);
-    };
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
+        
+        // Don't reconnect if it was a clean close or user navigated away
+        if (event.code !== 1000 && event.code !== 1001) {
+          console.log('Attempting to reconnect in 3 seconds...');
+          setTimeout(() => {
+            if (user) { // Only reconnect if user still exists
+              connectWebSocket();
+            }
+          }, 3000);
+        }
+      };
 
-    setWebsocket(ws);
+      setWebsocket(ws);
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+    }
   };
 
   const handleLocationUpdate = (data) => {
