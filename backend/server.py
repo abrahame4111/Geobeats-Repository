@@ -405,10 +405,13 @@ async def proxy_image(url: str = Query(...)):
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """WebSocket endpoint for real-time location and song updates"""
+    logger.info(f"🚀 WebSocket connection requested for user: {user_id}")
     await manager.connect(websocket, user_id)
+    
     try:
         while True:
             data = await websocket.receive_text()
+            logger.info(f"📥 Received data from {user_id}: {data}")
             location_data = json.loads(data)
             
             # Validate location data
@@ -416,12 +419,17 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 location_data["user_id"] = user_id
                 location_data["last_updated"] = datetime.now(timezone.utc).isoformat()
                 
+                logger.info(f"📍 Valid location data from {user_id}, broadcasting to all users")
                 await manager.broadcast_update(user_id, location_data)
+            else:
+                logger.warning(f"⚠️ Invalid location data from {user_id}: missing lat/lng")
+                
     except WebSocketDisconnect:
+        logger.info(f"🔌 WebSocket disconnect detected for {user_id}")
         manager.disconnect(user_id)
         await manager.broadcast_update(user_id, {"disconnected": True})
     except Exception as e:
-        logger.error(f"WebSocket error for user {user_id}: {e}")
+        logger.error(f"❌ WebSocket error for user {user_id}: {e}")
         manager.disconnect(user_id)
 
 # Health check
