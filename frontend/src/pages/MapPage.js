@@ -229,6 +229,72 @@ const MapPage = ({ accessToken, user }) => {
     }
   };
 
+  // Helper function to create music label overlay
+  const createMusicLabel = (songName, borderColor) => {
+    const labelDiv = document.createElement('div');
+    labelDiv.style.cssText = `
+      position: absolute;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      transform: translate(-50%, -100%);
+      margin-top: -40px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      border: 1px solid ${borderColor};
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 250px;
+      overflow: hidden;
+    `;
+    
+    labelDiv.innerHTML = `
+      <span style="font-size: 14px;">🎵</span>
+      <span style="overflow: hidden; text-overflow: ellipsis;">${songName}</span>
+    `;
+    
+    return labelDiv;
+  };
+
+  // Custom overlay class for music labels
+  class MusicLabel extends window.google.maps.OverlayView {
+    constructor(position, element) {
+      super();
+      this.position = position;
+      this.element = element;
+    }
+
+    onAdd() {
+      const panes = this.getPanes();
+      panes.floatPane.appendChild(this.element);
+    }
+
+    draw() {
+      const projection = this.getProjection();
+      const point = projection.fromLatLngToDivPixel(this.position);
+      if (point) {
+        this.element.style.left = point.x + 'px';
+        this.element.style.top = point.y + 'px';
+      }
+    }
+
+    onRemove() {
+      if (this.element && this.element.parentNode) {
+        this.element.parentNode.removeChild(this.element);
+      }
+    }
+
+    setPosition(newPosition) {
+      this.position = newPosition;
+      this.draw();
+    }
+  }
+
   const updateMarker = (userId, location) => {
     console.log('updateMarker called for:', userId, 'isCurrentUser:', userId === user.id);
     console.log('Location data:', location);
@@ -241,6 +307,7 @@ const MapPage = ({ accessToken, user }) => {
 
     const position = { lat: location.lat, lng: location.lng };
     const isCurrentUser = userId === user.id;
+    const markerColor = isCurrentUser ? '#1DB954' : '#4A90E2';
 
     if (markers[userId]) {
       console.log('Updating existing marker for:', userId);
