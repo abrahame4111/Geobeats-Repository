@@ -244,23 +244,23 @@ const MapPage = ({ accessToken, user }) => {
 
     if (markers[userId]) {
       console.log('Updating existing marker for:', userId);
+      
       // Smooth marker transition
       markers[userId].marker.setPosition(position);
       
-      // Update info window content
+      // Update info window content (but don't reopen it)
       markers[userId].infoWindow.setContent(createInfoWindowContent(userId, location));
       
-      // Update label if song changed
+      // Update or remove music label overlay
+      if (markers[userId].musicLabel) {
+        markers[userId].musicLabel.setMap(null);
+      }
+      
       if (location.current_track) {
-        markers[userId].marker.setLabel({
-          text: `🎵 ${location.current_track.name}`,
-          color: '#ffffff',
-          fontSize: '11px',
-          fontWeight: 'bold',
-          className: 'song-label'
-        });
-      } else {
-        markers[userId].marker.setLabel(null);
+        const labelDiv = createMusicLabel(location.current_track.name, markerColor);
+        const musicLabel = new MusicLabel(position, labelDiv);
+        musicLabel.setMap(map);
+        markers[userId].musicLabel = musicLabel;
       }
     } else {
       console.log('Creating NEW marker for:', userId);
