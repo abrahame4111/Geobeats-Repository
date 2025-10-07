@@ -646,12 +646,16 @@ const MapPage = ({ accessToken, user }) => {
             `${API}/spotify/currently-playing?access_token=${accessToken}`
           );
 
+          // Get consistent user ID
+          const userId = user?.id || user?.name || localStorage.getItem('temp_user_id') || `user_${Date.now()}`;
+          
           const locationData = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             current_track: trackResponse.data.item || null,
             profile_image: profileImage || 'https://via.placeholder.com/60?text=User',
             user_name: user?.name || user?.id || 'User',
+            user_id: userId,
             timestamp: new Date().toISOString(),
           };
 
@@ -666,8 +670,8 @@ const MapPage = ({ accessToken, user }) => {
 
           // Create marker immediately for current user
           locationData.last_updated = new Date().toISOString();
-          console.log('Creating marker for current user...');
-          updateMarker(user.id, locationData);
+          console.log('Creating marker for current user:', userId);
+          updateMarker(userId, locationData);
 
           // Update userLocations state to reflect active user count
           setUserLocations((prev) => ({
