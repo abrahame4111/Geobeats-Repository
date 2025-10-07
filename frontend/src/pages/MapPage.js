@@ -624,31 +624,15 @@ const MapPage = ({ accessToken, user }) => {
               <Users size={20} color="#1DB954" />
               <span>{Object.keys(userLocations).length} Active</span>
             </div>
-            {currentTrack && (
-              <div style={styles.nowPlaying}>
-                <Radio size={18} color="#1DB954" />
-                <span>
-                  {currentTrack.name} - {currentTrack.artists?.[0]?.name}
-                </span>
-              </div>
-            )}
           </div>
           <button
             className={locationEnabled ? 'btn-spotify' : 'btn-secondary'}
             onClick={toggleLocationSharing}
             data-testid="share-location-btn"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <MapPin size={18} />
             <span>{locationEnabled ? 'Stop Sharing' : 'Share Location'}</span>
-          </button>
-          <button
-            className="btn-secondary"
-            onClick={() => window.open(window.location.href, '_blank')}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            title="Open in new tab for better location access"
-          >
-            <span>↗</span>
-            <span>Open in New Tab</span>
           </button>
         </div>
       </div>
