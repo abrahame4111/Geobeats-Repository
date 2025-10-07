@@ -39,13 +39,19 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, user_id: str):
         await websocket.accept()
         self.active_connections[user_id] = websocket
+        logger.info(f"🔗 User {user_id} connected. Total connections: {len(self.active_connections)}")
+        logger.info(f"📍 Current active users: {list(self.active_connections.keys())}")
         
         # Send current locations to newly connected user
         if self.user_locations:
-            await websocket.send_text(json.dumps({
+            initial_message = {
                 "type": "initial_locations",
                 "locations": self.user_locations
-            }))
+            }
+            logger.info(f"📤 Sending initial locations to {user_id}: {len(self.user_locations)} locations")
+            await websocket.send_text(json.dumps(initial_message))
+        else:
+            logger.info(f"📍 No existing locations to send to {user_id}")
     
     def disconnect(self, user_id: str):
         if user_id in self.active_connections:
