@@ -332,7 +332,6 @@ const MapPage = ({ accessToken, user }) => {
     } else {
       console.log('Creating NEW marker for:', userId);
       
-      const markerColor = isCurrentUser ? '#1DB954' : '#4A90E2';
       const profileImage = location.profile_image || 'https://via.placeholder.com/80?text=User';
       
       // Create circular marker icon with profile picture and border
@@ -405,110 +404,43 @@ const MapPage = ({ accessToken, user }) => {
 
         console.log('Marker created with profile image:', profileImage);
 
-        // Create custom overlay for the music label above marker
+        // Create music label overlay if playing
+        let musicLabel = null;
         if (location.current_track) {
-          const labelDiv = document.createElement('div');
-          labelDiv.style.cssText = `
-            position: absolute;
-            background: rgba(0, 0, 0, 0.9);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 16px;
-            font-size: 12px;
-            font-weight: 600;
-            white-space: nowrap;
-            pointer-events: none;
-            transform: translate(-50%, -100%);
-            margin-top: -40px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-            border: 1px solid ${markerColor};
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            max-width: 250px;
-            overflow: hidden;
-          `;
-          
-          labelDiv.innerHTML = `
-            <span style="font-size: 14px;">🎵</span>
-            <span style="overflow: hidden; text-overflow: ellipsis;">${location.current_track.name}</span>
-          `;
-
-          // Create custom overlay
-          class MusicLabel extends window.google.maps.OverlayView {
-            constructor(position, element) {
-              super();
-              this.position = position;
-              this.element = element;
-            }
-
-            onAdd() {
-              const panes = this.getPanes();
-              panes.floatPane.appendChild(this.element);
-            }
-
-            draw() {
-              const projection = this.getProjection();
-              const point = projection.fromLatLngToDivPixel(this.position);
-              if (point) {
-                this.element.style.left = point.x + 'px';
-                this.element.style.top = point.y + 'px';
-              }
-            }
-
-            onRemove() {
-              if (this.element.parentNode) {
-                this.element.parentNode.removeChild(this.element);
-              }
-            }
-
-            setPosition(newPosition) {
-              this.position = newPosition;
-              this.draw();
-            }
-          }
-
-          const musicLabel = new MusicLabel(position, labelDiv);
+          const labelDiv = createMusicLabel(location.current_track.name, markerColor);
+          musicLabel = new MusicLabel(position, labelDiv);
           musicLabel.setMap(map);
-          
-          // Store the label with the marker
-          marker.musicLabel = musicLabel;
         }
 
-        // Simplified info window - just song details
+        // Create info window
         const infoWindow = new window.google.maps.InfoWindow({
           content: createInfoWindowContent(userId, location),
           pixelOffset: new window.google.maps.Size(0, -40),
           disableAutoPan: false,
         });
 
+        // Handle marker click
         marker.addListener('click', () => {
           console.log('Marker clicked:', userId);
           
-          // Close the currently active info window
+          // Close any active info window
           if (activeInfoWindow) {
             activeInfoWindow.close();
           }
           
-          // Open new info window and set as active
+          // Open this info window and set as active
           infoWindow.open(map, marker);
           setActiveInfoWindow(infoWindow);
         });
 
-        // Close info window when map is clicked
-        window.google.maps.event.addListener(map, 'click', () => {
-          if (activeInfoWindow) {
-            activeInfoWindow.close();
-            setActiveInfoWindow(null);
-          }
-        });
-
+        // Store marker data
         setMarkers((prev) => {
           const newMarkers = {
             ...prev,
             [userId]: {
               marker: marker,
               infoWindow: infoWindow,
+              musicLabel: musicLabel,
             },
           };
           console.log('Markers state updated, total markers:', Object.keys(newMarkers).length);
