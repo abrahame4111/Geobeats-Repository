@@ -264,56 +264,100 @@ const MapPage = ({ accessToken, user }) => {
     } else {
       console.log('Creating NEW marker for:', userId);
       
-      // Create marker with profile picture icon
-      const profileImage = location.profile_image || 'https://via.placeholder.com/60?text=User';
-      console.log('Profile image URL:', profileImage);
-      
       const markerColor = isCurrentUser ? '#1DB954' : '#4A90E2';
+      const profileImage = location.profile_image || 'https://via.placeholder.com/80?text=User';
       
-      // Create custom icon with profile picture
-      const iconSvg = `
-        <svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <clipPath id="clip-circle-${userId.replace(/[^a-zA-Z0-9]/g, '')}">
-              <circle cx="40" cy="40" r="32"/>
-            </clipPath>
-          </defs>
-          <!-- Outer border circle -->
-          <circle cx="40" cy="40" r="36" fill="${markerColor}" stroke="#ffffff" stroke-width="4"/>
-          <!-- Profile image -->
-          <image href="${profileImage}" x="8" y="8" width="64" height="64" clip-path="url(#clip-circle-${userId.replace(/[^a-zA-Z0-9]/g, '')})"/>
-        </svg>
-      `;
-      
-      const iconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(iconSvg);
-
+      // Create marker icon with profile picture using a simpler circle approach
       const marker = new window.google.maps.Marker({
         position,
         map,
         icon: {
-          url: iconUrl,
-          scaledSize: new window.google.maps.Size(80, 80),
-          anchor: new window.google.maps.Point(40, 40),
+          url: profileImage,
+          scaledSize: new window.google.maps.Size(60, 60),
+          anchor: new window.google.maps.Point(30, 30),
         },
         title: location.user_name || userId,
         optimized: false,
         zIndex: isCurrentUser ? 1000 : 100,
       });
 
-      console.log('Marker created:', marker);
+      console.log('Marker created with profile image:', profileImage);
 
+      // Create custom overlay for the music label above marker
+      if (location.current_track) {
+        const labelDiv = document.createElement('div');
+        labelDiv.style.cssText = `
+          position: absolute;
+          background: rgba(0, 0, 0, 0.9);
+          color: white;
+          padding: 6px 12px;
+          border-radius: 16px;
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+          pointer-events: none;
+          transform: translate(-50%, -100%);
+          margin-top: -35px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+          border: 1px solid ${markerColor};
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          max-width: 250px;
+          overflow: hidden;
+        `;
+        
+        labelDiv.innerHTML = `
+          <span style="font-size: 14px;">🎵</span>
+          <span style="overflow: hidden; text-overflow: ellipsis;">${location.current_track.name}</span>
+        `;
+
+        // Create custom overlay
+        class MusicLabel extends window.google.maps.OverlayView {
+          constructor(position, element) {
+            super();
+            this.position = position;
+            this.element = element;
+          }
+
+          onAdd() {
+            const panes = this.getPanes();
+            panes.floatPane.appendChild(this.element);
+          }
+
+          draw() {
+            const projection = this.getProjection();
+            const point = projection.fromLatLngToDivPixel(this.position);
+            if (point) {
+              this.element.style.left = point.x + 'px';
+              this.element.style.top = point.y + 'px';
+            }
+          }
+
+          onRemove() {
+            if (this.element.parentNode) {
+              this.element.parentNode.removeChild(this.element);
+            }
+          }
+
+          setPosition(newPosition) {
+            this.position = newPosition;
+            this.draw();
+          }
+        }
+
+        const musicLabel = new MusicLabel(position, labelDiv);
+        musicLabel.setMap(map);
+        
+        // Store the label with the marker
+        marker.musicLabel = musicLabel;
+      }
+
+      // Simplified info window - just song details
       const infoWindow = new window.google.maps.InfoWindow({
         content: createInfoWindowContent(userId, location),
-        pixelOffset: new window.google.maps.Size(0, -50),
+        pixelOffset: new window.google.maps.Size(0, -35),
       });
-
-      // Auto-open info window for current user
-      if (isCurrentUser) {
-        setTimeout(() => {
-          infoWindow.open(map, marker);
-          console.log('Info window auto-opened for current user');
-        }, 500);
-      }
 
       marker.addListener('click', () => {
         console.log('Marker clicked:', userId);
