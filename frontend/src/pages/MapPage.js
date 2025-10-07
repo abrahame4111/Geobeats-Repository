@@ -740,13 +740,18 @@ const MapPage = ({ accessToken, user }) => {
       setLocationEnabled(false);
       console.log('❌ Location sharing DISABLED');
       
+      // Get consistent user ID
+      const userId = user?.id || user?.name || localStorage.getItem('temp_user_id');
+      
       // Remove current user from active locations
-      removeMarker(user.id);
-      setUserLocations((prev) => {
-        const newLocations = { ...prev };
-        delete newLocations[user.id];
-        return newLocations;
-      });
+      if (userId) {
+        removeMarker(userId);
+        setUserLocations((prev) => {
+          const newLocations = { ...prev };
+          delete newLocations[userId];
+          return newLocations;
+        });
+      }
       
       // Notify other users via WebSocket
       if (websocket && websocket.readyState === WebSocket.OPEN) {
