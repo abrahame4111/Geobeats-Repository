@@ -63,6 +63,7 @@ class ConnectionManager:
     
     async def broadcast_update(self, user_id: str, location_data: Dict):
         self.user_locations[user_id] = location_data
+        logger.info(f"📍 Storing location for {user_id}: lat={location_data.get('lat')}, lng={location_data.get('lng')}")
         
         message = json.dumps({
             "type": "location_update",
@@ -71,12 +72,21 @@ class ConnectionManager:
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
         
+        logger.info(f"📡 Broadcasting update from {user_id} to {len(self.active_connections)} connections")
+        logger.info(f"📤 Recipients: {list(self.active_connections.keys())}")
+        
         disconnected = []
+        broadcast_count = 0
         for uid, connection in self.active_connections.items():
             try:
                 await connection.send_text(message)
-            except:
+                broadcast_count += 1
+                logger.info(f"✅ Successfully sent to {uid}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send to {uid}: {e}")
                 disconnected.append(uid)
+        
+        logger.info(f"📊 Broadcast summary: {broadcast_count} successful, {len(disconnected)} failed")
         
         for uid in disconnected:
             self.disconnect(uid)
