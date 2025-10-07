@@ -435,16 +435,59 @@ const MapPage = ({ accessToken, user }) => {
       const profileImage = location.profile_image || 'https://via.placeholder.com/80?text=User';
       
       // Create circular marker icon with profile picture and border
-      const createMarkerIcon = (imageUrl, borderColor) => {
+      const createMarkerIcon = (imageUrl, borderColor, userName) => {
         return new Promise((resolve) => {
           const canvas = document.createElement('canvas');
           canvas.width = 70;
           canvas.height = 70;
           const ctx = canvas.getContext('2d');
           
+          // Function to create fallback marker
+          const createFallback = () => {
+            ctx.clearRect(0, 0, 70, 70);
+            
+            // Draw white background circle
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(35, 35, 34, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw colored border
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(35, 35, 32, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw colored background
+            ctx.fillStyle = borderColor;
+            ctx.beginPath();
+            ctx.arc(35, 35, 28, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw initial letter or emoji
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const initial = userName ? userName.charAt(0).toUpperCase() : (isCurrentUser ? '😊' : '👤');
+            ctx.fillText(initial, 35, 35);
+            
+            resolve(canvas.toDataURL());
+          };
+          
+          // Try to load the image
           const img = new Image();
-          img.crossOrigin = 'anonymous';
+          
+          // Set a timeout for image loading
+          const timeout = setTimeout(() => {
+            console.warn('Image load timeout, using fallback');
+            createFallback();
+          }, 3000);
+          
           img.onload = () => {
+            clearTimeout(timeout);
+            
             // Draw white background circle
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
@@ -463,27 +506,30 @@ const MapPage = ({ accessToken, user }) => {
             ctx.beginPath();
             ctx.arc(35, 35, 28, 0, Math.PI * 2);
             ctx.clip();
-            ctx.drawImage(img, 7, 7, 56, 56);
-            ctx.restore();
             
-            resolve(canvas.toDataURL());
+            try {
+              ctx.drawImage(img, 7, 7, 56, 56);
+              ctx.restore();
+              resolve(canvas.toDataURL());
+            } catch (e) {
+              console.error('Error drawing image:', e);
+              ctx.restore();
+              createFallback();
+            }
           };
-          img.onerror = () => {
-            // Fallback to simple colored circle
-            ctx.fillStyle = borderColor;
-            ctx.beginPath();
-            ctx.arc(35, 35, 30, 0, Math.PI * 2);
-            ctx.fill();
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '30px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(isCurrentUser ? '😊' : '👤', 35, 35);
-            
-            resolve(canvas.toDataURL());
+          
+          img.onerror = (e) => {
+            clearTimeout(timeout);
+            console.error('Failed to load profile image:', imageUrl, e);
+            createFallback();
           };
-          img.src = imageUrl;
+          
+          // Try without crossOrigin first, then with it
+          if (imageUrl && imageUrl.includes('scdn.co')) {
+            img.crossOrigin = 'anonymous';
+          }
+          
+          img.src = imageUrl || 'https://via.placeholder.com/80?text=User';
         });
       };
 
