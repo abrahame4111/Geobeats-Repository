@@ -555,6 +555,12 @@ const MapPage = ({ accessToken, user }) => {
         .gm-style-iw button {
           display: none !important;
         }
+        
+        /* Make marker images circular with border */
+        img[src*="scdn.co"], img[src*="placeholder"] {
+          border-radius: 50% !important;
+          border: 3px solid #1DB954 !important;
+        }
       `}</style>
       <div style={styles.controls}>
         <div style={styles.controlsContent}>
