@@ -579,18 +579,24 @@ const MapPage = ({ accessToken, user }) => {
   };
 
   const toggleLocationSharing = () => {
+    console.log('Toggle button clicked. Current state:', locationEnabled);
+    
     if (!locationEnabled) {
       // Try to enable location sharing
       if (!navigator.geolocation) {
+        console.error('Geolocation not supported');
         alert('Geolocation is not supported by your browser. Please try a different browser.');
         return;
       }
       
+      console.log('WebSocket ready?', websocket?.readyState === WebSocket.OPEN);
+      console.log('Map ready?', !!map);
+      
       setLocationEnabled(true);
-      console.log('Location sharing enabled');
+      console.log('✅ Location sharing ENABLED');
     } else {
       setLocationEnabled(false);
-      console.log('Location sharing disabled');
+      console.log('❌ Location sharing DISABLED');
     }
   };
 
