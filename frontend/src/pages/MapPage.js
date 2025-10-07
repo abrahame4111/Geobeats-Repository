@@ -17,9 +17,10 @@ const MapPage = ({ accessToken, user }) => {
   const [mapsKey, setMapsKey] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
 
-  // Load Google Maps API key
+  // Load Google Maps API key and user profile
   useEffect(() => {
     loadMapsKey();
+    loadUserProfile();
   }, []);
 
   const loadMapsKey = async () => {
@@ -28,6 +29,17 @@ const MapPage = ({ accessToken, user }) => {
       setMapsKey(response.data.api_key);
     } catch (error) {
       console.error('Failed to load Maps API key:', error);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const response = await axios.get(`${API}/spotify/me?access_token=${accessToken}`);
+      const imageUrl = response.data.images?.[0]?.url || 'https://via.placeholder.com/80?text=User';
+      setProfileImage(imageUrl);
+    } catch (error) {
+      console.error('Failed to load user profile:', error);
+      setProfileImage('https://via.placeholder.com/80?text=User');
     }
   };
 
