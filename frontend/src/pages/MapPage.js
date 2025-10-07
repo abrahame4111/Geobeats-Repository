@@ -368,11 +368,14 @@ const MapPage = ({ accessToken, user }) => {
         markers[userId].musicLabel.setMap(null);
       }
       
-      if (location.current_track) {
-        const labelDiv = createMusicLabel(location.current_track.name, markerColor);
-        const musicLabel = new MusicLabel(position, labelDiv);
-        musicLabel.setMap(map);
-        markers[userId].musicLabel = musicLabel;
+      if (location.current_track && window.google && window.google.maps) {
+        const MusicLabel = createMusicLabelClass();
+        if (MusicLabel) {
+          const labelDiv = createMusicLabel(location.current_track.name, markerColor);
+          const musicLabel = new MusicLabel(position, labelDiv);
+          musicLabel.setMap(map);
+          markers[userId].musicLabel = musicLabel;
+        }
       }
     } else {
       console.log('Creating NEW marker for:', userId);
