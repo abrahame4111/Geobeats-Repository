@@ -25,8 +25,8 @@ This guide will walk you through setting up the Music Navigator app with your ow
    ```
    App name: Music Navigator
    App description: Real-time music streaming with location tracking
-   Website: https://music-navigator.preview.emergentagent.com
-   Redirect URI: https://music-navigator.preview.emergentagent.com/auth/callback
+   Website: https://geobeats.preview.emergentagent.com
+   Redirect URI: https://geobeats.preview.emergentagent.com/auth/callback
    ```
 3. Check the box: **"I understand and agree with Spotify's Developer Terms of Service and Design Guidelines"**
 4. Click **"Save"**
@@ -83,7 +83,7 @@ Keep these values handy - you'll add them to the `.env` file in Part 3.
 2. Under **"Application restrictions"**:
    - Select **"HTTP referrers (web sites)"**
    - Click **"Add an item"**
-   - Enter: `https://music-navigator.preview.emergentagent.com/*`
+   - Enter: `https://geobeats.preview.emergentagent.com/*`
    - Click **"Done"**
 
 3. Click **"Save"** at the bottom
@@ -117,7 +117,7 @@ CORS_ORIGINS="*"
 # Spotify API Configuration (Replace with your credentials)
 SPOTIFY_CLIENT_ID="YOUR_SPOTIFY_CLIENT_ID_HERE"
 SPOTIFY_CLIENT_SECRET="YOUR_SPOTIFY_CLIENT_SECRET_HERE"
-SPOTIFY_REDIRECT_URI="https://music-navigator.preview.emergentagent.com/auth/callback"
+SPOTIFY_REDIRECT_URI="https://geobeats.preview.emergentagent.com/auth/callback"
 
 # Google Maps API Configuration (Replace with your API key)
 GOOGLE_MAPS_API_KEY="YOUR_GOOGLE_MAPS_API_KEY_HERE"
@@ -131,7 +131,7 @@ Replace the placeholders with your actual credentials:
 # Spotify API Configuration
 SPOTIFY_CLIENT_ID="abc123xyz456..."  # Your Client ID from Spotify
 SPOTIFY_CLIENT_SECRET="def789uvw012..."  # Your Client Secret from Spotify
-SPOTIFY_REDIRECT_URI="https://music-navigator.preview.emergentagent.com/auth/callback"
+SPOTIFY_REDIRECT_URI="https://geobeats.preview.emergentagent.com/auth/callback"
 
 # Google Maps API Configuration
 GOOGLE_MAPS_API_KEY="AIzaSy..."  # Your API key from Google Cloud
@@ -162,7 +162,7 @@ Wait about 5 seconds for the backend to restart.
 
 ### Step 1: Open the Application
 
-Go to: [https://music-navigator.preview.emergentagent.com/](https://music-navigator.preview.emergentagent.com/)
+Go to: [https://geobeats.preview.emergentagent.com/](https://geobeats.preview.emergentagent.com/)
 
 ### Step 2: Test Login
 
