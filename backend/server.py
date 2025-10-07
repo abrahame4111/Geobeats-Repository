@@ -411,7 +411,10 @@ from starlette.requests import Request
 class PermissionsPolicyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
-        response.headers["Permissions-Policy"] = "geolocation=(self), camera=(), microphone=()"
+        # Allow geolocation for all origins (needed for iframe/preview environments)
+        response.headers["Permissions-Policy"] = "geolocation=*, camera=(), microphone=()"
+        # Also set Feature-Policy for older browsers
+        response.headers["Feature-Policy"] = "geolocation *"
         return response
 
 app.add_middleware(PermissionsPolicyMiddleware)
