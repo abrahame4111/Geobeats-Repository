@@ -107,15 +107,18 @@ user_problem_statement: "Multiple users (friends) cannot see each other's live l
 backend:
   - task: "WebSocket Broadcasting Multi-User Locations"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
-    stuck_count: 1
+    stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "WebSocket endpoint and ConnectionManager exist but multi-user broadcasting not working. Users can't see each other's locations and songs. Need to debug broadcast_update method and connection handling."
+      - working: true
+        agent: "testing"
+        comment: "FIXED: WebSocket endpoint was not properly configured for Kubernetes ingress. Moved WebSocket endpoint from @app.websocket('/ws/{user_id}') to @api_router.websocket('/ws/{user_id}') to match '/api' prefix requirement. Comprehensive testing completed: ✅ Multi-user connections (3 users tested), ✅ Real-time location broadcasting between all users, ✅ Message format verification (initial_locations and location_update), ✅ Disconnection handling, ✅ Initial locations sent to new connections. All WebSocket functionality working correctly at /api/ws/{user_id} endpoint."
 
 frontend:
   - task: "WebSocket Connection and Message Handling" 
