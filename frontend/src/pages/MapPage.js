@@ -524,9 +524,18 @@ const MapPage = ({ accessToken, user }) => {
             createFallback();
           };
           
-          // Try without crossOrigin first, then with it
+          // Handle Spotify CDN images with CORS
           if (imageUrl && imageUrl.includes('scdn.co')) {
             img.crossOrigin = 'anonymous';
+            
+            // If CORS fails, try using proxy
+            const originalError = img.onerror;
+            img.onerror = (e) => {
+              console.log('CORS failed, trying proxy...');
+              img.onerror = originalError;
+              img.crossOrigin = null;
+              img.src = `${API}/proxy/image?url=${encodeURIComponent(imageUrl)}`;
+            };
           }
           
           img.src = imageUrl || 'https://via.placeholder.com/80?text=User';
