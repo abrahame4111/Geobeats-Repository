@@ -267,21 +267,75 @@ const MapPage = ({ accessToken, user }) => {
       const markerColor = isCurrentUser ? '#1DB954' : '#4A90E2';
       const profileImage = location.profile_image || 'https://via.placeholder.com/80?text=User';
       
-      // Create marker icon with profile picture using a simpler circle approach
-      const marker = new window.google.maps.Marker({
-        position,
-        map,
-        icon: {
-          url: profileImage,
-          scaledSize: new window.google.maps.Size(60, 60),
-          anchor: new window.google.maps.Point(30, 30),
-        },
-        title: location.user_name || userId,
-        optimized: false,
-        zIndex: isCurrentUser ? 1000 : 100,
-      });
+      // Create circular marker icon with profile picture and border
+      const createMarkerIcon = (imageUrl, borderColor) => {
+        return new Promise((resolve) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = 70;
+          canvas.height = 70;
+          const ctx = canvas.getContext('2d');
+          
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            // Draw white background circle
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(35, 35, 34, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw colored border
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(35, 35, 32, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Clip to circle and draw image
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(35, 35, 28, 0, Math.PI * 2);
+            ctx.clip();
+            ctx.drawImage(img, 7, 7, 56, 56);
+            ctx.restore();
+            
+            resolve(canvas.toDataURL());
+          };
+          img.onerror = () => {
+            // Fallback to simple colored circle
+            ctx.fillStyle = borderColor;
+            ctx.beginPath();
+            ctx.arc(35, 35, 30, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '30px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(isCurrentUser ? '😊' : '👤', 35, 35);
+            
+            resolve(canvas.toDataURL());
+          };
+          img.src = imageUrl;
+        });
+      };
 
-      console.log('Marker created with profile image:', profileImage);
+      // Create marker with canvas-drawn icon
+      createMarkerIcon(profileImage, markerColor).then(iconUrl => {
+        const marker = new window.google.maps.Marker({
+          position,
+          map,
+          icon: {
+            url: iconUrl,
+            scaledSize: new window.google.maps.Size(70, 70),
+            anchor: new window.google.maps.Point(35, 35),
+          },
+          title: location.user_name || userId,
+          optimized: false,
+          zIndex: isCurrentUser ? 1000 : 100,
+        });
+
+        console.log('Marker created with profile image:', profileImage);
 
       // Create custom overlay for the music label above marker
       if (location.current_track) {
