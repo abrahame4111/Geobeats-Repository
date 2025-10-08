@@ -415,6 +415,42 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
+  mapPlaceholder: {
+    flex: 1,
+    backgroundColor: '#282828',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  placeholderText: {
+    color: '#1DB954',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  placeholderSubText: {
+    color: '#b3b3b3',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  userLocationItem: {
+    backgroundColor: 'rgba(29, 185, 84, 0.1)',
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 4,
+    width: '100%',
+  },
+  userLocationText: {
+    color: '#fff',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  userTrackText: {
+    color: '#1DB954',
+    fontSize: 10,
+    marginTop: 2,
+  },
   markerContainer: {
     width: 40,
     height: 40,
