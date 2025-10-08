@@ -307,19 +307,27 @@ const MapScreen = ({ navigation }) => {
         </Text>
       </View>
 
-      {/* Map */}
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        region={region}
-        onRegionChangeComplete={setRegion}
-        showsUserLocation={false}
-        showsMyLocationButton={false}
-        customMapStyle={mapStyle}
-      >
-        {renderMarkers()}
-      </MapView>
+      {/* Map Placeholder */}
+      <View style={styles.mapPlaceholder}>
+        <Text style={styles.placeholderText}>Map View Coming Soon</Text>
+        <Text style={styles.placeholderSubText}>
+          Location sharing and WebSocket connection working below
+        </Text>
+        
+        {/* Show user locations as list for now */}
+        {Object.entries(userLocations).map(([userId, location]) => (
+          <View key={userId} style={styles.userLocationItem}>
+            <Text style={styles.userLocationText}>
+              {location.user_name || userId}: {location.lat?.toFixed(4)}, {location.lng?.toFixed(4)}
+            </Text>
+            {location.current_track && (
+              <Text style={styles.userTrackText}>
+                🎵 {location.current_track.name}
+              </Text>
+            )}
+          </View>
+        ))}
+      </View>
 
       {/* Controls */}
       <View style={styles.controls}>
