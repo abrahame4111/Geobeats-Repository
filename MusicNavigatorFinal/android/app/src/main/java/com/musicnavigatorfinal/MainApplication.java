@@ -52,7 +52,7 @@ public class MainApplication extends Application implements ReactApplication {
   @Override
   public void onCreate() {
     super.onCreate();
-    SoLoader.init(this, /* native exopackage */ false);
+    SoLoader.init(this, false);
     if (DefaultNewArchitectureEntryPoint.getFabricEnabled()) {
       DefaultNewArchitectureEntryPoint.load();
     }
