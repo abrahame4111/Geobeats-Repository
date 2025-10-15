@@ -51,12 +51,18 @@ const LoginScreen = ({ navigation }) => {
         }
         
         if (queryString) {
-          const urlParams = new URLSearchParams(queryString);
-          const accessToken = urlParams.get('access_token');
-          const refreshToken = urlParams.get('refresh_token');
-          const userId = urlParams.get('user_id');
-          const userName = urlParams.get('user_name');
-          const userEmail = urlParams.get('user_email');
+          // Parse query string manually (URLSearchParams not available in RN)
+          const params = {};
+          queryString.split('&').forEach(param => {
+            const [key, value] = param.split('=');
+            params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+          });
+          
+          const accessToken = params['access_token'];
+          const refreshToken = params['refresh_token'];
+          const userId = params['user_id'];
+          const userName = params['user_name'];
+          const userEmail = params['user_email'];
 
           console.log('Extracted tokens:', { accessToken: accessToken ? 'present' : 'missing', userId });
 
