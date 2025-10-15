@@ -681,12 +681,9 @@ const MapScreen = ({ navigation }) => {
               style={styles.topButton}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={['#1DB954', '#1ed760']}
-                style={styles.homeButton}
-              >
-                <Icon name="home" size={22} color="#fff" />
-              </LinearGradient>
+              <View style={styles.homeButton}>
+                <Icon name="home" size={22} color="#1DB954" />
+              </View>
             </TouchableOpacity>
             
             {/* Center Section */}
