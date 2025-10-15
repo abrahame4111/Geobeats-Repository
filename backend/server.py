@@ -289,9 +289,12 @@ async def get_categories(access_token: str = Query(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/spotify/currently-playing")
-async def get_currently_playing(access_token: str = Query(...)):
+async def get_currently_playing(authorization: str = Header(...)):
     """Get currently playing track"""
     try:
+        # Extract token from "Bearer <token>" format
+        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 "https://api.spotify.com/v1/me/player/currently-playing",
@@ -299,13 +302,16 @@ async def get_currently_playing(access_token: str = Query(...)):
             )
             
             if response.status_code == 204:
+                logger.info("No track currently playing")
                 return {"is_playing": False}
             
             if response.status_code != 200:
+                logger.warning(f"Spotify API returned {response.status_code}")
                 return {"is_playing": False}
             
             return response.json()
     except Exception as e:
+        logger.error(f"Error fetching currently playing: {str(e)}")
         return {"is_playing": False}
 
 @api_router.get("/spotify/queue")
