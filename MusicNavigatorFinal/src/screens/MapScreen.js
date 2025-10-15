@@ -626,14 +626,9 @@ const MapScreen = ({ navigation }) => {
         anchor={{ x: 0.5, y: 1 }}
       >
         <View style={styles.markerContainer}>
-          {/* Song Bubble - Only if sharing or if it's not me */}
+          {/* Song Card - Only if sharing or if it's not me */}
           {songName && (
-            <Animated.View 
-              style={[
-                styles.songCard,
-                isMe && { transform: [{ scale: pulseAnim }] }
-              ]}
-            >
+            <View style={styles.songCard}>
               {/* Album Cover */}
               <View style={styles.albumCoverContainer}>
                 {(isMe ? currentTrack?.album?.images?.[0]?.url : location.album_cover) ? (
@@ -645,29 +640,35 @@ const MapScreen = ({ navigation }) => {
                   />
                 ) : (
                   <LinearGradient
-                    colors={['#1DB954', '#1ed760']}
+                    colors={['#282828', '#404040']}
                     style={styles.albumPlaceholder}
                   >
-                    <Icon name="album" size={24} color="#fff" />
+                    <Icon name="music-note" size={20} color="#b3b3b3" />
                   </LinearGradient>
                 )}
               </View>
               
               {/* Song Info */}
               <View style={styles.songInfo}>
-                <MarqueeText text={songName} style={styles.songTitle} />
+                <View style={styles.songTitleContainer}>
+                  <MarqueeText text={songName} style={styles.songTitle} />
+                </View>
                 {artist && (
-                  <View style={{ marginTop: 2 }}>
+                  <View style={styles.artistContainer}>
                     <MarqueeText text={artist} style={styles.artistName} />
                   </View>
                 )}
               </View>
               
-              {/* Playing Indicator */}
+              {/* Playing Indicator - Spotify Style */}
               <View style={styles.playingIndicator}>
-                <Icon name="graphic-eq" size={14} color="#1DB954" />
+                <View style={styles.soundWave}>
+                  <View style={[styles.soundBar, styles.soundBar1]} />
+                  <View style={[styles.soundBar, styles.soundBar2]} />
+                  <View style={[styles.soundBar, styles.soundBar3]} />
+                </View>
               </View>
-            </Animated.View>
+            </View>
           )}
           
           {/* Profile Marker with Spotify Photo */}
