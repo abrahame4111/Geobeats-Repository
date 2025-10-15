@@ -25,6 +25,8 @@ const LoginScreen = ({ navigation }) => {
   const handleSpotifyLogin = async () => {
     try {
       setLoading(true);
+      const loginUrl = `${API}${API_ENDPOINTS.AUTH.LOGIN}`;
+      console.log('Opening Spotify login URL:', loginUrl);
       setShowWebView(true);
     } catch (error) {
       Alert.alert('Error', 'Failed to initiate login');
