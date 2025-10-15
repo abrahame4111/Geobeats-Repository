@@ -316,10 +316,11 @@ const MapScreen = ({ navigation }) => {
         latitude: location.latitude,
         longitude: location.longitude,
         current_song: currentTrack?.name || null,
+        profile_image: userProfile?.images?.[0]?.url || null,
       });
       
       wsRef.current.send(message);
-      console.log('📤 Sent location update');
+      console.log('📤 Sent location update with song:', currentTrack?.name);
     }
   };
 
