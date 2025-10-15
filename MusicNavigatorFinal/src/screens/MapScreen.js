@@ -508,24 +508,31 @@ const MapScreen = ({ navigation }) => {
 
   const fetchCurrentTrack = async () => {
     try {
+      console.log('🔍 Fetching current track from:', `${API}${API_ENDPOINTS.SPOTIFY.CURRENTLY_PLAYING}`);
       const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.CURRENTLY_PLAYING}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
       
+      console.log('📊 Spotify response status:', response.status);
+      console.log('📊 Spotify response data:', JSON.stringify(response.data).substring(0, 200));
+      
       if (response.data && response.data.item) {
         const track = response.data.item;
         setCurrentTrack(track);
-        console.log('🎵 Now playing:', track.name);
+        console.log('🎵 Now playing:', track.name, 'by', track.artists?.[0]?.name);
         
         // If sharing is enabled and we have location, send update
         if (shareEnabled && myLocation) {
           sendLocationUpdate(myLocation);
         }
       } else {
+        console.log('⚠️ No track data in response');
         setCurrentTrack(null);
       }
     } catch (error) {
-      if (__DEV__) console.log('No song playing');
+      console.log('⚠️ Current track error:', error.response?.status, error.response?.data || error.message);
+      // Don't show alert for "no song playing" errors
+      setCurrentTrack(null);
     }
   };
 
