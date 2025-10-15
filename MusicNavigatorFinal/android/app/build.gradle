@@ -18,6 +18,12 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    
+    // Disable strict version checking
+    dependenciesInfo {
+        includeInApk false
+        includeInBundle false
+    }
 
     packagingOptions {
         pickFirst '**/libc++_shared.so'
