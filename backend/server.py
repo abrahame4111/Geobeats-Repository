@@ -198,8 +198,9 @@ async def spotify_callback(code: str = Query(...)):
                 "user_email": profile.get("email", "")
             }
             
-            # Redirect to frontend login page with auth data
-            redirect_url = f"/?{urlencode(auth_params)}"
+            # Redirect with hash params so mobile WebView can intercept
+            redirect_url = f"/#callback?{urlencode(auth_params)}"
+            logger.info(f"Redirecting to: {redirect_url}")
             return RedirectResponse(url=redirect_url)
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")
