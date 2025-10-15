@@ -352,11 +352,29 @@ const MapScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (accessToken) {
+      fetchUserProfile();
       fetchCurrentTrack();
       const interval = setInterval(fetchCurrentTrack, 10000);
       return () => clearInterval(interval);
     }
   }, [accessToken]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.ME}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      if (response.data) {
+        setUserProfile(response.data);
+        console.log('✅ Got Spotify profile:', response.data.display_name);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.log('Could not fetch Spotify profile');
+      }
+    }
+  };
 
   const fetchCurrentTrack = async () => {
     try {
@@ -365,11 +383,19 @@ const MapScreen = ({ navigation }) => {
       });
       
       if (response.data && response.data.item) {
-        setCurrentTrack(response.data.item);
+        const track = response.data.item;
+        setCurrentTrack(track);
+        console.log('🎵 Now playing:', track.name);
+        
+        // Update location with current song
+        if (myLocation) {
+          sendLocationUpdate(myLocation);
+        }
+      } else {
+        setCurrentTrack(null);
       }
     } catch (error) {
       // Silently fail - Spotify endpoint might not be available or no song playing
-      // Only log in development mode
       if (__DEV__) {
         console.log('Spotify track fetch failed (this is OK if no song is playing)');
       }
