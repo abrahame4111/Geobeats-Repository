@@ -76,6 +76,15 @@ android {
     }
 }
 
+configurations.all {
+    resolutionStrategy {
+        // Force specific versions to avoid conflicts
+        force 'androidx.core:core:1.12.0'
+        force 'androidx.core:core-ktx:1.12.0'
+        force 'androidx.webkit:webkit:1.8.0'
+    }
+}
+
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
     
