@@ -73,10 +73,10 @@ const LoginScreen = ({ navigation }) => {
               email: userEmail || '',
             };
             
-            console.log('Login successful, navigating to Home');
+            console.log('Login successful, saving credentials');
             login(accessToken, refreshToken, user);
             setShowWebView(false);
-            navigation.replace('Home');
+            // Navigation will happen automatically when isAuthenticated becomes true
           }
         }
       } catch (error) {
