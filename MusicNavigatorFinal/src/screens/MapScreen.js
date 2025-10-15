@@ -561,6 +561,15 @@ const MapScreen = ({ navigation }) => {
     const artist = isMe ? (shareEnabled ? currentTrack?.artists?.[0]?.name : null) : location.artist;
     const userName = isMe ? (user?.name || 'Me') : location.user_name;
     
+    // Debug logging for my marker
+    if (isMe) {
+      console.log('🎨 Rendering my marker:');
+      console.log('  - Profile image:', profileImage ? 'Available' : 'Missing');
+      console.log('  - Share enabled:', shareEnabled);
+      console.log('  - Song name:', songName || 'None');
+      console.log('  - Artist:', artist || 'None');
+    }
+    
     return (
       <Marker
         key={userId}
