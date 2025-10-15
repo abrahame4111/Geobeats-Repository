@@ -1,7 +1,7 @@
 // Backend Configuration
 export const CONFIG = {
   // Replace with your backend URL
-  BACKEND_URL: 'https://geobeats.preview.emergentagent.com',
+  BACKEND_URL: 'https://spotifymap-live.preview.emergentagent.com',
   
   // API Configuration
   API_TIMEOUT: 10000,
@@ -25,7 +25,7 @@ export const CONFIG = {
   // Spotify API Configuration (these should match your backend)
   SPOTIFY: {
     CLIENT_ID: 'df14f22ccdc24f0ea4ed90e1e993e35d', // Replace with your Spotify Client ID
-    REDIRECT_URI: 'https://geobeats.preview.emergentagent.com/api/auth/callback',
+    REDIRECT_URI: 'https://spotifymap-live.preview.emergentagent.com/api/auth/callback',
     SCOPES: 'user-read-private user-read-email user-read-currently-playing user-read-playback-state playlist-read-private'
   },
   
