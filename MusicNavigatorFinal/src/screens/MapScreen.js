@@ -655,24 +655,10 @@ const MapScreen = ({ navigation }) => {
               
               {/* Song Info */}
               <View style={styles.songInfo}>
-                <View style={styles.marqueeContainer}>
-                  <Text 
-                    style={styles.songTitle} 
-                    numberOfLines={1}
-                    ellipsizeMode="clip"
-                  >
-                    {songName}
-                  </Text>
-                </View>
+                <MarqueeText text={songName} style={styles.songTitle} />
                 {artist && (
-                  <View style={styles.marqueeContainer}>
-                    <Text 
-                      style={styles.artistName} 
-                      numberOfLines={1}
-                      ellipsizeMode="clip"
-                    >
-                      {artist}
-                    </Text>
+                  <View style={{ marginTop: 2 }}>
+                    <MarqueeText text={artist} style={styles.artistName} />
                   </View>
                 )}
               </View>
