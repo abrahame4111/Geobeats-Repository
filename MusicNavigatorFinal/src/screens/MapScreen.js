@@ -556,6 +556,51 @@ const MapScreen = ({ navigation }) => {
 
   // ============ RENDER MARKER ============
 
+  // Marquee Text Component
+  const MarqueeText = ({ text, style }) => {
+    const scrollAnim = useRef(new Animated.Value(0)).current;
+    const [textWidth, setTextWidth] = useState(0);
+    const [containerWidth, setContainerWidth] = useState(0);
+    
+    useEffect(() => {
+      if (textWidth > containerWidth && containerWidth > 0) {
+        // Text is too long, start scrolling
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(1000), // Wait before starting
+            Animated.timing(scrollAnim, {
+              toValue: -(textWidth - containerWidth) - 20,
+              duration: (textWidth - containerWidth) * 30, // Slower scroll
+              useNativeDriver: true,
+            }),
+            Animated.delay(500), // Pause at end
+            Animated.timing(scrollAnim, {
+              toValue: 0,
+              duration: 500,
+              useNativeDriver: true,
+            }),
+          ])
+        ).start();
+      }
+    }, [textWidth, containerWidth]);
+
+    return (
+      <View 
+        style={{ overflow: 'hidden', width: '100%' }}
+        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+      >
+        <Animated.View style={{ transform: [{ translateX: scrollAnim }] }}>
+          <Text
+            style={style}
+            onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
+          >
+            {text}
+          </Text>
+        </Animated.View>
+      </View>
+    );
+  };
+
   const renderMarker = (location, userId, isMe = false) => {
     const profileImage = isMe ? userProfile?.images?.[0]?.url : location.profile_image;
     const songName = isMe ? (shareEnabled ? currentTrack?.name : null) : location.current_song;
