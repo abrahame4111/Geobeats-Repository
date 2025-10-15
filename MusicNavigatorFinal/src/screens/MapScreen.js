@@ -406,6 +406,9 @@ const MapScreen = ({ navigation }) => {
   // ============ RENDER ============
 
   const renderMarker = (location, userId, isMe = false) => {
+    const profileImage = isMe ? userProfile?.images?.[0]?.url : location.profile_image;
+    const songName = isMe ? currentTrack?.name : location.current_song;
+    
     return (
       <Marker
         key={userId}
@@ -419,13 +422,33 @@ const MapScreen = ({ navigation }) => {
         }}
       >
         <View style={styles.markerContainer}>
+          {/* Song playing label */}
+          {songName && (
+            <View style={styles.songBubble}>
+              <Icon name="music-note" size={12} color="#1DB954" style={styles.songIcon} />
+              <Text style={styles.songText} numberOfLines={1}>
+                {songName}
+              </Text>
+            </View>
+          )}
+          
+          {/* Profile picture marker */}
           <View style={[styles.marker, isMe && styles.myMarker]}>
-            <Icon 
-              name={isMe ? "my-location" : "person-pin-circle"} 
-              size={isMe ? 24 : 20} 
-              color="#fff" 
-            />
+            {profileImage ? (
+              <Image 
+                source={{ uri: profileImage }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <Icon 
+                name={isMe ? "my-location" : "person"} 
+                size={isMe ? 24 : 20} 
+                color="#fff" 
+              />
+            )}
           </View>
+          
+          {/* Username label */}
           {location.user_name && (
             <View style={styles.markerLabel}>
               <Text style={styles.markerText} numberOfLines={1}>
