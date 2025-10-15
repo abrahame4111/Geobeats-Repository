@@ -813,6 +813,23 @@ const MapScreen = ({ navigation }) => {
           </LinearGradient>
         </TouchableOpacity>
 
+        {/* Refresh Spotify Data */}
+        <TouchableOpacity 
+          onPress={() => {
+            fetchUserProfile();
+            fetchCurrentTrack();
+          }} 
+          style={styles.controlButton}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#9b4dca', '#7b2cbf']}
+            style={styles.controlGradient}
+          >
+            <Icon name="refresh" size={24} color="#fff" />
+          </LinearGradient>
+        </TouchableOpacity>
+
         {!locationPermission && (
           <TouchableOpacity 
             onPress={requestLocationPermission} 
