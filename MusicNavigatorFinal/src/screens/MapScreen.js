@@ -556,46 +556,64 @@ const MapScreen = ({ navigation }) => {
 
   // ============ RENDER MARKER ============
 
-  // Marquee Text Component
+  // Marquee Text Component - Spotify Style
   const MarqueeText = ({ text, style }) => {
     const scrollAnim = useRef(new Animated.Value(0)).current;
     const [textWidth, setTextWidth] = useState(0);
     const [containerWidth, setContainerWidth] = useState(0);
+    const [shouldScroll, setShouldScroll] = useState(false);
     
     useEffect(() => {
       if (textWidth > containerWidth && containerWidth > 0) {
-        // Text is too long, start scrolling
+        setShouldScroll(true);
+        const scrollDistance = textWidth - containerWidth + 20;
+        
         Animated.loop(
           Animated.sequence([
-            Animated.delay(1000), // Wait before starting
+            Animated.delay(2000), // Longer initial pause
             Animated.timing(scrollAnim, {
-              toValue: -(textWidth - containerWidth) - 20,
-              duration: (textWidth - containerWidth) * 30, // Slower scroll
+              toValue: -scrollDistance,
+              duration: scrollDistance * 40, // Smooth, consistent speed
               useNativeDriver: true,
             }),
-            Animated.delay(500), // Pause at end
+            Animated.delay(1000), // Pause at end
             Animated.timing(scrollAnim, {
               toValue: 0,
-              duration: 500,
+              duration: 800, // Quick return
               useNativeDriver: true,
             }),
           ])
         ).start();
+      } else {
+        setShouldScroll(false);
+        scrollAnim.setValue(0);
       }
     }, [textWidth, containerWidth]);
 
+    if (!text) return null;
+
     return (
       <View 
-        style={{ overflow: 'hidden', width: '100%' }}
+        style={{ overflow: 'hidden', flex: 1 }}
         onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
       >
-        <Animated.View style={{ transform: [{ translateX: scrollAnim }] }}>
+        <Animated.View 
+          style={{ 
+            transform: [{ translateX: scrollAnim }],
+            flexDirection: 'row',
+          }}
+        >
           <Text
-            style={style}
+            style={[style, { flexShrink: 0 }]}
             onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
           >
             {text}
           </Text>
+          {shouldScroll && (
+            <Text style={[style, { marginLeft: 20, flexShrink: 0 }]}>
+              {text}
+            </Text>
+          )}
         </Animated.View>
       </View>
     );
