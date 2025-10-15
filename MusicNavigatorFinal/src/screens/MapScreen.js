@@ -514,19 +514,28 @@ const MapScreen = ({ navigation }) => {
         style={styles.topBar}
       >
         <GlassCard style={styles.topCard}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Icon name="arrow-back" size={24} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.topLeft}>
+            <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.iconButton}>
+              <Icon name="home" size={24} color="#1DB954" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+              <Icon name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.topInfo}>
             <Text style={styles.topTitle}>Live Map</Text>
             <View style={styles.statusContainer}>
               <View style={[styles.statusDot, connectionStatus === 'connected' && styles.statusConnected]} />
               <Text style={styles.statusText}>
-                {Object.keys(userLocations).length} friends online
+                {Object.keys(userLocations).length} friends • {connectionStatus}
               </Text>
             </View>
           </View>
+          
+          <TouchableOpacity onPress={cycleMapType} style={styles.iconButton}>
+            <Icon name="layers" size={24} color="#1DB954" />
+          </TouchableOpacity>
         </GlassCard>
       </LinearGradient>
 
