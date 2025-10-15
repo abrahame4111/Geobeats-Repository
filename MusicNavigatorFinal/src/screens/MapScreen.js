@@ -556,63 +556,80 @@ const MapScreen = ({ navigation }) => {
 
   // ============ RENDER MARKER ============
 
-  // Marquee Text Component - Spotify Style
+  // Marquee Text Component - Simplified and Working
   const MarqueeText = ({ text, style }) => {
-    const scrollAnim = useRef(new Animated.Value(0)).current;
-    const [textWidth, setTextWidth] = useState(0);
+    const animatedValue = useRef(new Animated.Value(0)).current;
+    const [contentWidth, setContentWidth] = useState(0);
     const [containerWidth, setContainerWidth] = useState(0);
-    const [shouldScroll, setShouldScroll] = useState(false);
-    
+    const animationRef = useRef(null);
+
     useEffect(() => {
-      if (textWidth > containerWidth && containerWidth > 0) {
-        setShouldScroll(true);
-        const scrollDistance = textWidth - containerWidth + 20;
+      // Stop any existing animation
+      if (animationRef.current) {
+        animationRef.current.stop();
+      }
+      animatedValue.setValue(0);
+
+      const shouldAnimate = contentWidth > containerWidth && containerWidth > 0;
+      
+      if (shouldAnimate) {
+        const distance = contentWidth - containerWidth;
         
-        Animated.loop(
+        // Start animation with loop
+        animationRef.current = Animated.loop(
           Animated.sequence([
-            Animated.delay(2000), // Longer initial pause
-            Animated.timing(scrollAnim, {
-              toValue: -scrollDistance,
-              duration: scrollDistance * 40, // Smooth, consistent speed
+            Animated.delay(2000),
+            Animated.timing(animatedValue, {
+              toValue: -distance - 20,
+              duration: (distance + 20) * 50,
               useNativeDriver: true,
             }),
-            Animated.delay(1000), // Pause at end
-            Animated.timing(scrollAnim, {
+            Animated.delay(1000),
+            Animated.timing(animatedValue, {
               toValue: 0,
-              duration: 800, // Quick return
+              duration: 500,
               useNativeDriver: true,
             }),
           ])
-        ).start();
-      } else {
-        setShouldScroll(false);
-        scrollAnim.setValue(0);
+        );
+        
+        animationRef.current.start();
       }
-    }, [textWidth, containerWidth]);
+
+      return () => {
+        if (animationRef.current) {
+          animationRef.current.stop();
+        }
+      };
+    }, [contentWidth, containerWidth]);
 
     if (!text) return null;
 
     return (
       <View 
-        style={{ overflow: 'hidden', flex: 1 }}
-        onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
+        style={{ flex: 1, overflow: 'hidden' }}
+        onLayout={(e) => {
+          const width = e.nativeEvent.layout.width;
+          setContainerWidth(width);
+        }}
       >
-        <Animated.View 
-          style={{ 
-            transform: [{ translateX: scrollAnim }],
+        <Animated.View
+          style={{
             flexDirection: 'row',
+            transform: [{ translateX: animatedValue }],
           }}
         >
           <Text
-            style={[style, { flexShrink: 0 }]}
-            onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
+            style={[style, { paddingRight: 20 }]}
+            onLayout={(e) => {
+              const width = e.nativeEvent.layout.width;
+              setContentWidth(width);
+            }}
           >
             {text}
           </Text>
-          {shouldScroll && (
-            <Text style={[style, { marginLeft: 20, flexShrink: 0 }]}>
-              {text}
-            </Text>
+          {contentWidth > containerWidth && (
+            <Text style={style}>{text}</Text>
           )}
         </Animated.View>
       </View>
