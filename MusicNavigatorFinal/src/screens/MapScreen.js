@@ -9,6 +9,7 @@ import {
   Platform,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
@@ -26,503 +27,510 @@ const MapScreen = ({ navigation }) => {
   const { user, accessToken, API, BACKEND_URL } = useAuth();
   const mapRef = useRef(null);
   const wsRef = useRef(null);
+  const locationWatchId = useRef(null);
   
+  // State
   const [region, setRegion] = useState({
-    latitude: 20.0, // World view center
+    latitude: 20.0,
     longitude: 0.0,
-    latitudeDelta: 180.0, // Show entire world
-    longitudeDelta: 360.0,
+    latitudeDelta: 100,
+    longitudeDelta: 100,
   });
   
   const [userLocations, setUserLocations] = useState({});
-  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [myLocation, setMyLocation] = useState(null);
+  const [locationPermission, setLocationPermission] = useState(false);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   const [currentTrack, setCurrentTrack] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('Disconnected');
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
   const [showSongCard, setShowSongCard] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
 
+  // Initialize
   useEffect(() => {
-    requestLocationPermission();
-    connectWebSocket();
+    initializeMap();
     
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      cleanup();
     };
   }, []);
 
-  const requestLocationPermission = async () => {
-    try {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Location Access Required',
-            message: 'Music Navigator needs location access to show you and your friends on the map',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        
-        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          console.log('Location permission granted');
-          getCurrentLocation();
-        } else {
-          Alert.alert(
-            'Location Permission Required',
-            'Please enable location permission in settings to use this feature',
-            [{ text: 'OK' }]
-          );
-        }
-      } else {
-        getCurrentLocation();
-      }
-    } catch (error) {
-      console.error('Error requesting location permission:', error);
+  const cleanup = () => {
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+    if (locationWatchId.current) {
+      Geolocation.clearWatch(locationWatchId.current);
     }
   };
 
-  const getCurrentLocation = () => {
+  const initializeMap = async () => {
+    const hasPermission = await requestLocationPermission();
+    if (hasPermission) {
+      startLocationTracking();
+      connectWebSocket();
+    }
+  };
+
+  // ============ LOCATION HANDLING ============
+
+  const requestLocationPermission = async () => {
+    if (Platform.OS === 'ios') {
+      Geolocation.requestAuthorization('whenInUse');
+      setLocationPermission(true);
+      return true;
+    }
+
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+        {
+          title: 'Location Permission',
+          message: 'Music Navigator needs your location to show you on the map',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+
+      const hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
+      setLocationPermission(hasPermission);
+      
+      if (!hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'Location permission is needed to use the map feature',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Try Again', onPress: requestLocationPermission }
+          ]
+        );
+      }
+      
+      return hasPermission;
+    } catch (error) {
+      console.error('Permission error:', error);
+      return false;
+    }
+  };
+
+  const startLocationTracking = () => {
+    setLoadingLocation(true);
+    
+    // Get initial position
     Geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        console.log('Got user location:', latitude, longitude);
+        console.log('📍 Got initial location:', latitude, longitude);
         
-        const newUserLocation = { latitude, longitude };
-        setUserLocation(newUserLocation);
-        setLocationEnabled(true);
+        const newLocation = { latitude, longitude };
+        setMyLocation(newLocation);
         
-        // Start location sharing
-        startLocationSharing();
+        // Center map on user
+        centerOnLocation(newLocation);
+        
+        // Send to WebSocket
+        sendLocationUpdate(newLocation);
+        
+        setLoadingLocation(false);
       },
       (error) => {
-        console.error('Geolocation error:', error);
-        Alert.alert(
-          'Location Error',
-          `Unable to get your current location: ${error.message}. Please check your GPS settings.`,
-          [{ text: 'OK' }]
-        );
+        console.error('Location error:', error);
+        setLoadingLocation(false);
+        
+        // Show user-friendly error
+        let errorMessage = 'Unable to get your location. ';
+        switch (error.code) {
+          case 1:
+            errorMessage += 'Please enable location permissions in settings.';
+            break;
+          case 2:
+            errorMessage += 'Location services unavailable.';
+            break;
+          case 3:
+            errorMessage += 'Request timed out. Make sure GPS is enabled.';
+            break;
+          default:
+            errorMessage += 'Please check your location settings.';
+        }
+        
+        Alert.alert('Location Error', errorMessage, [
+          { text: 'Cancel' },
+          { text: 'Retry', onPress: startLocationTracking }
+        ]);
+      },
+      {
+        enableHighAccuracy: false, // Use network location first (faster)
+        timeout: 15000,
+        maximumAge: 10000,
+      }
+    );
+
+    // Watch position for continuous updates
+    locationWatchId.current = Geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        console.log('📍 Location update:', latitude, longitude);
+        
+        const newLocation = { latitude, longitude };
+        setMyLocation(newLocation);
+        sendLocationUpdate(newLocation);
+      },
+      (error) => {
+        console.error('Watch position error:', error);
       },
       {
         enableHighAccuracy: true,
-        timeout: CONFIG.LOCATION_TIMEOUT,
-        maximumAge: 10000,
+        distanceFilter: 50, // Update every 50 meters
+        interval: 10000, // Check every 10 seconds
+        fastestInterval: 5000,
       }
     );
   };
 
-  const connectWebSocket = () => {
-    if (!user?.id) return;
-    
-    const wsUrl = BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-    const fullWsUrl = `${wsUrl}${API_ENDPOINTS.WEBSOCKET}/${user.id}`;
-    
-    console.log('Connecting to WebSocket:', fullWsUrl);
-    
-    const ws = new WebSocket(fullWsUrl);
-    
-    ws.onopen = () => {
-      console.log('✅ WebSocket connected');
-      setConnectionStatus('Connected');
-    };
-    
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data.type);
-        handleLocationUpdate(data);
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    };
-    
-    ws.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
-      setConnectionStatus('Error');
-    };
-    
-    ws.onclose = (event) => {
-      console.log('WebSocket disconnected. Code:', event.code);
-      setConnectionStatus('Disconnected');
-      
-      if (event.code !== 1000) {
-        setTimeout(() => {
-          console.log('Attempting to reconnect...');
-          connectWebSocket();
-        }, CONFIG.WS_RECONNECT_INTERVAL);
-      }
-    };
-    
-    wsRef.current = ws;
-  };
-
-  const handleLocationUpdate = (data) => {
-    if (data.type === 'initial_locations') {
-      console.log('Received initial locations:', Object.keys(data.locations).length);
-      setUserLocations(data.locations);
-    } else if (data.type === 'location_update') {
-      if (data.location.disconnected) {
-        setUserLocations(prev => {
-          const updated = { ...prev };
-          delete updated[data.user_id];
-          return updated;
-        });
-      } else {
-        setUserLocations(prev => ({
-          ...prev,
-          [data.user_id]: data.location,
-        }));
-      }
+  const centerOnLocation = (location, zoom = 0.05) => {
+    if (mapRef.current && location) {
+      mapRef.current.animateToRegion({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        latitudeDelta: zoom,
+        longitudeDelta: zoom,
+      }, 1000);
     }
   };
 
-  const startLocationSharing = () => {
-    const shareLocation = () => {
-      Geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            const { latitude, longitude } = position.coords;
-            
-            let track = null;
-            try {
-              const trackResponse = await axios.get(
-                `${API}${API_ENDPOINTS.SPOTIFY.CURRENTLY_PLAYING}?access_token=${accessToken}`
-              );
-              track = trackResponse.data;
-              setCurrentTrack(track);
-              if (track && !showSongCard) {
-                setShowSongCard(true);
-              }
-            } catch (error) {
-              console.log('No track currently playing');
-            }
-            
-            let profileImage = null;
-            try {
-              const profileResponse = await axios.get(
-                `${API}${API_ENDPOINTS.SPOTIFY.ME}?access_token=${accessToken}`
-              );
-              profileImage = profileResponse.data.images?.[0]?.url;
-            } catch (error) {
-              console.log('Could not get profile image');
-            }
-            
-            const locationData = {
-              lat: latitude,
-              lng: longitude,
-              current_track: track,
-              profile_image: profileImage || 'https://via.placeholder.com/80?text=User',
-              user_name: user?.name || 'User',
-              user_id: user?.id,
-              timestamp: new Date().toISOString(),
-            };
-            
-            console.log('Sharing location data');
-            
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify(locationData));
-            }
-          } catch (error) {
-            console.error('Error sharing location:', error);
-          }
-        },
-        (error) => {
-          console.error('Location sharing error:', error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 5000,
-        }
-      );
-    };
-    
-    shareLocation();
-    const intervalId = setInterval(shareLocation, CONFIG.LOCATION_UPDATE_INTERVAL);
-    
-    return () => clearInterval(intervalId);
-  };
-
-  const toggleLocationSharing = () => {
-    if (locationEnabled) {
-      setLocationEnabled(false);
+  const centerOnMe = () => {
+    if (myLocation) {
+      centerOnLocation(myLocation, 0.01);
     } else {
-      requestLocationPermission();
-    }
-  };
-
-  const centerOnUser = () => {
-    if (userLocation && mapRef.current) {
-      const newRegion = {
-        ...userLocation,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
-      mapRef.current.animateToRegion(newRegion, 1000);
+      Alert.alert('Location Not Available', 'Trying to get your location...', [
+        { text: 'OK', onPress: startLocationTracking }
+      ]);
     }
   };
 
   const showAllUsers = () => {
-    const locations = Object.values(userLocations);
-    if (locations.length > 0 && mapRef.current) {
-      const coordinates = locations.map(loc => ({
-        latitude: loc.lat,
-        longitude: loc.lng
-      }));
+    const allLocations = [...Object.values(userLocations)];
+    if (myLocation) {
+      allLocations.push(myLocation);
+    }
+
+    if (allLocations.length === 0) {
+      Alert.alert('No Locations', 'No user locations available yet');
+      return;
+    }
+
+    if (allLocations.length === 1) {
+      centerOnLocation(allLocations[0]);
+      return;
+    }
+
+    // Calculate bounding box
+    const lats = allLocations.map(l => l.latitude);
+    const lngs = allLocations.map(l => l.longitude);
+    
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+    const latDelta = (maxLat - minLat) * 1.5; // Add padding
+    const lngDelta = (maxLng - minLng) * 1.5;
+
+    mapRef.current?.animateToRegion({
+      latitude: centerLat,
+      longitude: centerLng,
+      latitudeDelta: Math.max(latDelta, 0.01),
+      longitudeDelta: Math.max(lngDelta, 0.01),
+    }, 1000);
+  };
+
+  // ============ WEBSOCKET HANDLING ============
+
+  const connectWebSocket = () => {
+    if (!user?.id) {
+      console.log('No user ID, skipping WebSocket');
+      return;
+    }
+
+    try {
+      const wsUrl = BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+      const fullWsUrl = `${wsUrl}${API_ENDPOINTS.WEBSOCKET}/${user.id}`;
       
-      mapRef.current.fitToCoordinates(coordinates, {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
+      console.log('🔌 Connecting to WebSocket:', fullWsUrl);
+      
+      wsRef.current = new WebSocket(fullWsUrl);
+
+      wsRef.current.onopen = () => {
+        console.log('✅ WebSocket connected');
+        setConnectionStatus('connected');
+      };
+
+      wsRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log('📨 WebSocket message:', data.type);
+          
+          if (data.type === 'location_update') {
+            handleLocationUpdate(data);
+          } else if (data.type === 'initial_locations') {
+            handleInitialLocations(data);
+          }
+        } catch (error) {
+          console.error('WebSocket message error:', error);
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setConnectionStatus('error');
+      };
+
+      wsRef.current.onclose = () => {
+        console.log('🔌 WebSocket closed');
+        setConnectionStatus('disconnected');
+        
+        // Attempt reconnection after 5 seconds
+        setTimeout(() => {
+          if (user?.id) {
+            console.log('🔄 Attempting to reconnect...');
+            connectWebSocket();
+          }
+        }, 5000);
+      };
+    } catch (error) {
+      console.error('WebSocket connection error:', error);
+      setConnectionStatus('error');
+    }
+  };
+
+  const sendLocationUpdate = (location) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && user) {
+      const message = JSON.stringify({
+        type: 'location_update',
+        user_id: user.id,
+        user_name: user.name || 'Unknown',
+        latitude: location.latitude,
+        longitude: location.longitude,
+        current_song: currentTrack?.name || null,
       });
+      
+      wsRef.current.send(message);
+      console.log('📤 Sent location update');
     }
   };
 
-  const getConnectionStatusColor = () => {
-    switch (connectionStatus) {
-      case 'Connected': return '#1DB954';
-      case 'Error': return '#FF4444';
-      default: return '#FFA500';
+  const handleLocationUpdate = (data) => {
+    const { user_id, location } = data;
+    if (user_id !== user?.id) {
+      setUserLocations(prev => ({
+        ...prev,
+        [user_id]: {
+          ...location,
+          user_id,
+        }
+      }));
     }
   };
 
-  const renderMarkers = () => {
-    return Object.entries(userLocations).map(([userId, location]) => {
-      if (!location.lat || !location.lng) return null;
+  const handleInitialLocations = (data) => {
+    console.log('📍 Received initial locations:', Object.keys(data.locations).length);
+    const filteredLocations = {};
+    
+    Object.entries(data.locations).forEach(([userId, location]) => {
+      if (userId !== user?.id) {
+        filteredLocations[userId] = location;
+      }
+    });
+    
+    setUserLocations(filteredLocations);
+  };
+
+  // ============ SPOTIFY INTEGRATION ============
+
+  useEffect(() => {
+    if (accessToken) {
+      fetchCurrentTrack();
+      const interval = setInterval(fetchCurrentTrack, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [accessToken]);
+
+  const fetchCurrentTrack = async () => {
+    try {
+      const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.CURRENTLY_PLAYING}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
       
-      const isCurrentUser = userId === user?.id;
-      
-      return (
-        <Marker
-          key={userId}
-          coordinate={{
-            latitude: location.lat,
-            longitude: location.lng,
-          }}
-          title={location.user_name || userId}
-          description={location.current_track?.name || 'No music playing'}
-        >
-          <View style={[
-            styles.markerContainer,
-            isCurrentUser ? styles.currentUserMarker : styles.otherUserMarker
-          ]}>
+      if (response.data && response.data.item) {
+        setCurrentTrack(response.data.item);
+      }
+    } catch (error) {
+      console.error('Error fetching current track:', error);
+    }
+  };
+
+  // ============ RENDER ============
+
+  const renderMarker = (location, userId, isMe = false) => {
+    return (
+      <Marker
+        key={userId}
+        coordinate={{
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }}
+        onPress={() => {
+          setSelectedUser(isMe ? null : location);
+          setShowSongCard(true);
+        }}
+      >
+        <View style={styles.markerContainer}>
+          <View style={[styles.marker, isMe && styles.myMarker]}>
             <Icon 
-              name="person" 
-              size={18} 
-              color={"#fff"} 
+              name={isMe ? "my-location" : "person-pin-circle"} 
+              size={isMe ? 24 : 20} 
+              color="#fff" 
             />
           </View>
-          
-          {location.current_track && (
-            <View style={styles.songBubble}>
-              <Text style={styles.songBubbleText} numberOfLines={1}>
-                🎵 {location.current_track.name}
+          {location.user_name && (
+            <View style={styles.markerLabel}>
+              <Text style={styles.markerText} numberOfLines={1}>
+                {location.user_name}
               </Text>
             </View>
           )}
-        </Marker>
-      );
-    });
+        </View>
+      </Marker>
+    );
   };
 
   return (
-    <LinearGradient
-      colors={['#191414', '#0d0d0d']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <GlassCard style={styles.headerButton}>
-            <Icon name="arrow-back" size={24} color="#fff" />
-          </GlassCard>
-        </TouchableOpacity>
+      {/* Map */}
+      <MapView
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
+        style={styles.map}
+        initialRegion={region}
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+        showsCompass={true}
+        scrollEnabled={true}
+        zoomEnabled={true}
+        rotateEnabled={true}
+        pitchEnabled={true}
+      >
+        {/* Render my location */}
+        {myLocation && renderMarker({ ...myLocation, user_name: user?.name || 'Me' }, user?.id, true)}
         
-        <View style={styles.headerTitle}>
-          <Text style={styles.headerTitleText}>Global Music Map</Text>
-        </View>
-        
-        <TouchableOpacity onPress={showAllUsers} style={styles.headerButton}>
-          <GlassCard style={styles.headerButton}>
-            <Icon name="zoom-out-map" size={20} color="#1DB954" />
-          </GlassCard>
-        </TouchableOpacity>
-      </View>
+        {/* Render other users */}
+        {Object.entries(userLocations).map(([userId, location]) => 
+          renderMarker(location, userId, false)
+        )}
+      </MapView>
 
-      {/* Status Card */}
-      <View style={styles.statusContainer}>
-        <GlassCard style={styles.statusCard}>
-          <View style={styles.statusContent}>
-            <View style={styles.statusItem}>
-              <View style={[styles.statusDot, { backgroundColor: getConnectionStatusColor() }]} />
-              <Text style={styles.statusText}>{connectionStatus}</Text>
-            </View>
-            <View style={styles.statusDivider} />
-            <View style={styles.statusItem}>
-              <Icon name="people" size={16} color="#1DB954" />
-              <Text style={styles.statusText}>{Object.keys(userLocations).length} Users Online</Text>
+      {/* Top Bar */}
+      <LinearGradient
+        colors={['rgba(25, 20, 20, 0.95)', 'rgba(25, 20, 20, 0.7)', 'transparent']}
+        style={styles.topBar}
+      >
+        <GlassCard style={styles.topCard}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          
+          <View style={styles.topInfo}>
+            <Text style={styles.topTitle}>Live Map</Text>
+            <View style={styles.statusContainer}>
+              <View style={[styles.statusDot, connectionStatus === 'connected' && styles.statusConnected]} />
+              <Text style={styles.statusText}>
+                {Object.keys(userLocations).length} friends online
+              </Text>
             </View>
           </View>
         </GlassCard>
-      </View>
+      </LinearGradient>
 
-      {/* Map */}
-      <View style={styles.mapContainer}>
-        <MapView
-          ref={mapRef}
-          provider={PROVIDER_GOOGLE}
-          style={styles.map}
-          initialRegion={region}
-          showsUserLocation={false}
-          showsMyLocationButton={false}
-          zoomEnabled={true}
-          scrollEnabled={true}
-          pitchEnabled={true}
-          rotateEnabled={true}
-          loadingEnabled={true}
-          customMapStyle={mapStyle}
-          onRegionChangeComplete={setRegion}
-        >
-          {renderMarkers()}
-        </MapView>
-      </View>
-
-      {/* Controls */}
+      {/* Control Buttons */}
       <View style={styles.controls}>
-        <View style={styles.controlRow}>
-          <TouchableOpacity
-            style={styles.controlButton}
-            onPress={toggleLocationSharing}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={locationEnabled ? ['#1ED760', '#1DB954'] : ['#666', '#555']}
-              style={styles.controlButtonGradient}
-            >
-              <Icon
-                name={locationEnabled ? 'location-on' : 'location-off'}
-                size={18}
-                color="#fff"
-              />
-              <Text style={styles.controlButtonText}>
-                {locationEnabled ? 'Sharing' : 'Share Location'}
-              </Text>
-            </LinearGradient>
+        <TouchableOpacity onPress={centerOnMe} style={styles.controlButton}>
+          <GlassCard style={styles.controlCard}>
+            {loadingLocation ? (
+              <ActivityIndicator size="small" color="#1DB954" />
+            ) : (
+              <Icon name="my-location" size={24} color={myLocation ? "#1DB954" : "#888"} />
+            )}
+          </GlassCard>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={showAllUsers} style={styles.controlButton}>
+          <GlassCard style={styles.controlCard}>
+            <Icon name="people" size={24} color="#1DB954" />
+          </GlassCard>
+        </TouchableOpacity>
+
+        {!locationPermission && (
+          <TouchableOpacity onPress={requestLocationPermission} style={styles.controlButton}>
+            <GlassCard style={styles.controlCard}>
+              <Icon name="location-off" size={24} color="#ff4444" />
+            </GlassCard>
           </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.controlButton, styles.centerButton]}
-            onPress={centerOnUser}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['#333', '#555']}
-              style={styles.controlButtonGradient}
-            >
-              <Icon name="my-location" size={18} color="#1DB954" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+        )}
       </View>
 
       {/* Song Card */}
       {showSongCard && currentTrack && (
-        <SongCard
-          track={currentTrack}
-          isPlaying={true}
-          onClose={() => setShowSongCard(false)}
-        />
+        <View style={styles.songCardContainer}>
+          <SongCard
+            track={currentTrack}
+            onClose={() => setShowSongCard(false)}
+          />
+        </View>
       )}
-    </LinearGradient>
+    </View>
   );
 };
-
-// Dark map style for better UI
-const mapStyle = [
-  {
-    elementType: 'geometry',
-    stylers: [{ color: '#212121' }],
-  },
-  {
-    elementType: 'labels.icon',
-    stylers: [{ visibility: 'off' }],
-  },
-  {
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#757575' }],
-  },
-  {
-    elementType: 'labels.text.stroke',
-    stylers: [{ color: '#212121' }],
-  },
-  {
-    featureType: 'administrative',
-    elementType: 'geometry',
-    stylers: [{ color: '#757575' }],
-  },
-  {
-    featureType: 'administrative.country',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#9e9e9e' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'geometry',
-    stylers: [{ color: '#000000' }],
-  },
-  {
-    featureType: 'water',
-    elementType: 'labels.text.fill',
-    stylers: [{ color: '#3d3d3d' }],
-  },
-];
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
   },
-  header: {
+  map: {
+    flex: 1,
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: StatusBar.currentHeight + 10,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  topCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: StatusBar.currentHeight + 16,
-    paddingBottom: 16,
+    padding: 12,
   },
   backButton: {
-    width: 44,
-    height: 44,
+    padding: 8,
+    marginRight: 12,
   },
-  headerButton: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
+  topInfo: {
     flex: 1,
-    alignItems: 'center',
   },
-  headerTitleText: {
+  topTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#fff',
+    marginBottom: 4,
   },
   statusContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
-  },
-  statusCard: {
-    minHeight: 50,
-  },
-  statusContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  statusItem: {
     flexDirection: 'row',
     alignItems: 'center',
   },
@@ -530,91 +538,79 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 8,
+    backgroundColor: '#666',
+    marginRight: 6,
+  },
+  statusConnected: {
+    backgroundColor: '#1DB954',
   },
   statusText: {
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '500',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
-  statusDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  controls: {
+    position: 'absolute',
+    right: 16,
+    bottom: 100,
+    gap: 12,
   },
-  mapContainer: {
-    flex: 1,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
+  controlButton: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  map: {
-    flex: 1,
+  controlCard: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   markerContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    alignItems: 'center',
+  },
+  marker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1DB954',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  currentUserMarker: {
-    backgroundColor: '#1DB954',
+  myMarker: {
+    backgroundColor: '#4169E1',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
-  otherUserMarker: {
-    backgroundColor: '#FF6B6B',
-  },
-  songBubble: {
-    position: 'absolute',
-    top: -35,
-    left: -60,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 10,
+  markerLabel: {
+    marginTop: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    minWidth: 120,
-    maxWidth: 200,
+    maxWidth: 100,
   },
-  songBubbleText: {
-    color: '#1DB954',
+  markerText: {
+    color: '#fff',
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
   },
-  controls: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  controlRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  controlButton: {
-    flex: 1,
-    borderRadius: 22,
-    overflow: 'hidden',
-    marginRight: 8,
-  },
-  centerButton: {
-    flex: 0,
-    width: 44,
-    marginRight: 0,
-  },
-  controlButtonGradient: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 6,
+  songCardContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
   },
 });
 
