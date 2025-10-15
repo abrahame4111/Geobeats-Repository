@@ -106,7 +106,7 @@ Non-Commercial (Personal/Educational Project)
 
 **Website URL:**
 ```
-https://spotifymap-live.preview.emergentagent.com/
+https://musicmap-build.preview.emergentagent.com/
 ```
 
 **Terms of Service URL:**
@@ -210,7 +210,7 @@ N/A or create a simple privacy page
 1. Check Spotify app settings
 2. Redirect URI must be exactly:
    ```
-   https://spotifymap-live.preview.emergentagent.com/auth/callback
+   https://musicmap-build.preview.emergentagent.com/auth/callback
    ```
 3. No trailing slash, exact match
 
