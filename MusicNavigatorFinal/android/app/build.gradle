@@ -67,7 +67,10 @@ android {
 
 dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
-    implementation "com.facebook.react:react-native:+"
+    
+    // React Native from node_modules
+    implementation "com.facebook.react:react-android"
+    
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.0.0"
     
     // Google Play Services for Maps
@@ -84,8 +87,7 @@ dependencies {
         exclude group:'com.facebook.fbjni'
     }
 
-    implementation("com.facebook.react:react-android")
-    debugImplementation("com.facebook.react:hermes-engine:+")
+    debugImplementation("com.facebook.react:hermes-android")
 }
 
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
