@@ -429,12 +429,13 @@ const MapScreen = ({ navigation }) => {
         longitude: location.longitude,
         current_song: currentTrack?.name || null,
         artist: currentTrack?.artists?.[0]?.name || null,
+        album_cover: currentTrack?.album?.images?.[0]?.url || null,
         profile_image: userProfile?.images?.[0]?.url || null,
         timestamp: Date.now(),
       });
       
       wsRef.current.send(message);
-      console.log('📤 Location + song sent:', currentTrack?.name || 'No song');
+      console.log('📤 Location + song + album sent:', currentTrack?.name || 'No song');
     }
   };
 
