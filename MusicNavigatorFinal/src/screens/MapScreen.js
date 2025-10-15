@@ -599,11 +599,16 @@ const styles = StyleSheet.create({
   topCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     padding: 12,
   },
-  backButton: {
+  topLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  iconButton: {
     padding: 8,
-    marginRight: 12,
   },
   topInfo: {
     flex: 1,
