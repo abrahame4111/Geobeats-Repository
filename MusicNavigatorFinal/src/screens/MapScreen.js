@@ -783,16 +783,17 @@ const MapScreen = ({ navigation }) => {
           style={styles.controlButton}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={myLocation ? ['#1DB954', '#1ed760'] : ['#333', '#444']}
-            style={styles.controlGradient}
-          >
+          <View style={styles.controlGradient}>
             {loadingLocation ? (
-              <ActivityIndicator size="small" color="#fff" />
+              <ActivityIndicator size="small" color="#1DB954" />
             ) : (
-              <Icon name="my-location" size={24} color="#fff" />
+              <Icon 
+                name="my-location" 
+                size={24} 
+                color={myLocation ? "#1DB954" : "#888"} 
+              />
             )}
-          </LinearGradient>
+          </View>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -800,12 +801,9 @@ const MapScreen = ({ navigation }) => {
           style={styles.controlButton}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={['#1DB954', '#1ed760']}
-            style={styles.controlGradient}
-          >
-            <Icon name="people" size={24} color="#fff" />
-          </LinearGradient>
+          <View style={styles.controlGradient}>
+            <Icon name="people" size={24} color="#1DB954" />
+          </View>
         </TouchableOpacity>
 
         {/* Refresh Spotify Data */}
@@ -817,12 +815,9 @@ const MapScreen = ({ navigation }) => {
           style={styles.controlButton}
           activeOpacity={0.8}
         >
-          <LinearGradient
-            colors={['#9b4dca', '#7b2cbf']}
-            style={styles.controlGradient}
-          >
-            <Icon name="refresh" size={24} color="#fff" />
-          </LinearGradient>
+          <View style={styles.controlGradient}>
+            <Icon name="refresh" size={24} color="#9b4dca" />
+          </View>
         </TouchableOpacity>
 
         {!locationPermission && (
@@ -831,12 +826,9 @@ const MapScreen = ({ navigation }) => {
             style={styles.controlButton}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={['#ff4444', '#cc0000']}
-              style={styles.controlGradient}
-            >
-              <Icon name="location-off" size={24} color="#fff" />
-            </LinearGradient>
+            <View style={styles.controlGradient}>
+              <Icon name="location-off" size={24} color="#ff4444" />
+            </View>
           </TouchableOpacity>
         )}
       </View>
