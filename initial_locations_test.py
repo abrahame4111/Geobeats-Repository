@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv('/app/frontend/.env')
-BACKEND_URL = os.getenv('REACT_APP_BACKEND_URL', 'https://spotifymap-live.preview.emergentagent.com')
+BACKEND_URL = os.getenv('REACT_APP_BACKEND_URL', 'https://musicmap-build.preview.emergentagent.com')
 WS_URL = BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://')
 
 async def test_initial_locations():

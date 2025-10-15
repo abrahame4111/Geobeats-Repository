@@ -116,7 +116,7 @@ npx react-native run-android
 - **Gradle**: 8.0.1
 
 ### Backend
-- **URL**: https://spotifymap-live.preview.emergentagent.com
+- **URL**: https://musicmap-build.preview.emergentagent.com
 - **WebSocket**: wss://spotifymap-live.preview.emergentagent.com/api/ws
 - **Spotify OAuth**: Configured and working
 

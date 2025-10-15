@@ -83,7 +83,7 @@ For cloud builds without local Android Studio:
 ### Backend URL
 The app is already configured to connect to:
 ```
-https://spotifymap-live.preview.emergentagent.com
+https://musicmap-build.preview.emergentagent.com
 ```
 
 If you need to change it, edit: `src/config/config.js`
