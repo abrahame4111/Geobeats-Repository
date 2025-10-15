@@ -1019,8 +1019,8 @@ const styles = StyleSheet.create({
   controlButton: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
     elevation: 10,
   },
   controlGradient: {
@@ -1029,7 +1029,8 @@ const styles = StyleSheet.create({
     borderRadius: 31,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    backgroundColor: 'rgba(30, 30, 35, 0.85)',
+    borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   
