@@ -367,7 +367,11 @@ const MapScreen = ({ navigation }) => {
         setCurrentTrack(response.data.item);
       }
     } catch (error) {
-      console.error('Error fetching current track:', error);
+      // Silently fail - Spotify endpoint might not be available or no song playing
+      // Only log in development mode
+      if (__DEV__) {
+        console.log('Spotify track fetch failed (this is OK if no song is playing)');
+      }
     }
   };
 
