@@ -711,16 +711,16 @@ const MapScreen = ({ navigation }) => {
               style={styles.topButton}
               activeOpacity={0.7}
             >
-              <LinearGradient
-                colors={shareEnabled ? ['#1DB954', '#1ed760'] : ['#444', '#666']}
-                style={styles.shareButton}
-              >
+              <View style={[
+                styles.shareButton,
+                shareEnabled && { borderColor: 'rgba(29, 185, 84, 0.5)' }
+              ]}>
                 <Icon 
                   name={shareEnabled ? "visibility" : "visibility-off"} 
                   size={22} 
-                  color="#fff" 
+                  color={shareEnabled ? "#1DB954" : "#888"} 
                 />
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
             
             {/* Theme Button */}
