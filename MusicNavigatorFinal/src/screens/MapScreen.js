@@ -212,6 +212,22 @@ const MapScreen = ({ navigation }) => {
     }
   };
 
+  const cycleMapType = () => {
+    const types = ['standard', 'satellite', 'hybrid', 'terrain'];
+    const currentIndex = types.indexOf(mapType);
+    const nextIndex = (currentIndex + 1) % types.length;
+    setMapType(types[nextIndex]);
+    
+    const typeNames = {
+      standard: 'Standard',
+      satellite: 'Satellite',
+      hybrid: 'Hybrid',
+      terrain: 'Terrain'
+    };
+    
+    console.log(`🗺️ Map type changed to: ${typeNames[types[nextIndex]]}`);
+  };
+
   const showAllUsers = () => {
     const allLocations = [...Object.values(userLocations)];
     if (myLocation) {
