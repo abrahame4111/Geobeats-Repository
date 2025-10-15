@@ -1,17 +1,11 @@
 apply plugin: "com.android.application"
-apply plugin: "com.facebook.react"
 
 import com.android.build.OutputFile
-
-// React Native project configuration
-project.ext.react = [
-    enableHermes: true,
-]
 
 def enableSeparateBuildPerCPUArchitecture = false
 def enableProguardInReleaseBuilds = false
 def jscFlavor = 'org.webkit:android-jsc:+'
-def enableHermes = project.ext.react.get("enableHermes", true)
+def enableHermes = true
 
 android {
     ndkVersion rootProject.ext.ndkVersion
