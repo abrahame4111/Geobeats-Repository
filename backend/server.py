@@ -234,9 +234,12 @@ async def refresh_token(refresh_token: str):
 
 # Spotify API endpoints
 @api_router.get("/spotify/me")
-async def get_current_user(access_token: str = Query(...)):
+async def get_current_user(authorization: str = Header(...)):
     """Get current user profile"""
     try:
+        # Extract token from "Bearer <token>" format
+        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 "https://api.spotify.com/v1/me",
@@ -248,6 +251,7 @@ async def get_current_user(access_token: str = Query(...)):
             
             return response.json()
     except Exception as e:
+        logger.error(f"Error fetching Spotify profile: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/spotify/playlists")
