@@ -627,6 +627,30 @@ const styles = StyleSheet.create({
   markerContainer: {
     alignItems: 'center',
   },
+  songBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(29, 185, 84, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 6,
+    maxWidth: 150,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  songIcon: {
+    marginRight: 4,
+  },
+  songText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
+  },
   marker: {
     width: 40,
     height: 40,
@@ -641,12 +665,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
+    overflow: 'hidden',
   },
   myMarker: {
     backgroundColor: '#4169E1',
     width: 44,
     height: 44,
     borderRadius: 22,
+    borderWidth: 4,
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
   },
   markerLabel: {
     marginTop: 4,
