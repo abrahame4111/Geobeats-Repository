@@ -101,7 +101,7 @@ const MapScreen = ({ navigation }) => {
         console.error('Geolocation error:', error);
         Alert.alert(
           'Location Error',
-          'Unable to get your current location. Please check your GPS settings.',
+          `Unable to get your current location: ${error.message}. Please check your GPS settings.`,
           [{ text: 'OK' }]
         );
       },
@@ -109,6 +109,8 @@ const MapScreen = ({ navigation }) => {
         enableHighAccuracy: true,
         timeout: CONFIG.LOCATION_TIMEOUT,
         maximumAge: 10000,
+        forceRequestLocation: true,
+        showLocationDialog: true,
       }
     );
   };
