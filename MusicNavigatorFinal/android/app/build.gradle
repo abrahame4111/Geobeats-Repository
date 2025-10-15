@@ -69,7 +69,7 @@ dependencies {
     implementation fileTree(dir: "libs", include: ["*.jar"])
     
     // React Native from node_modules
-    implementation "com.facebook.react:react-android"
+    implementation "com.facebook.react:react-android:0.72.6"
     
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.0.0"
     
@@ -87,7 +87,7 @@ dependencies {
         exclude group:'com.facebook.fbjni'
     }
 
-    debugImplementation("com.facebook.react:hermes-android")
+    debugImplementation("com.facebook.react:hermes-android:0.72.6")
 }
 
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
