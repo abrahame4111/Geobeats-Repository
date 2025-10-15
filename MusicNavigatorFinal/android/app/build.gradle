@@ -96,9 +96,9 @@ dependencies {
     
     implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.0.0"
     
-    // Google Play Services for Maps and Location
+    // Google Play Services for Maps and Location (all same version)
     implementation "com.google.android.gms:play-services-base:18.2.0"
-    implementation "com.google.android.gms:play-services-maps:18.1.0"
+    implementation "com.google.android.gms:play-services-maps:18.2.0"
     implementation "com.google.android.gms:play-services-location:21.0.1"
     
     debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}") {
