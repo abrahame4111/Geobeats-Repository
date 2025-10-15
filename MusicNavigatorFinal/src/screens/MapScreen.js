@@ -588,18 +588,13 @@ const MapScreen = ({ navigation }) => {
                 isMe && { transform: [{ scale: pulseAnim }] }
               ]}
             >
-              <LinearGradient
-                colors={['#1DB954', '#1ed760']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.songGradient}
-              >
-                <Icon name="music-note" size={12} color="#fff" />
+              <View style={styles.songGradient}>
+                <Icon name="music-note" size={16} color="#1DB954" />
                 <View style={styles.songTextContainer}>
-                  <Text style={styles.songText} numberOfLines={1}>{songName}</Text>
-                  {artist && <Text style={styles.artistText} numberOfLines={1}>{artist}</Text>}
+                  <Text style={styles.songText}>{songName}</Text>
+                  {artist && <Text style={styles.artistText}>{artist}</Text>}
                 </View>
-              </LinearGradient>
+              </View>
             </Animated.View>
           )}
           
