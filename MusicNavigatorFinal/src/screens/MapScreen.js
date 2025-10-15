@@ -45,6 +45,7 @@ const MapScreen = ({ navigation }) => {
   const [connectionStatus, setConnectionStatus] = useState('connecting');
   const [showSongCard, setShowSongCard] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
 
   // Initialize
   useEffect(() => {
