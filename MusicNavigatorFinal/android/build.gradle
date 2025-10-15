@@ -32,6 +32,11 @@ allprojects {
             force 'androidx.appcompat:appcompat:1.5.1'
             force 'androidx.appcompat:appcompat-resources:1.5.1'
             force 'androidx.webkit:webkit:1.5.0'
+            
+            // Force Google Play Services versions to match
+            force 'com.google.android.gms:play-services-base:18.2.0'
+            force 'com.google.android.gms:play-services-maps:18.2.0'
+            force 'com.google.android.gms:play-services-location:21.0.1'
         }
     }
     repositories {
