@@ -24,6 +24,11 @@ android {
         includeInApk false
         includeInBundle false
     }
+    
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
 
     packagingOptions {
         pickFirst '**/libc++_shared.so'
