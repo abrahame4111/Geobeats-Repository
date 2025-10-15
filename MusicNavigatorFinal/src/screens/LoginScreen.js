@@ -79,10 +79,22 @@ const LoginScreen = ({ navigation }) => {
         <WebView
           source={{ uri: `${API}${API_ENDPOINTS.AUTH.LOGIN}` }}
           onNavigationStateChange={handleWebViewNavigationStateChange}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.error('WebView error:', nativeEvent);
+            Alert.alert('Error', `Failed to load: ${nativeEvent.description}`);
+          }}
+          onHttpError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.error('WebView HTTP error:', nativeEvent);
+          }}
           style={styles.webView}
           javaScriptEnabled={true}
           domStorageEnabled={true}
           startInLoadingState={true}
+          mixedContentMode="always"
+          thirdPartyCookiesEnabled={true}
+          sharedCookiesEnabled={true}
         />
       </LinearGradient>
     );
