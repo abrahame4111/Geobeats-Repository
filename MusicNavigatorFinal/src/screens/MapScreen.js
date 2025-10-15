@@ -488,6 +488,7 @@ const MapScreen = ({ navigation }) => {
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
+        mapType={mapType}
         style={styles.map}
         initialRegion={region}
         showsUserLocation={false}
