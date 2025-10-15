@@ -26,6 +26,12 @@ allprojects {
                 substitute module('com.facebook.react:react-native') using module('com.facebook.react:react-android:0.72.6')
                 substitute module('com.facebook.react:hermes-engine') using module('com.facebook.react:hermes-android:0.72.6')
             }
+            // Force compatible androidx versions
+            force 'androidx.core:core:1.9.0'
+            force 'androidx.core:core-ktx:1.9.0'
+            force 'androidx.appcompat:appcompat:1.5.1'
+            force 'androidx.appcompat:appcompat-resources:1.5.1'
+            force 'androidx.webkit:webkit:1.5.0'
         }
     }
     repositories {
