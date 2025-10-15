@@ -119,7 +119,7 @@ class LocationUpdate(BaseModel):
 # Spotify OAuth endpoints
 @api_router.get("/auth/login")
 async def spotify_login():
-    """Initiate Spotify OAuth flow"""
+    """Initiate Spotify OAuth flow - Redirects to Spotify"""
     scope = "user-read-private user-read-email user-read-playback-state user-modify-playback-state user-read-currently-playing playlist-read-private playlist-read-collaborative streaming"
     
     auth_url = (
@@ -130,7 +130,7 @@ async def spotify_login():
         f"scope={scope}"
     )
     
-    return {"auth_url": auth_url}
+    return RedirectResponse(url=auth_url)
 
 @api_router.get("/auth/callback")
 async def spotify_callback(code: str = Query(...)):
