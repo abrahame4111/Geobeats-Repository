@@ -1,12 +1,8 @@
 apply plugin: "com.android.application"
-apply plugin: "com.facebook.react"
 
 import com.android.build.OutputFile
 
-project.ext.react = [
-    enableHermes: true,
-]
-
+apply from: "../../node_modules/react-native/react.gradle"
 apply from: "../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"; applyNativeModulesAppBuildGradle(project)
 
 def enableSeparateBuildPerCPUArchitecture = false
