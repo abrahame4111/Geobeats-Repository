@@ -47,6 +47,8 @@ const MapScreen = ({ navigation }) => {
   const [showSongCard, setShowSongCard] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [mapType, setMapType] = useState('standard');
+  const [showMapMenu, setShowMapMenu] = useState(false);
 
   // Initialize
   useEffect(() => {
