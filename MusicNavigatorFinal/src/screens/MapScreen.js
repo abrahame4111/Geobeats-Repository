@@ -584,16 +584,56 @@ const MapScreen = ({ navigation }) => {
           {songName && (
             <Animated.View 
               style={[
-                styles.songBubble,
+                styles.songCard,
                 isMe && { transform: [{ scale: pulseAnim }] }
               ]}
             >
-              <View style={styles.songGradient}>
-                <Icon name="music-note" size={16} color="#1DB954" />
-                <View style={styles.songTextContainer}>
-                  <Text style={styles.songText}>{songName}</Text>
-                  {artist && <Text style={styles.artistText}>{artist}</Text>}
+              {/* Album Cover */}
+              <View style={styles.albumCoverContainer}>
+                {(isMe ? currentTrack?.album?.images?.[0]?.url : location.album_cover) ? (
+                  <Image
+                    source={{ 
+                      uri: isMe ? currentTrack.album.images[0].url : location.album_cover 
+                    }}
+                    style={styles.albumCover}
+                  />
+                ) : (
+                  <LinearGradient
+                    colors={['#1DB954', '#1ed760']}
+                    style={styles.albumPlaceholder}
+                  >
+                    <Icon name="album" size={24} color="#fff" />
+                  </LinearGradient>
+                )}
+              </View>
+              
+              {/* Song Info */}
+              <View style={styles.songInfo}>
+                <View style={styles.marqueeContainer}>
+                  <Text 
+                    style={styles.songTitle} 
+                    numberOfLines={1}
+                    ellipsizeMode="clip"
+                  >
+                    {songName}
+                  </Text>
                 </View>
+                {artist && (
+                  <View style={styles.marqueeContainer}>
+                    <Text 
+                      style={styles.artistName} 
+                      numberOfLines={1}
+                      ellipsizeMode="clip"
+                    >
+                      {artist}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              
+              {/* Playing Indicator */}
+              <View style={styles.playingIndicator}>
+                <Icon name="graphic-eq" size={14} color="#1DB954" />
               </View>
             </Animated.View>
           )}
