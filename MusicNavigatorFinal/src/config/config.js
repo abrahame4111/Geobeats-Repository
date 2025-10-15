@@ -33,18 +33,18 @@ export const CONFIG = {
   GOOGLE_MAPS_API_KEY: 'YOUR_GOOGLE_MAPS_API_KEY'
 };
 
-// API Endpoints
+// API Endpoints (Note: /api prefix is added by AuthContext)
 export const API_ENDPOINTS = {
   AUTH: {
-    LOGIN: '/api/auth/login',
-    CALLBACK: '/api/auth/callback',
-    REFRESH: '/api/auth/refresh'
+    LOGIN: '/auth/login',
+    CALLBACK: '/auth/callback',
+    REFRESH: '/auth/refresh'
   },
   SPOTIFY: {
-    ME: '/api/spotify/me',
-    PLAYLISTS: '/api/spotify/playlists',
-    CATEGORIES: '/api/spotify/categories',
-    CURRENTLY_PLAYING: '/api/spotify/currently-playing'
+    ME: '/spotify/me',
+    PLAYLISTS: '/spotify/playlists',
+    CATEGORIES: '/spotify/categories',
+    CURRENTLY_PLAYING: '/spotify/currently-playing'
   },
-  WEBSOCKET: '/api/ws'
+  WEBSOCKET: '/ws'
 };
