@@ -23,6 +23,53 @@ import { CONFIG, API_ENDPOINTS } from '../config/config';
 
 const { width, height } = Dimensions.get('window');
 
+// Custom Map Styles
+const MAP_STYLES = {
+  standard: [],
+  neon: [
+    { elementType: 'geometry', stylers: [{ color: '#0a0a0a' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#0a0a0a' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#00ffff' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a1a2e' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#00ffff' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f3443' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#16213e' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0e4749' }] },
+  ],
+  blue: [
+    { elementType: 'geometry', stylers: [{ color: '#1a237e' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#1a237e' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#9fa8da' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#283593' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0d47a1' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1e2a5e' }] },
+  ],
+  green: [
+    { elementType: 'geometry', stylers: [{ color: '#1b5e20' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#1b5e20' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#a5d6a7' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2e7d32' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#004d40' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1b5e20' }] },
+  ],
+  vintage: [
+    { elementType: 'geometry', stylers: [{ color: '#ebe3cd' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#523735' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f1e6' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#f5f1e6' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#bbb5a6' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9c9c9' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#dfd2ae' }] },
+  ],
+  dark: [
+    { elementType: 'geometry', stylers: [{ color: '#212121' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#383838' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+  ],
+};
+
 const MapScreen = ({ navigation }) => {
   const { user, accessToken, API, BACKEND_URL } = useAuth();
   
@@ -39,13 +86,16 @@ const MapScreen = ({ navigation }) => {
     latitudeDelta: 100,
     longitudeDelta: 100,
   });
-  const [mapType, setMapType] = useState('standard');
+  const [mapTheme, setMapTheme] = useState('neon');
   
   // Location State
   const [myLocation, setMyLocation] = useState(null);
   const [userLocations, setUserLocations] = useState({});
   const [locationPermission, setLocationPermission] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  
+  // Sharing State - DEFAULT OFF
+  const [shareEnabled, setShareEnabled] = useState(false);
   
   // Spotify State
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -56,7 +106,7 @@ const MapScreen = ({ navigation }) => {
   const [onlineCount, setOnlineCount] = useState(0);
   
   // UI State
-  const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
 
   // ============ INITIALIZATION ============
   
@@ -91,7 +141,7 @@ const MapScreen = ({ navigation }) => {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.2,
+          toValue: 1.15,
           duration: 1000,
           useNativeDriver: true,
         }),
@@ -102,6 +152,43 @@ const MapScreen = ({ navigation }) => {
         }),
       ])
     ).start();
+  };
+
+  // ============ SHARE TOGGLE ============
+
+  const toggleShare = () => {
+    const newShareState = !shareEnabled;
+    setShareEnabled(newShareState);
+    
+    if (newShareState) {
+      // Just enabled - send location immediately
+      if (myLocation) {
+        sendLocationUpdate(myLocation);
+      }
+      Alert.alert(
+        '🎵 Sharing Enabled',
+        'Your location and listening activity are now visible to friends!',
+        [{ text: 'Got it!' }]
+      );
+    } else {
+      // Disabled - send a disconnect message
+      sendDisconnectMessage();
+      Alert.alert(
+        '🔒 Sharing Disabled',
+        'Your location is now private. Only you can see yourself on the map.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const sendDisconnectMessage = () => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && user) {
+      const message = JSON.stringify({
+        type: 'user_disconnect',
+        user_id: user.id,
+      });
+      wsRef.current.send(message);
+    }
   };
 
   // ============ LOCATION HANDLING ============
@@ -118,7 +205,7 @@ const MapScreen = ({ navigation }) => {
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
           title: 'Location Access Required',
-          message: 'Music Navigator needs your location to show you and your friends on the map',
+          message: 'Music Navigator needs your location to show you on the map',
           buttonPositive: 'Allow',
           buttonNegative: 'Deny',
         }
@@ -130,7 +217,7 @@ const MapScreen = ({ navigation }) => {
       if (!hasPermission) {
         Alert.alert(
           'Permission Required',
-          'Location permission is needed to use the live map feature',
+          'Location permission is needed to use the map feature',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Try Again', onPress: requestLocationPermission }
@@ -156,7 +243,12 @@ const MapScreen = ({ navigation }) => {
         const newLocation = { latitude, longitude };
         setMyLocation(newLocation);
         centerOnLocation(newLocation);
-        sendLocationUpdate(newLocation);
+        
+        // Only send if sharing is enabled
+        if (shareEnabled) {
+          sendLocationUpdate(newLocation);
+        }
+        
         setLoadingLocation(false);
       },
       (error) => {
@@ -176,7 +268,11 @@ const MapScreen = ({ navigation }) => {
         const { latitude, longitude } = position.coords;
         const newLocation = { latitude, longitude };
         setMyLocation(newLocation);
-        sendLocationUpdate(newLocation);
+        
+        // Only send if sharing is enabled
+        if (shareEnabled) {
+          sendLocationUpdate(newLocation);
+        }
       },
       (error) => console.error('Watch error:', error),
       {
@@ -192,12 +288,12 @@ const MapScreen = ({ navigation }) => {
     const messages = {
       1: 'Please enable location permissions in your device settings.',
       2: 'Location services are unavailable. Please enable GPS.',
-      3: 'Location request timed out. Make sure GPS is enabled and you have a clear view of the sky.',
+      3: 'Location request timed out. Make sure GPS is enabled.',
     };
     
     Alert.alert(
       'Location Error',
-      messages[errorCode] || 'Unable to get your location. Please check your settings.',
+      messages[errorCode] || 'Unable to get your location.',
       [
         { text: 'Cancel' },
         { text: 'Retry', onPress: startLocationTracking }
@@ -287,6 +383,8 @@ const MapScreen = ({ navigation }) => {
             handleLocationUpdate(data);
           } else if (data.type === 'initial_locations') {
             handleInitialLocations(data);
+          } else if (data.type === 'user_disconnect') {
+            handleUserDisconnect(data);
           }
         } catch (error) {
           console.error('WebSocket message error:', error);
@@ -316,6 +414,12 @@ const MapScreen = ({ navigation }) => {
   };
 
   const sendLocationUpdate = (location) => {
+    // Only send if sharing is enabled
+    if (!shareEnabled) {
+      console.log('🔒 Sharing disabled, not sending location');
+      return;
+    }
+    
     if (wsRef.current?.readyState === WebSocket.OPEN && user) {
       const message = JSON.stringify({
         type: 'location_update',
@@ -330,7 +434,7 @@ const MapScreen = ({ navigation }) => {
       });
       
       wsRef.current.send(message);
-      console.log('📤 Location sent with song:', currentTrack?.name || 'No song');
+      console.log('📤 Location + song sent:', currentTrack?.name || 'No song');
     }
   };
 
@@ -366,6 +470,18 @@ const MapScreen = ({ navigation }) => {
     setOnlineCount(Object.keys(filteredLocations).length);
   };
 
+  const handleUserDisconnect = (data) => {
+    const { user_id } = data;
+    if (user_id !== user?.id) {
+      setUserLocations(prev => {
+        const updated = { ...prev };
+        delete updated[user_id];
+        return updated;
+      });
+      setOnlineCount(prev => Math.max(0, prev - 1));
+    }
+  };
+
   // ============ SPOTIFY INTEGRATION ============
 
   const fetchUserProfile = async () => {
@@ -394,7 +510,8 @@ const MapScreen = ({ navigation }) => {
         setCurrentTrack(track);
         console.log('🎵 Now playing:', track.name);
         
-        if (myLocation) {
+        // If sharing is enabled and we have location, send update
+        if (shareEnabled && myLocation) {
           sendLocationUpdate(myLocation);
         }
       } else {
@@ -405,27 +522,29 @@ const MapScreen = ({ navigation }) => {
     }
   };
 
-  // ============ MAP CONTROLS ============
+  // ============ MAP THEME CONTROL ============
 
-  const MAP_TYPES = [
-    { value: 'standard', label: 'Standard', icon: 'map' },
-    { value: 'satellite', label: 'Satellite', icon: 'satellite' },
-    { value: 'hybrid', label: 'Hybrid', icon: 'layers' },
-    { value: 'terrain', label: 'Terrain', icon: 'terrain' },
+  const THEMES = [
+    { id: 'neon', name: 'Neon', icon: '✨', colors: ['#00ffff', '#ff00ff'] },
+    { id: 'blue', name: 'Blue', icon: '💙', colors: ['#1a237e', '#0d47a1'] },
+    { id: 'green', name: 'Green', icon: '💚', colors: ['#1b5e20', '#2e7d32'] },
+    { id: 'vintage', name: 'Vintage', icon: '📜', colors: ['#ebe3cd', '#bbb5a6'] },
+    { id: 'dark', name: 'Dark', icon: '🌑', colors: ['#212121', '#000000'] },
+    { id: 'standard', name: 'Standard', icon: '🗺️', colors: ['#ffffff', '#e0e0e0'] },
   ];
 
-  const changeMapType = (type) => {
-    setMapType(type);
-    setShowMapTypeMenu(false);
-    console.log('🗺️ Map type:', type);
+  const changeTheme = (themeId) => {
+    setMapTheme(themeId);
+    setShowThemeMenu(false);
+    console.log('🎨 Theme changed to:', themeId);
   };
 
   // ============ RENDER MARKER ============
 
   const renderMarker = (location, userId, isMe = false) => {
     const profileImage = isMe ? userProfile?.images?.[0]?.url : location.profile_image;
-    const songName = isMe ? currentTrack?.name : location.current_song;
-    const artist = isMe ? currentTrack?.artists?.[0]?.name : location.artist;
+    const songName = isMe ? (shareEnabled ? currentTrack?.name : null) : location.current_song;
+    const artist = isMe ? (shareEnabled ? currentTrack?.artists?.[0]?.name : null) : location.artist;
     const userName = isMe ? (user?.name || 'Me') : location.user_name;
     
     return (
@@ -438,7 +557,7 @@ const MapScreen = ({ navigation }) => {
         anchor={{ x: 0.5, y: 1 }}
       >
         <View style={styles.markerContainer}>
-          {/* Song Bubble */}
+          {/* Song Bubble - Only if sharing or if it's not me */}
           {songName && (
             <Animated.View 
               style={[
@@ -461,27 +580,25 @@ const MapScreen = ({ navigation }) => {
             </Animated.View>
           )}
           
-          {/* Profile Marker */}
+          {/* Profile Marker with Spotify Photo */}
           <View style={[styles.markerCircle, isMe && styles.myMarkerCircle]}>
-            <View style={styles.markerInner}>
-              {profileImage ? (
-                <Image 
-                  source={{ uri: profileImage }}
-                  style={styles.profileImage}
+            {profileImage ? (
+              <Image 
+                source={{ uri: profileImage }}
+                style={styles.profileImage}
+              />
+            ) : (
+              <LinearGradient
+                colors={isMe ? ['#4169E1', '#1E90FF'] : ['#1DB954', '#1ed760']}
+                style={styles.profilePlaceholder}
+              >
+                <Icon 
+                  name="person" 
+                  size={isMe ? 28 : 24} 
+                  color="#fff" 
                 />
-              ) : (
-                <LinearGradient
-                  colors={isMe ? ['#4169E1', '#1E90FF'] : ['#1DB954', '#1ed760']}
-                  style={styles.profilePlaceholder}
-                >
-                  <Icon 
-                    name={isMe ? "person" : "person-outline"} 
-                    size={isMe ? 28 : 24} 
-                    color="#fff" 
-                  />
-                </LinearGradient>
-              )}
-            </View>
+              </LinearGradient>
+            )}
           </View>
           
           {/* Username Badge */}
@@ -504,11 +621,11 @@ const MapScreen = ({ navigation }) => {
         translucent 
       />
       
-      {/* Map */}
+      {/* Map with Custom Style */}
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
-        mapType={mapType}
+        customMapStyle={MAP_STYLES[mapTheme]}
         style={styles.map}
         initialRegion={region}
         showsUserLocation={false}
@@ -520,14 +637,14 @@ const MapScreen = ({ navigation }) => {
         rotateEnabled={true}
         pitchEnabled={true}
       >
-        {/* My Location */}
+        {/* My Location - Always visible to me */}
         {myLocation && renderMarker(
           { ...myLocation, user_name: user?.name || 'Me' }, 
           user?.id, 
           true
         )}
         
-        {/* Other Users */}
+        {/* Other Users - Only visible if they're sharing */}
         {Object.entries(userLocations).map(([userId, location]) => 
           renderMarker(location, userId, false)
         )}
@@ -536,35 +653,23 @@ const MapScreen = ({ navigation }) => {
       {/* Modern Top Bar */}
       <View style={styles.topBarContainer}>
         <LinearGradient
-          colors={['rgba(0, 0, 0, 0.8)', 'rgba(0, 0, 0, 0.4)', 'transparent']}
+          colors={['rgba(0, 0, 0, 0.85)', 'rgba(0, 0, 0, 0.5)', 'transparent']}
           style={styles.topGradient}
         >
           <View style={styles.topBar}>
-            {/* Left Section */}
-            <View style={styles.topLeft}>
-              <TouchableOpacity 
-                onPress={() => navigation.navigate('Home')} 
-                style={styles.topButton}
-                activeOpacity={0.7}
+            {/* Home Button */}
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Home')} 
+              style={styles.topButton}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#1DB954', '#1ed760']}
+                style={styles.homeButton}
               >
-                <LinearGradient
-                  colors={['#1DB954', '#1ed760']}
-                  style={styles.homeButton}
-                >
-                  <Icon name="home" size={22} color="#fff" />
-                </LinearGradient>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                onPress={() => navigation.goBack()} 
-                style={styles.topButton}
-                activeOpacity={0.7}
-              >
-                <View style={styles.backButton}>
-                  <Icon name="arrow-back" size={22} color="#fff" />
-                </View>
-              </TouchableOpacity>
-            </View>
+                <Icon name="home" size={22} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
             
             {/* Center Section */}
             <View style={styles.topCenter}>
@@ -580,55 +685,71 @@ const MapScreen = ({ navigation }) => {
                   ]} 
                 />
                 <Text style={styles.statusText}>
-                  {onlineCount} {onlineCount === 1 ? 'friend' : 'friends'} • {connectionStatus}
+                  {onlineCount} online • {shareEnabled ? 'sharing' : 'private'}
                 </Text>
               </View>
             </View>
             
-            {/* Right Section */}
+            {/* Share Status Button */}
             <TouchableOpacity 
-              onPress={() => setShowMapTypeMenu(!showMapTypeMenu)} 
+              onPress={toggleShare} 
               style={styles.topButton}
               activeOpacity={0.7}
             >
-              <View style={styles.layersButton}>
-                <Icon name="layers" size={22} color="#1DB954" />
+              <LinearGradient
+                colors={shareEnabled ? ['#1DB954', '#1ed760'] : ['#444', '#666']}
+                style={styles.shareButton}
+              >
+                <Icon 
+                  name={shareEnabled ? "visibility" : "visibility-off"} 
+                  size={22} 
+                  color="#fff" 
+                />
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            {/* Theme Button */}
+            <TouchableOpacity 
+              onPress={() => setShowThemeMenu(!showThemeMenu)} 
+              style={styles.topButton}
+              activeOpacity={0.7}
+            >
+              <View style={styles.themeButton}>
+                <Text style={styles.themeEmoji}>
+                  {THEMES.find(t => t.id === mapTheme)?.icon || '🗺️'}
+                </Text>
               </View>
             </TouchableOpacity>
           </View>
         </LinearGradient>
       </View>
 
-      {/* Map Type Menu */}
-      {showMapTypeMenu && (
-        <View style={styles.mapTypeMenu}>
+      {/* Theme Menu */}
+      {showThemeMenu && (
+        <View style={styles.themeMenu}>
           <LinearGradient
             colors={['rgba(20, 20, 20, 0.98)', 'rgba(30, 30, 30, 0.95)']}
-            style={styles.mapTypeGradient}
+            style={styles.themeGradient}
           >
-            <Text style={styles.mapTypeTitle}>Map Style</Text>
-            {MAP_TYPES.map((type) => (
+            <Text style={styles.themeMenuTitle}>Map Themes</Text>
+            {THEMES.map((theme) => (
               <TouchableOpacity
-                key={type.value}
-                onPress={() => changeMapType(type.value)}
+                key={theme.id}
+                onPress={() => changeTheme(theme.id)}
                 style={[
-                  styles.mapTypeOption,
-                  mapType === type.value && styles.mapTypeOptionActive
+                  styles.themeOption,
+                  mapTheme === theme.id && styles.themeOptionActive
                 ]}
                 activeOpacity={0.7}
               >
-                <Icon 
-                  name={type.icon} 
-                  size={20} 
-                  color={mapType === type.value ? '#1DB954' : '#fff'} 
-                />
+                <Text style={styles.themeEmoji}>{theme.icon}</Text>
                 <Text style={[
-                  styles.mapTypeLabel,
-                  mapType === type.value && styles.mapTypeLabelActive
+                  styles.themeLabel,
+                  mapTheme === theme.id && styles.themeLabelActive
                 ]}>
-                  {type.label}
+                  {theme.name}
                 </Text>
-                {mapType === type.value && (
+                {mapTheme === theme.id && (
                   <Icon name="check-circle" size={18} color="#1DB954" />
                 )}
               </TouchableOpacity>
@@ -639,7 +760,6 @@ const MapScreen = ({ navigation }) => {
 
       {/* Floating Controls */}
       <View style={styles.floatingControls}>
-        {/* Center on Me */}
         <TouchableOpacity 
           onPress={centerOnMe} 
           style={styles.controlButton}
@@ -652,16 +772,11 @@ const MapScreen = ({ navigation }) => {
             {loadingLocation ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Icon 
-                name="my-location" 
-                size={24} 
-                color="#fff" 
-              />
+              <Icon name="my-location" size={24} color="#fff" />
             )}
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Show All Users */}
         <TouchableOpacity 
           onPress={showAllUsers} 
           style={styles.controlButton}
@@ -675,7 +790,6 @@ const MapScreen = ({ navigation }) => {
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Permission Warning */}
         {!locationPermission && (
           <TouchableOpacity 
             onPress={requestLocationPermission} 
@@ -722,9 +836,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-  },
-  topLeft: {
-    flexDirection: 'row',
     gap: 10,
   },
   topButton: {
@@ -741,7 +852,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  backButton: {
+  shareButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  themeButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -751,20 +869,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  layersButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+  themeEmoji: {
+    fontSize: 20,
   },
   topCenter: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: 12,
   },
   topTitle: {
     fontSize: 18,
@@ -800,8 +910,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   
-  // ========== MAP TYPE MENU ==========
-  mapTypeMenu: {
+  // ========== THEME MENU ==========
+  themeMenu: {
     position: 'absolute',
     top: StatusBar.currentHeight + 70,
     right: 16,
@@ -814,10 +924,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  mapTypeGradient: {
+  themeGradient: {
     padding: 8,
   },
-  mapTypeTitle: {
+  themeMenuTitle: {
     fontSize: 12,
     fontWeight: '700',
     color: '#888',
@@ -826,24 +936,24 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 12,
   },
-  mapTypeOption: {
+  themeOption: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
     borderRadius: 10,
     marginBottom: 4,
   },
-  mapTypeOptionActive: {
+  themeOptionActive: {
     backgroundColor: 'rgba(29, 185, 84, 0.2)',
   },
-  mapTypeLabel: {
+  themeLabel: {
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
     marginLeft: 12,
   },
-  mapTypeLabelActive: {
+  themeLabelActive: {
     color: '#1DB954',
   },
   
@@ -907,9 +1017,9 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   markerCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -918,23 +1028,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 8,
+    borderWidth: 3,
+    borderColor: '#fff',
+    overflow: 'hidden',
   },
   myMarkerCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: 3,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 4,
     borderColor: '#4169E1',
-  },
-  markerInner: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
   },
   profileImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 25,
   },
   profilePlaceholder: {
     width: '100%',
