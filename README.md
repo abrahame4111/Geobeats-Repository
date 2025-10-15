@@ -38,7 +38,7 @@ A real-time music streaming application that combines Spotify integration with l
 3. Fill in the details:
    - **App Name**: Music Navigator (or any name you prefer)
    - **App Description**: Real-time music streaming with location tracking
-   - **Redirect URI**: `https://geobeats.preview.emergentagent.com/auth/callback`
+   - **Redirect URI**: `https://spotifymap-live.preview.emergentagent.com/auth/callback`
    - Check the Terms of Service box
 4. Click "Save"
 5. You'll see your **Client ID** and **Client Secret** (click "Show Client Secret")
@@ -57,7 +57,7 @@ A real-time music streaming application that combines Spotify integration with l
 6. **IMPORTANT**: Restrict your API key:
    - Click on the key name
    - Under "Application restrictions", select "HTTP referrers"
-   - Add: `https://geobeats.preview.emergentagent.com/*`
+   - Add: `https://spotifymap-live.preview.emergentagent.com/*`
    - Under "API restrictions", select "Restrict key"
    - Choose the three APIs mentioned above
    - Click "Save"
@@ -71,7 +71,7 @@ A real-time music streaming application that combines Spotify integration with l
 # Spotify API Configuration
 SPOTIFY_CLIENT_ID="your_spotify_client_id_here"
 SPOTIFY_CLIENT_SECRET="your_spotify_client_secret_here"
-SPOTIFY_REDIRECT_URI="https://geobeats.preview.emergentagent.com/auth/callback"
+SPOTIFY_REDIRECT_URI="https://spotifymap-live.preview.emergentagent.com/auth/callback"
 
 # Google Maps API Configuration
 GOOGLE_MAPS_API_KEY="your_google_maps_api_key_here"

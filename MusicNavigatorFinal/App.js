@@ -58,7 +58,7 @@ const App = () => {
         </View>
         
         <WebView
-          source={{ uri: 'https://geobeats.preview.emergentagent.com/api/auth/login' }}
+          source={{ uri: 'https://spotifymap-live.preview.emergentagent.com/api/auth/login' }}
           onNavigationStateChange={handleWebViewNavigation}
           style={styles.webView}
           javaScriptEnabled={true}
