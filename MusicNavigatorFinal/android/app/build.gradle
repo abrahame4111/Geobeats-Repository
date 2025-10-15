@@ -87,11 +87,7 @@ dependencies {
         exclude group:'com.facebook.fbjni'
     }
 
-    if (enableHermes) {
-        debugImplementation("com.facebook.react:hermes-engine:+")
-    } else {
-        implementation jscFlavor
-    }
+    debugImplementation("com.facebook.react:hermes-engine:+")
 }
 
 apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
