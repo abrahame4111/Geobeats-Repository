@@ -1127,7 +1127,7 @@ const styles = StyleSheet.create({
   // ========== MARKERS ==========
   markerContainer: {
     alignItems: 'center',
-    width: 240,
+    width: 260,
   },
   songCard: {
     marginBottom: 12,
