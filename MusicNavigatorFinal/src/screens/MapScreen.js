@@ -486,6 +486,7 @@ const MapScreen = ({ navigation }) => {
 
   const fetchUserProfile = async () => {
     try {
+      console.log('🔍 Fetching Spotify profile from:', `${API}${API_ENDPOINTS.SPOTIFY.ME}`);
       const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.ME}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
@@ -493,9 +494,15 @@ const MapScreen = ({ navigation }) => {
       if (response.data) {
         setUserProfile(response.data);
         console.log('✅ Spotify profile loaded:', response.data.display_name);
+        console.log('📸 Profile image URL:', response.data.images?.[0]?.url || 'No image');
       }
     } catch (error) {
-      if (__DEV__) console.log('Profile fetch failed');
+      console.error('❌ Profile fetch error:', error.response?.data || error.message);
+      Alert.alert(
+        'Spotify Profile Error',
+        'Unable to load your Spotify profile. Please check your connection and try again.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
