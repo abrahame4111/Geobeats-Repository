@@ -39,24 +39,43 @@ const LoginScreen = ({ navigation }) => {
     const { url } = navState;
     console.log('Navigation URL:', url);
     
+    // Check for callback with tokens (supports both ? and # formats)
     if (url.includes('access_token=')) {
-      const urlParams = new URLSearchParams(url.split('?')[1]);
-      const accessToken = urlParams.get('access_token');
-      const refreshToken = urlParams.get('refresh_token');
-      const userId = urlParams.get('user_id');
-      const userName = urlParams.get('user_name');
-      const userEmail = urlParams.get('user_email');
-
-      if (accessToken && refreshToken && userId) {
-        const user = {
-          id: userId,
-          name: userName || userId,
-          email: userEmail || '',
-        };
+      try {
+        // Extract query string from URL (handle both ? and #)
+        let queryString = '';
+        if (url.includes('#callback?')) {
+          queryString = url.split('#callback?')[1];
+        } else if (url.includes('?')) {
+          queryString = url.split('?')[1];
+        }
         
-        login(accessToken, refreshToken, user);
-        setShowWebView(false);
-        navigation.replace('Home');
+        if (queryString) {
+          const urlParams = new URLSearchParams(queryString);
+          const accessToken = urlParams.get('access_token');
+          const refreshToken = urlParams.get('refresh_token');
+          const userId = urlParams.get('user_id');
+          const userName = urlParams.get('user_name');
+          const userEmail = urlParams.get('user_email');
+
+          console.log('Extracted tokens:', { accessToken: accessToken ? 'present' : 'missing', userId });
+
+          if (accessToken && refreshToken && userId) {
+            const user = {
+              id: userId,
+              name: userName || userId,
+              email: userEmail || '',
+            };
+            
+            console.log('Login successful, navigating to Home');
+            login(accessToken, refreshToken, user);
+            setShowWebView(false);
+            navigation.replace('Home');
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing auth callback:', error);
+        Alert.alert('Error', 'Failed to process login');
       }
     }
   };
