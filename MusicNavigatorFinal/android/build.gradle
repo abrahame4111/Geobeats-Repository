@@ -17,6 +17,13 @@ buildscript {
 }
 
 allprojects {
+    configurations.all {
+        resolutionStrategy {
+            // Force all modules to use the same React Native version
+            force 'com.facebook.react:react-android:0.72.6'
+            force 'com.facebook.react:hermes-android:0.72.6'
+        }
+    }
     repositories {
         mavenLocal()
         google()
