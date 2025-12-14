@@ -735,15 +735,17 @@ const styles = StyleSheet.create({
   // Mini Player
   miniPlayerContainer: {
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 16,
+    zIndex: 10,
   },
   miniPlayer: {
     borderRadius: 12,
+    overflow: 'hidden',
   },
   miniPlayerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
+    padding: 12,
   },
   miniAlbum: {
     width: 48,
