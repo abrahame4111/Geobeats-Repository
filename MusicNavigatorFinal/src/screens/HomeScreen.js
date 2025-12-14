@@ -77,11 +77,18 @@ const HomeScreen = ({ navigation }) => {
       const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.CURRENTLY_PLAYING}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+      
+      console.log('🎵 Currently playing response:', response.data);
+      
       if (response.data && response.data.item) {
         setCurrentlyPlaying(response.data);
+      } else if (response.data && response.data.is_playing === false) {
+        // No track playing but we got a response
+        setCurrentlyPlaying(null);
       }
     } catch (error) {
-      // Silently fail
+      console.log('Currently playing fetch error:', error.message);
+      // Don't clear currentlyPlaying on error to avoid flickering
     }
   };
 
