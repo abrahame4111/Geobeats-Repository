@@ -495,7 +495,7 @@ const HomeScreen = ({ navigation }) => {
       </View>
 
       {/* Currently Playing Mini Player */}
-      {currentlyPlaying?.item && (
+      {currentlyPlaying?.item ? (
         <View style={styles.miniPlayerContainer}>
           <GlassCard style={styles.miniPlayer}>
             <TouchableOpacity 
@@ -534,6 +534,27 @@ const HomeScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
+          </GlassCard>
+        </View>
+      ) : (
+        <View style={styles.miniPlayerContainer}>
+          <GlassCard style={styles.miniPlayer}>
+            <View style={styles.miniPlayerContent}>
+              <View style={styles.miniAlbumPlaceholder}>
+                <Icon name="music-note" size={24} color="#666" />
+              </View>
+              <View style={styles.miniInfo}>
+                <Text style={styles.miniTitle} numberOfLines={1}>
+                  No music playing
+                </Text>
+                <Text style={styles.miniArtist} numberOfLines={1}>
+                  Play a song on Spotify to see it here
+                </Text>
+              </View>
+              <TouchableOpacity onPress={fetchCurrentlyPlaying} style={styles.miniPlayBtn}>
+                <Icon name="refresh" size={24} color="#1DB954" />
+              </TouchableOpacity>
+            </View>
           </GlassCard>
         </View>
       )}
