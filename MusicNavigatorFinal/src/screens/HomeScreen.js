@@ -10,6 +10,8 @@ import {
   Alert,
   StatusBar,
   Dimensions,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useAuth } from '../context/AuthContext';
@@ -18,16 +20,30 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import axios from 'axios';
 import { API_ENDPOINTS } from '../config/config';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const HomeScreen = ({ navigation }) => {
   const { user, accessToken, logout, API } = useAuth();
   const [playlists, setPlaylists] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
+  const [currentlyPlaying, setCurrentlyPlaying] = useState(null);
+  
+  // Playlist Modal State
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [playlistTracks, setPlaylistTracks] = useState([]);
+  const [loadingTracks, setLoadingTracks] = useState(false);
+  const [showPlaylistModal, setShowPlaylistModal] = useState(false);
 
   useEffect(() => {
     loadData();
+    checkPremiumStatus();
+    fetchCurrentlyPlaying();
+    
+    // Refresh currently playing every 5 seconds
+    const interval = setInterval(fetchCurrentlyPlaying, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
@@ -42,6 +58,30 @@ const HomeScreen = ({ navigation }) => {
       Alert.alert('Error', 'Failed to load Spotify data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkPremiumStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/spotify/premium-status`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      setIsPremium(response.data.is_premium);
+    } catch (error) {
+      console.error('Failed to check premium status:', error);
+    }
+  };
+
+  const fetchCurrentlyPlaying = async () => {
+    try {
+      const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.CURRENTLY_PLAYING}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (response.data && response.data.item) {
+        setCurrentlyPlaying(response.data);
+      }
+    } catch (error) {
+      // Silently fail
     }
   };
 
@@ -67,6 +107,124 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
+  const openPlaylist = async (playlist) => {
+    setSelectedPlaylist(playlist);
+    setShowPlaylistModal(true);
+    setLoadingTracks(true);
+    
+    try {
+      // Fetch playlist tracks directly from Spotify API through our backend
+      const response = await axios.get(
+        `${API}/spotify/playlist/${playlist.id}/tracks?access_token=${accessToken}`
+      );
+      setPlaylistTracks(response.data.items || []);
+    } catch (error) {
+      console.error('Error loading playlist tracks:', error);
+      // Try alternative endpoint
+      try {
+        const tracksUrl = playlist.tracks?.href;
+        if (tracksUrl) {
+          const response = await axios.get(`${API}/spotify/proxy?url=${encodeURIComponent(tracksUrl)}&access_token=${accessToken}`);
+          setPlaylistTracks(response.data.items || []);
+        }
+      } catch (e) {
+        Alert.alert('Error', 'Failed to load playlist tracks');
+      }
+    } finally {
+      setLoadingTracks(false);
+    }
+  };
+
+  const playTrack = async (trackUri, trackName) => {
+    if (!isPremium) {
+      Alert.alert(
+        '🎫 Premium Required',
+        'Playing songs requires Spotify Premium. You can still browse and see what\'s playing on other devices.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      await axios.put(`${API}/spotify/play`, null, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { uri: trackUri }
+      });
+      
+      Alert.alert('🎵 Now Playing', trackName);
+      fetchCurrentlyPlaying();
+    } catch (error) {
+      console.error('Play error:', error);
+      Alert.alert('Error', 'Failed to play track. Make sure Spotify is open on a device.');
+    }
+  };
+
+  const playPlaylist = async (playlistUri) => {
+    if (!isPremium) {
+      Alert.alert(
+        '🎫 Premium Required',
+        'Playing playlists requires Spotify Premium.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      await axios.put(`${API}/spotify/play/context`, null, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { context_uri: playlistUri }
+      });
+      
+      Alert.alert('🎵 Playing Playlist', selectedPlaylist?.name || 'Playlist');
+      setShowPlaylistModal(false);
+      fetchCurrentlyPlaying();
+    } catch (error) {
+      console.error('Play playlist error:', error);
+      Alert.alert('Error', 'Failed to play playlist. Make sure Spotify is open on a device.');
+    }
+  };
+
+  const togglePlayback = async () => {
+    if (!isPremium) {
+      Alert.alert('🎫 Premium Required', 'Playback controls require Spotify Premium.');
+      return;
+    }
+
+    try {
+      if (currentlyPlaying?.is_playing) {
+        await axios.put(`${API}/spotify/pause`, null, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      } else {
+        await axios.put(`${API}/spotify/play`, null, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      }
+      fetchCurrentlyPlaying();
+    } catch (error) {
+      console.error('Toggle playback error:', error);
+    }
+  };
+
+  const skipTrack = async (direction) => {
+    if (!isPremium) return;
+
+    try {
+      if (direction === 'next') {
+        await axios.post(`${API}/spotify/next`, null, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      } else {
+        await axios.post(`${API}/spotify/previous`, null, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+      }
+      setTimeout(fetchCurrentlyPlaying, 500);
+    } catch (error) {
+      console.error('Skip error:', error);
+    }
+  };
+
   const handleLogout = () => {
     Alert.alert(
       'Logout',
@@ -84,7 +242,11 @@ const HomeScreen = ({ navigation }) => {
 
   const renderPlaylist = ({ item, index }) => (
     <GlassCard style={[styles.playlistCard, { marginLeft: index === 0 ? 16 : 8 }]}>
-      <TouchableOpacity style={styles.playlistContent}>
+      <TouchableOpacity 
+        style={styles.playlistContent}
+        onPress={() => openPlaylist(item)}
+        activeOpacity={0.7}
+      >
         <View style={styles.playlistImageContainer}>
           <Image
             source={{
@@ -96,6 +258,12 @@ const HomeScreen = ({ navigation }) => {
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             style={styles.playlistImageOverlay}
           />
+          {/* Play button overlay */}
+          <View style={styles.playOverlay}>
+            <LinearGradient colors={['#1DB954', '#1ed760']} style={styles.playButtonSmall}>
+              <Icon name="play-arrow" size={24} color="#fff" />
+            </LinearGradient>
+          </View>
         </View>
         <View style={styles.playlistInfo}>
           <Text style={styles.playlistName} numberOfLines={2}>
@@ -111,7 +279,11 @@ const HomeScreen = ({ navigation }) => {
 
   const renderCategory = ({ item, index }) => (
     <GlassCard style={[styles.categoryCard, { marginLeft: index === 0 ? 16 : 8 }]}>
-      <TouchableOpacity style={styles.categoryContent}>
+      <TouchableOpacity 
+        style={styles.categoryContent}
+        onPress={() => Alert.alert('Browse', `Explore ${item.name} category coming soon!`)}
+        activeOpacity={0.7}
+      >
         <Image
           source={{
             uri: item.icons?.[0]?.url || 'https://via.placeholder.com/200x200/1DB954/ffffff?text=Category'
@@ -127,6 +299,120 @@ const HomeScreen = ({ navigation }) => {
         </Text>
       </TouchableOpacity>
     </GlassCard>
+  );
+
+  const renderTrackItem = ({ item, index }) => {
+    const track = item.track;
+    if (!track) return null;
+    
+    return (
+      <TouchableOpacity 
+        style={styles.trackItem}
+        onPress={() => playTrack(track.uri, track.name)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.trackNumber}>{index + 1}</Text>
+        {track.album?.images?.[0]?.url && (
+          <Image source={{ uri: track.album.images[0].url }} style={styles.trackAlbum} />
+        )}
+        <View style={styles.trackInfo}>
+          <Text style={styles.trackName} numberOfLines={1}>{track.name}</Text>
+          <Text style={styles.trackArtist} numberOfLines={1}>
+            {track.artists?.map(a => a.name).join(', ')}
+          </Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.trackPlayBtn}
+          onPress={() => playTrack(track.uri, track.name)}
+        >
+          <Icon name="play-circle-outline" size={28} color="#1DB954" />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    );
+  };
+
+  // Playlist Modal
+  const renderPlaylistModal = () => (
+    <Modal
+      visible={showPlaylistModal}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => setShowPlaylistModal(false)}
+    >
+      <LinearGradient colors={['#191414', '#0d0d0d', '#000000']} style={styles.modalContainer}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.modalHeader}>
+          <TouchableOpacity 
+            style={styles.modalBackBtn}
+            onPress={() => setShowPlaylistModal(false)}
+          >
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle} numberOfLines={1}>
+            {selectedPlaylist?.name}
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
+        
+        {/* Playlist Info */}
+        <View style={styles.playlistHeader}>
+          {selectedPlaylist?.images?.[0]?.url && (
+            <Image 
+              source={{ uri: selectedPlaylist.images[0].url }} 
+              style={styles.playlistCover}
+            />
+          )}
+          <Text style={styles.playlistDescription} numberOfLines={2}>
+            {selectedPlaylist?.description || `${selectedPlaylist?.tracks?.total} tracks`}
+          </Text>
+          
+          {/* Play All Button */}
+          <TouchableOpacity 
+            style={styles.playAllBtn}
+            onPress={() => playPlaylist(selectedPlaylist?.uri)}
+          >
+            <LinearGradient colors={['#1DB954', '#1ed760']} style={styles.playAllGradient}>
+              <Icon name="play-arrow" size={28} color="#fff" />
+              <Text style={styles.playAllText}>Play All</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+        
+        {/* Tracks List */}
+        {loadingTracks ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#1DB954" />
+            <Text style={styles.loadingText}>Loading tracks...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={playlistTracks}
+            renderItem={renderTrackItem}
+            keyExtractor={(item, index) => item.track?.id || index.toString()}
+            contentContainerStyle={styles.tracksList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Icon name="music-off" size={48} color="#666" />
+                <Text style={styles.emptyText}>No tracks found</Text>
+                <Text style={styles.emptySubtext}>This playlist might be empty or private</Text>
+              </View>
+            }
+          />
+        )}
+        
+        {!isPremium && (
+          <View style={styles.premiumBanner}>
+            <Icon name="lock" size={18} color="#FFD700" />
+            <Text style={styles.premiumBannerText}>
+              Upgrade to Premium to play songs
+            </Text>
+          </View>
+        )}
+      </LinearGradient>
+    </Modal>
   );
 
   return (
@@ -149,6 +435,11 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.userText}>
               <Text style={styles.welcomeText}>Welcome back,</Text>
               <Text style={styles.userName}>{user?.name || 'User'}</Text>
+              {isPremium && (
+                <View style={styles.premiumBadge}>
+                  <Text style={styles.premiumBadgeText}>Premium</Text>
+                </View>
+              )}
             </View>
           </View>
           
@@ -159,6 +450,50 @@ const HomeScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Currently Playing Mini Player */}
+      {currentlyPlaying?.item && (
+        <View style={styles.miniPlayerContainer}>
+          <GlassCard style={styles.miniPlayer}>
+            <TouchableOpacity 
+              style={styles.miniPlayerContent}
+              onPress={navigateToMap}
+              activeOpacity={0.9}
+            >
+              {currentlyPlaying.item.album?.images?.[0]?.url && (
+                <Image 
+                  source={{ uri: currentlyPlaying.item.album.images[0].url }} 
+                  style={styles.miniAlbum}
+                />
+              )}
+              <View style={styles.miniInfo}>
+                <Text style={styles.miniTitle} numberOfLines={1}>
+                  {currentlyPlaying.item.name}
+                </Text>
+                <Text style={styles.miniArtist} numberOfLines={1}>
+                  {currentlyPlaying.item.artists?.map(a => a.name).join(', ')}
+                </Text>
+              </View>
+              
+              <View style={styles.miniControls}>
+                <TouchableOpacity onPress={() => skipTrack('previous')} style={styles.miniBtn}>
+                  <Icon name="skip-previous" size={24} color={isPremium ? "#fff" : "#666"} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={togglePlayback} style={styles.miniPlayBtn}>
+                  <Icon 
+                    name={currentlyPlaying.is_playing ? "pause" : "play-arrow"} 
+                    size={28} 
+                    color="#1DB954" 
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => skipTrack('next')} style={styles.miniBtn}>
+                  <Icon name="skip-next" size={24} color={isPremium ? "#fff" : "#666"} />
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </GlassCard>
+        </View>
+      )}
 
       {/* Map Button */}
       <View style={styles.mapButtonContainer}>
@@ -187,9 +522,11 @@ const HomeScreen = ({ navigation }) => {
         {/* Your Playlists */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Playlists</Text>
+          <Text style={styles.sectionSubtitle}>Tap to view tracks</Text>
           {loading ? (
             <View style={styles.loadingContainer}>
               <GlassCard style={styles.loadingCard}>
+                <ActivityIndicator color="#1DB954" />
                 <Text style={styles.loadingText}>Loading your music...</Text>
               </GlassCard>
             </View>
@@ -211,6 +548,7 @@ const HomeScreen = ({ navigation }) => {
           {loading ? (
             <View style={styles.loadingContainer}>
               <GlassCard style={styles.loadingCard}>
+                <ActivityIndicator color="#1DB954" />
                 <Text style={styles.loadingText}>Loading categories...</Text>
               </GlassCard>
             </View>
@@ -258,6 +596,9 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* Playlist Modal */}
+      {renderPlaylistModal()}
     </LinearGradient>
   );
 };
@@ -269,7 +610,7 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: StatusBar.currentHeight + 20,
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   headerContent: {
     flexDirection: 'row',
@@ -303,6 +644,19 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginTop: 2,
   },
+  premiumBadge: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  premiumBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#000',
+  },
   logoutButton: {
     width: 48,
     height: 48,
@@ -313,9 +667,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  
+  // Mini Player
+  miniPlayerContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  miniPlayer: {
+    borderRadius: 12,
+  },
+  miniPlayerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  miniAlbum: {
+    width: 48,
+    height: 48,
+    borderRadius: 6,
+  },
+  miniInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  miniTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  miniArtist: {
+    fontSize: 12,
+    color: '#b3b3b3',
+    marginTop: 2,
+  },
+  miniControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  miniBtn: {
+    padding: 6,
+  },
+  miniPlayBtn: {
+    padding: 6,
+  },
+  
+  // Map Button
   mapButtonContainer: {
     paddingHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   mapButton: {
     borderRadius: 18,
@@ -347,34 +746,47 @@ const styles = StyleSheet.create({
     paddingBottom: 50,
   },
   section: {
-    marginBottom: 36,
+    marginBottom: 28,
   },
   sectionTitle: {
     fontSize: 24,
     fontWeight: '800',
     color: '#ffffff',
     paddingHorizontal: 16,
-    marginBottom: 18,
+    marginBottom: 4,
     letterSpacing: 0.6,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    paddingHorizontal: 16,
+    marginBottom: 14,
   },
   loadingContainer: {
     paddingHorizontal: 16,
+    alignItems: 'center',
+    paddingVertical: 20,
   },
   loadingCard: {
     minHeight: 60,
     justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   loadingText: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 14,
-    textAlign: 'center',
+    marginLeft: 12,
   },
   horizontalList: {
     paddingRight: 16,
   },
+  
+  // Playlist Card
   playlistCard: {
     width: 170,
-    height: 210,
+    height: 220,
     marginRight: 8,
   },
   playlistContent: {
@@ -397,6 +809,23 @@ const styles = StyleSheet.create({
     right: 0,
     height: 70,
   },
+  playOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+  },
+  playButtonSmall: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   playlistInfo: {
     paddingHorizontal: 4,
   },
@@ -412,6 +841,8 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.65)',
     fontWeight: '500',
   },
+  
+  // Category Card
   categoryCard: {
     width: 170,
     height: 130,
@@ -445,6 +876,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
+  
+  // Stats
   statsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -477,6 +910,140 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.7)',
     fontWeight: '600',
+  },
+  
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: StatusBar.currentHeight + 10,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  modalBackBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  playlistHeader: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+  },
+  playlistCover: {
+    width: 180,
+    height: 180,
+    borderRadius: 12,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+  },
+  playlistDescription: {
+    fontSize: 14,
+    color: '#b3b3b3',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  playAllBtn: {
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  playAllGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+  },
+  playAllText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#fff',
+    marginLeft: 8,
+  },
+  tracksList: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  trackItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  trackNumber: {
+    width: 30,
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  trackAlbum: {
+    width: 48,
+    height: 48,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  trackInfo: {
+    flex: 1,
+  },
+  trackName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  trackArtist: {
+    fontSize: 13,
+    color: '#b3b3b3',
+    marginTop: 2,
+  },
+  trackPlayBtn: {
+    padding: 8,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 8,
+  },
+  premiumBanner: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  premiumBannerText: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });
 
