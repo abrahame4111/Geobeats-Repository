@@ -1681,8 +1681,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   albumCoverContainer: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 4,
     overflow: 'hidden',
     backgroundColor: '#282828',
