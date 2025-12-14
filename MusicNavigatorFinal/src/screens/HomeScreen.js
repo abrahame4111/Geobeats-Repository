@@ -151,15 +151,36 @@ const HomeScreen = ({ navigation }) => {
     setSelectedCategory(category);
     setShowCategoryModal(true);
     setLoadingCategory(true);
+    setCategoryPlaylists([]); // Clear previous results
     
     try {
       const response = await axios.get(
         `${API}/spotify/category/${category.id}/playlists?access_token=${accessToken}`
       );
-      setCategoryPlaylists(response.data.playlists?.items || []);
+      
+      console.log('Category playlists response:', response.data);
+      
+      // Handle different response structures
+      let playlists = [];
+      if (response.data.playlists?.items) {
+        playlists = response.data.playlists.items;
+      } else if (response.data.items) {
+        playlists = response.data.items;
+      } else if (Array.isArray(response.data)) {
+        playlists = response.data;
+      }
+      
+      // Filter out null items
+      const validPlaylists = playlists.filter(item => item && item.id && item.name);
+      setCategoryPlaylists(validPlaylists);
+      
+      if (validPlaylists.length === 0) {
+        console.log('No valid playlists found for category:', category.name);
+      }
     } catch (error) {
       console.error('Error loading category playlists:', error);
       Alert.alert('Error', 'Failed to load category playlists');
+      setCategoryPlaylists([]);
     } finally {
       setLoadingCategory(false);
     }
