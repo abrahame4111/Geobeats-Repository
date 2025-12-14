@@ -117,7 +117,6 @@ const MapScreen = ({ navigation }) => {
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
-  const [showPlaybackControls, setShowPlaybackControls] = useState(false);
   
   // Listen Together State
   const [listenSessionId, setListenSessionId] = useState(null);
