@@ -246,23 +246,54 @@ const MapScreen = ({ navigation }) => {
     }
 
     try {
-      const granted = await PermissionsAndroid.request(
+      // First request fine location
+      const fineGranted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
         {
-          title: 'Location Access Required',
-          message: 'Music Navigator needs your location to show you on the map',
+          title: 'Precise Location Required',
+          message: 'Music Navigator needs your precise location to show you on the map and share with friends.',
           buttonPositive: 'Allow',
           buttonNegative: 'Deny',
         }
       );
 
-      const hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
+      console.log('📍 Fine location permission:', fineGranted);
+
+      if (fineGranted === PermissionsAndroid.RESULTS.GRANTED) {
+        setLocationPermission(true);
+        
+        // Also request coarse location as backup
+        try {
+          await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION
+          );
+        } catch (e) {
+          console.log('Coarse location request failed:', e);
+        }
+        
+        return true;
+      }
+
+      // If fine location denied, try coarse location
+      const coarseGranted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+        {
+          title: 'Location Required',
+          message: 'Music Navigator needs location access to show you on the map.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny',
+        }
+      );
+
+      console.log('📍 Coarse location permission:', coarseGranted);
+
+      const hasPermission = coarseGranted === PermissionsAndroid.RESULTS.GRANTED;
       setLocationPermission(hasPermission);
       
       if (!hasPermission) {
         Alert.alert(
-          'Permission Required',
-          'Location permission is needed to use the map feature',
+          'Location Permission Required',
+          'Location permission is needed to show your position on the map.\n\nPlease go to Settings > Apps > MusicNavigatorFinal > Permissions and enable Location.',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Try Again', onPress: requestLocationPermission }
