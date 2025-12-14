@@ -279,12 +279,14 @@ const MapScreen = ({ navigation }) => {
 
   const startLocationTracking = () => {
     setLoadingLocation(true);
+    console.log('📍 Starting location tracking...');
     
+    // First try with high accuracy
     Geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         const newLocation = { latitude, longitude, accuracy };
-        console.log('📍 Initial location:', latitude, longitude, 'accuracy:', accuracy);
+        console.log('📍 Got location (high accuracy):', latitude, longitude, 'accuracy:', accuracy);
         setMyLocation(newLocation);
         centerOnLocation(newLocation);
         
@@ -293,53 +295,114 @@ const MapScreen = ({ navigation }) => {
         }
         
         setLoadingLocation(false);
+        startWatchingPosition();
       },
       (error) => {
-        console.error('Location error:', error);
-        setLoadingLocation(false);
-        showLocationError(error.code);
+        console.log('📍 High accuracy failed, trying low accuracy...', error.message);
+        // Fallback to low accuracy
+        tryLowAccuracyLocation();
       },
       {
         enableHighAccuracy: true,
-        timeout: 20000,
-        maximumAge: 5000,
+        timeout: 15000,
+        maximumAge: 10000,
       }
     );
+  };
 
-    // Watch position with high accuracy for real-time updates
+  const tryLowAccuracyLocation = () => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        const newLocation = { latitude, longitude, accuracy };
+        console.log('📍 Got location (low accuracy):', latitude, longitude, 'accuracy:', accuracy);
+        setMyLocation(newLocation);
+        centerOnLocation(newLocation);
+        
+        if (shareEnabled) {
+          sendLocationUpdate(newLocation);
+        }
+        
+        setLoadingLocation(false);
+        startWatchingPosition();
+      },
+      (error) => {
+        console.error('📍 Location error:', error);
+        setLoadingLocation(false);
+        
+        // Try one more time with very relaxed settings
+        Geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            setMyLocation({ latitude, longitude });
+            centerOnLocation({ latitude, longitude });
+            setLoadingLocation(false);
+            startWatchingPosition();
+          },
+          (finalError) => {
+            console.error('📍 Final location error:', finalError);
+            showLocationError(finalError.code);
+          },
+          {
+            enableHighAccuracy: false,
+            timeout: 30000,
+            maximumAge: 60000,
+          }
+        );
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 20000,
+        maximumAge: 30000,
+      }
+    );
+  };
+
+  const startWatchingPosition = () => {
+    // Clear any existing watch
+    if (locationWatchId.current) {
+      Geolocation.clearWatch(locationWatchId.current);
+    }
+
+    // Watch position for real-time updates
     locationWatchId.current = Geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, accuracy } = position.coords;
         const newLocation = { latitude, longitude, accuracy };
-        console.log('📍 Location update:', latitude, longitude, 'accuracy:', accuracy);
+        console.log('📍 Location update:', latitude.toFixed(6), longitude.toFixed(6));
         setMyLocation(newLocation);
         
         if (shareEnabled) {
           sendLocationUpdate(newLocation);
         }
       },
-      (error) => console.error('Watch error:', error),
+      (error) => console.log('📍 Watch error:', error.message),
       {
-        enableHighAccuracy: true,
-        distanceFilter: 10, // Update every 10 meters
-        interval: 3000, // Update every 3 seconds
-        fastestInterval: 1000, // Fastest update every 1 second
+        enableHighAccuracy: false,
+        distanceFilter: 20,
+        interval: 5000,
+        fastestInterval: 2000,
+        maximumAge: 10000,
       }
     );
   };
 
   const showLocationError = (errorCode) => {
     const messages = {
-      1: 'Please enable location permissions in your device settings.',
-      2: 'Location services are unavailable. Please enable GPS.',
-      3: 'Location request timed out. Make sure GPS is enabled.',
+      1: 'Location permission denied. Please enable location in Settings > Apps > MusicNavigatorFinal > Permissions.',
+      2: 'Location services unavailable. Please enable GPS/Location in your device settings.',
+      3: 'Location request timed out. Please make sure:\n\n1. GPS is enabled\n2. You are not in airplane mode\n3. Try moving to an area with better GPS signal',
     };
     
     Alert.alert(
       'Location Error',
-      messages[errorCode] || 'Unable to get your location.',
+      messages[errorCode] || 'Unable to get your location. Please check your GPS settings.',
       [
-        { text: 'Cancel' },
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => {
+          // This will prompt user to check settings
+          Alert.alert('Enable Location', 'Please enable Location/GPS in your device settings, then return to the app and tap Retry.');
+        }},
         { text: 'Retry', onPress: startLocationTracking }
       ]
     );
