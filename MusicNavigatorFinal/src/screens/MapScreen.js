@@ -1844,6 +1844,12 @@ const styles = StyleSheet.create({
   listenSessionMarker: {
     borderColor: '#1DB954',
   },
+  profileImageContainer: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   profileImage: {
     width: '100%',
     height: '100%',
