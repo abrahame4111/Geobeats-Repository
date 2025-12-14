@@ -497,7 +497,10 @@ const HomeScreen = ({ navigation }) => {
       {/* Currently Playing Mini Player */}
       {currentlyPlaying?.item ? (
         <View style={styles.miniPlayerContainer}>
-          <GlassCard style={styles.miniPlayer}>
+          <LinearGradient
+            colors={['rgba(40,40,40,0.95)', 'rgba(30,30,30,0.9)']}
+            style={styles.miniPlayerGradient}
+          >
             <TouchableOpacity 
               style={styles.miniPlayerContent}
               onPress={navigateToMap}
@@ -534,11 +537,14 @@ const HomeScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
-          </GlassCard>
+          </LinearGradient>
         </View>
       ) : (
         <View style={styles.miniPlayerContainer}>
-          <GlassCard style={styles.miniPlayer}>
+          <LinearGradient
+            colors={['rgba(40,40,40,0.95)', 'rgba(30,30,30,0.9)']}
+            style={styles.miniPlayerGradient}
+          >
             <View style={styles.miniPlayerContent}>
               <View style={styles.miniAlbumPlaceholder}>
                 <Icon name="music-note" size={24} color="#666" />
@@ -555,7 +561,7 @@ const HomeScreen = ({ navigation }) => {
                 <Icon name="refresh" size={24} color="#1DB954" />
               </TouchableOpacity>
             </View>
-          </GlassCard>
+          </LinearGradient>
         </View>
       )}
 
