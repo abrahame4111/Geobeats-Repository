@@ -905,60 +905,6 @@ const MapScreen = ({ navigation }) => {
     );
   };
 
-  // Song Card Component with Playback Controls
-  const SongCard = ({ track, location, isMe, onPress }) => {
-    const songName = track?.name || location?.current_song;
-    const artistName = getArtistString(track, location);
-    const albumCover = track?.album?.images?.[0]?.url || location?.album_cover;
-    
-    if (!songName) return null;
-    
-    return (
-      <TouchableOpacity 
-        style={styles.songCard}
-        onPress={onPress}
-        activeOpacity={0.9}
-      >
-        {/* Album Cover */}
-        <View style={styles.albumCoverContainer}>
-          {albumCover ? (
-            <Image source={{ uri: albumCover }} style={styles.albumCover} />
-          ) : (
-            <LinearGradient
-              colors={['#282828', '#404040']}
-              style={styles.albumPlaceholder}
-            >
-              <Icon name="music-note" size={20} color="#b3b3b3" />
-            </LinearGradient>
-          )}
-        </View>
-        
-        {/* Song Info */}
-        <View style={styles.songInfo}>
-          <MarqueeText text={songName} style={styles.songTitle} />
-          <View style={{ marginTop: 4 }}>
-            <MarqueeText text={artistName} style={styles.artistName} />
-          </View>
-        </View>
-        
-        {/* Playing/Listen Together Indicator */}
-        <View style={styles.playingIndicator}>
-          {listenSessionId && isMe ? (
-            <View style={styles.listenBadge}>
-              <Icon name="headset" size={14} color="#1DB954" />
-            </View>
-          ) : (
-            <View style={styles.soundWave}>
-              <View style={[styles.soundBar, styles.soundBar1]} />
-              <View style={[styles.soundBar, styles.soundBar2]} />
-              <View style={[styles.soundBar, styles.soundBar3]} />
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   const renderMarker = (location, userId, isMe = false) => {
     if (!location) return null;
     
