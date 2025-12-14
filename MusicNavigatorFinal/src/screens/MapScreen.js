@@ -125,11 +125,26 @@ const MapScreen = ({ navigation }) => {
   // ============ INITIALIZATION ============
   
   useEffect(() => {
+    // Fetch profile immediately on mount (before other async operations)
+    if (accessToken) {
+      fetchUserProfile();
+    }
+    
     initializeApp();
     startPulseAnimation();
     
     return cleanup;
   }, []);
+
+  // Prefetch profile image when userProfile changes
+  useEffect(() => {
+    if (userProfile?.images?.[0]?.url) {
+      // Prefetch the image for faster loading
+      Image.prefetch(userProfile.images[0].url)
+        .then(() => console.log('✅ Profile image prefetched'))
+        .catch(err => console.log('Profile image prefetch failed:', err));
+    }
+  }, [userProfile]);
 
   // Track progress update
   useEffect(() => {
@@ -148,16 +163,22 @@ const MapScreen = ({ navigation }) => {
   }, [isPlaying, duration]);
 
   const initializeApp = async () => {
+    // Start location and websocket in parallel
     const hasPermission = await requestLocationPermission();
+    
     if (hasPermission) {
       startLocationTracking();
       connectWebSocket();
     }
     
     if (accessToken) {
-      fetchUserProfile();
-      checkPremiumStatus();
-      fetchCurrentTrack();
+      // Fetch these in parallel for faster loading
+      Promise.all([
+        checkPremiumStatus(),
+        fetchCurrentTrack()
+      ]).catch(err => console.log('Init fetch error:', err));
+      
+      // Set up interval for track updates
       const interval = setInterval(fetchCurrentTrack, 5000);
       return () => clearInterval(interval);
     }
