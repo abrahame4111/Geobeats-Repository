@@ -573,25 +573,32 @@ const HomeScreen = ({ navigation }) => {
           </View>
         ) : (
           <FlatList
-            data={categoryPlaylists}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                style={styles.categoryPlaylistItem}
-                onPress={() => openPlaylist(item)}
-                activeOpacity={0.7}
-              >
-                {item.images?.[0]?.url && (
-                  <Image source={{ uri: item.images[0].url }} style={styles.categoryPlaylistImage} />
-                )}
-                <View style={styles.categoryPlaylistInfo}>
-                  <Text style={styles.categoryPlaylistName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.categoryPlaylistDesc} numberOfLines={2}>
-                    {item.description || `${item.tracks?.total || 0} tracks`}
-                  </Text>
-                </View>
-                <Icon name="chevron-right" size={24} color="#666" />
-              </TouchableOpacity>
-            )}
+            data={categoryPlaylists.filter(item => item && item.id)}
+            renderItem={({ item }) => {
+              if (!item || !item.name) return null;
+              return (
+                <TouchableOpacity 
+                  style={styles.categoryPlaylistItem}
+                  onPress={() => openPlaylist(item)}
+                  activeOpacity={0.7}
+                >
+                  {item.images?.[0]?.url ? (
+                    <Image source={{ uri: item.images[0].url }} style={styles.categoryPlaylistImage} />
+                  ) : (
+                    <View style={[styles.categoryPlaylistImage, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}>
+                      <Icon name="queue-music" size={28} color="#666" />
+                    </View>
+                  )}
+                  <View style={styles.categoryPlaylistInfo}>
+                    <Text style={styles.categoryPlaylistName} numberOfLines={1}>{item.name}</Text>
+                    <Text style={styles.categoryPlaylistDesc} numberOfLines={2}>
+                      {item.description || `${item.tracks?.total || 0} tracks`}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={24} color="#666" />
+                </TouchableOpacity>
+              );
+            }}
             keyExtractor={(item, index) => item?.id || `playlist-${index}`}
             contentContainerStyle={styles.categoryPlaylistsList}
             showsVerticalScrollIndicator={false}
