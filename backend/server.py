@@ -745,6 +745,48 @@ async def proxy_spotify_request(url: str = Query(...), access_token: str = Query
         logger.error(f"Proxy error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/spotify/search")
+async def search_spotify(q: str = Query(...), access_token: str = Query(...)):
+    """Search Spotify for tracks"""
+    try:
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.get(
+                f"https://api.spotify.com/v1/search?q={q}&type=track&limit=30",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Search failed: {response.status_code}")
+                raise HTTPException(status_code=response.status_code, detail="Search failed")
+            
+            return response.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/spotify/category/{category_id}/playlists")
+async def get_category_playlists(category_id: str, access_token: str = Query(...)):
+    """Get playlists for a category"""
+    try:
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.get(
+                f"https://api.spotify.com/v1/browse/categories/{category_id}/playlists?limit=30",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Category playlists failed: {response.status_code}")
+                raise HTTPException(status_code=response.status_code, detail="Failed to get category playlists")
+            
+            return response.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Category playlists error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Listen Together endpoints
 @api_router.post("/listen-together/create")
 async def create_listen_session(authorization: str = Header(...)):
