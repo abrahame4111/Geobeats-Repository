@@ -742,19 +742,16 @@ const styles = StyleSheet.create({
   miniPlayerContainer: {
     paddingHorizontal: 16,
     marginBottom: 16,
-    zIndex: 10,
   },
-  miniPlayer: {
+  miniPlayerGradient: {
     borderRadius: 12,
-    overflow: 'hidden',
-    padding: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   miniPlayerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
-    marginHorizontal: -8,
-    marginVertical: -10,
   },
   miniAlbum: {
     width: 48,
