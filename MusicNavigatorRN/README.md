@@ -133,7 +133,7 @@ MusicNavigatorRN/
 ## Backend Integration
 
 This app connects to the FastAPI backend at:
-- **Production**: `https://musicmap-build.preview.emergentagent.com`
+- **Production**: `https://mapify-social.preview.emergentagent.com`
 - **WebSocket**: `wss://geobeats.preview.emergentagent.com/api/ws/`
 
 The backend handles:

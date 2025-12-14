@@ -58,7 +58,7 @@ const App = () => {
         </View>
         
         <WebView
-          source={{ uri: 'https://musicmap-build.preview.emergentagent.com/api/auth/login' }}
+          source={{ uri: 'https://mapify-social.preview.emergentagent.com/api/auth/login' }}
           onNavigationStateChange={handleWebViewNavigation}
           style={styles.webView}
           javaScriptEnabled={true}

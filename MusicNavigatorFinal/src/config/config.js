@@ -1,7 +1,7 @@
 // Backend Configuration
 export const CONFIG = {
   // Replace with your backend URL
-  BACKEND_URL: 'https://musicmap-build.preview.emergentagent.com',
+  BACKEND_URL: 'https://mapify-social.preview.emergentagent.com',
   
   // API Configuration
   API_TIMEOUT: 10000,
@@ -25,7 +25,7 @@ export const CONFIG = {
   // Spotify API Configuration (these should match your backend)
   SPOTIFY: {
     CLIENT_ID: 'YOUR_SPOTIFY_CLIENT_ID', // Replace with your Spotify Client ID
-    REDIRECT_URI: 'https://musicmap-build.preview.emergentagent.com/api/auth/callback',
+    REDIRECT_URI: 'https://mapify-social.preview.emergentagent.com/api/auth/callback',
     SCOPES: 'user-read-private user-read-email user-read-currently-playing user-read-playback-state playlist-read-private'
   },
   
