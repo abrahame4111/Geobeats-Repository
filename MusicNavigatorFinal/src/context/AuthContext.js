@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { CONFIG, API_ENDPOINTS } from '../config/config';
 import { SimpleStorage } from '../utils/SimpleStorage';
 import axios from 'axios';
+import CookieManager from '@react-native-cookies/cookies';
 
 const AuthContext = createContext();
 
@@ -62,18 +63,45 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      console.log('🚪 Logging out...');
+      
+      // Clear all stored auth data
       await SimpleStorage.multiRemove([
         'spotify_access_token',
         'spotify_refresh_token',
         'spotify_user',
       ]);
       
+      // Clear all cookies (this clears Spotify session cookies)
+      try {
+        await CookieManager.clearAll();
+        console.log('🍪 Cookies cleared');
+      } catch (cookieError) {
+        console.log('Cookie clear error (non-critical):', cookieError);
+      }
+      
+      // Clear any additional storage
+      try {
+        await SimpleStorage.clear();
+        console.log('💾 Storage cleared');
+      } catch (storageError) {
+        console.log('Storage clear error (non-critical):', storageError);
+      }
+      
+      // Reset state
       setAccessToken(null);
       setRefreshToken(null);
       setUser(null);
       setIsAuthenticated(false);
+      
+      console.log('✅ Logout complete');
     } catch (error) {
       console.error('Error during logout:', error);
+      // Still reset state even if clearing fails
+      setAccessToken(null);
+      setRefreshToken(null);
+      setUser(null);
+      setIsAuthenticated(false);
     }
   };
 
