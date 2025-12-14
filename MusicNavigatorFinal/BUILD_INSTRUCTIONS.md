@@ -83,7 +83,7 @@ For cloud builds without local Android Studio:
 ### Backend URL
 The app is already configured to connect to:
 ```
-https://musicmap-build.preview.emergentagent.com
+https://mapify-social.preview.emergentagent.com
 ```
 
 If you need to change it, edit: `src/config/config.js`
