@@ -1055,6 +1055,47 @@ const MapScreen = ({ navigation }) => {
       }
     };
     
+    // Profile Image Component with loading state
+    const ProfileImageView = () => {
+      const [imageLoaded, setImageLoaded] = useState(false);
+      const [imageError, setImageError] = useState(false);
+      
+      if (!profileImage || imageError) {
+        return (
+          <LinearGradient
+            colors={isMe ? ['#4169E1', '#1E90FF'] : ['#1DB954', '#1ed760']}
+            style={styles.profilePlaceholder}
+          >
+            <Icon name="person" size={isMe ? 28 : 24} color="#fff" />
+          </LinearGradient>
+        );
+      }
+      
+      return (
+        <View style={styles.profileImageContainer}>
+          {!imageLoaded && (
+            <LinearGradient
+              colors={isMe ? ['#4169E1', '#1E90FF'] : ['#1DB954', '#1ed760']}
+              style={[styles.profilePlaceholder, { position: 'absolute' }]}
+            >
+              <ActivityIndicator size="small" color="#fff" />
+            </LinearGradient>
+          )}
+          <Image 
+            source={{ 
+              uri: profileImage,
+              cache: 'force-cache',
+              priority: 'high'
+            }} 
+            style={[styles.profileImage, !imageLoaded && { opacity: 0 }]}
+            onLoad={() => setImageLoaded(true)}
+            onError={() => setImageError(true)}
+            resizeMode="cover"
+          />
+        </View>
+      );
+    };
+    
     return (
       <Marker
         key={userId}
@@ -1064,7 +1105,7 @@ const MapScreen = ({ navigation }) => {
         }}
         anchor={{ x: 0.5, y: 0.95 }}
         onPress={handleMarkerPress}
-        tracksViewChanges={false}
+        tracksViewChanges={!profileImage || isMe}
       >
         <View style={styles.markerWrapper}>
           {/* Song Card - positioned above profile */}
@@ -1075,7 +1116,10 @@ const MapScreen = ({ navigation }) => {
                 <View style={styles.albumCoverContainer}>
                   {(isMe ? currentTrack?.album?.images?.[0]?.url : location?.album_cover) ? (
                     <Image 
-                      source={{ uri: isMe ? currentTrack?.album?.images?.[0]?.url : location?.album_cover }} 
+                      source={{ 
+                        uri: isMe ? currentTrack?.album?.images?.[0]?.url : location?.album_cover,
+                        cache: 'force-cache'
+                      }} 
                       style={styles.albumCover} 
                     />
                   ) : (
@@ -1117,16 +1161,7 @@ const MapScreen = ({ navigation }) => {
             isMe && styles.myMarkerCircle,
             hasListenSession && styles.listenSessionMarker
           ]}>
-            {profileImage ? (
-              <Image source={{ uri: profileImage }} style={styles.profileImage} />
-            ) : (
-              <LinearGradient
-                colors={isMe ? ['#4169E1', '#1E90FF'] : ['#1DB954', '#1ed760']}
-                style={styles.profilePlaceholder}
-              >
-                <Icon name="person" size={isMe ? 28 : 24} color="#fff" />
-              </LinearGradient>
-            )}
+            <ProfileImageView />
           </View>
           
           {/* Username Badge */}
