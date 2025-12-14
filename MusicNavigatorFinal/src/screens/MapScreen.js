@@ -965,6 +965,7 @@ const MapScreen = ({ navigation }) => {
     const profileImage = isMe ? userProfile?.images?.[0]?.url : location.profile_image;
     const userName = isMe ? (user?.name || 'Me') : (location.user_name || 'User');
     const hasListenSession = isMe ? !!listenSessionId : !!location.listen_session_id;
+    const showSongCard = isMe ? (shareEnabled && currentTrack) : location.current_song;
     
     return (
       <Marker
@@ -973,7 +974,7 @@ const MapScreen = ({ navigation }) => {
           latitude: isMe ? location.latitude : (location.lat || location.latitude),
           longitude: isMe ? location.longitude : (location.lng || location.longitude),
         }}
-        anchor={{ x: 0.5, y: 1 }}
+        anchor={{ x: 0.5, y: 0.95 }}
         onPress={() => {
           if (!isMe) {
             setSelectedUser({ ...location, user_id: userId });
@@ -983,20 +984,24 @@ const MapScreen = ({ navigation }) => {
           }
         }}
       >
-        <View style={styles.markerContainer}>
-          {/* Song Card */}
-          {(isMe ? (shareEnabled && currentTrack) : location.current_song) && (
-            <SongCard 
-              track={isMe ? currentTrack : null}
-              location={location}
-              isMe={isMe}
-              onPress={() => {
-                if (!isMe) {
-                  setSelectedUser({ ...location, user_id: userId });
-                  setShowUserModal(true);
-                }
-              }}
-            />
+        <View style={styles.markerWrapper}>
+          {/* Song Card - positioned above profile */}
+          {showSongCard && (
+            <View style={styles.songCardWrapper}>
+              <SongCard 
+                track={isMe ? currentTrack : null}
+                location={location}
+                isMe={isMe}
+                onPress={() => {
+                  if (!isMe) {
+                    setSelectedUser({ ...location, user_id: userId });
+                    setShowUserModal(true);
+                  }
+                }}
+              />
+              {/* Arrow pointing down to profile */}
+              <View style={styles.songCardArrow} />
+            </View>
           )}
           
           {/* Profile Marker */}
