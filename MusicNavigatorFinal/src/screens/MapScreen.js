@@ -1420,38 +1420,6 @@ const MapScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Mini Player Bar */}
-      {currentTrack && !showPlaybackControls && (
-        <TouchableOpacity 
-          style={styles.miniPlayer}
-          onPress={() => setShowPlaybackControls(true)}
-          activeOpacity={0.9}
-        >
-          <LinearGradient colors={['#1a1a1a', '#2d2d2d']} style={styles.miniPlayerGradient}>
-            {currentTrack.album?.images?.[0]?.url && (
-              <Image source={{ uri: currentTrack.album.images[0].url }} style={styles.miniAlbum} />
-            )}
-            <View style={styles.miniInfo}>
-              <Text style={styles.miniTitle} numberOfLines={1}>{currentTrack.name}</Text>
-              <Text style={styles.miniArtist} numberOfLines={1}>
-                {currentTrack.artists?.map(a => a.name).join(', ')}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={togglePlayback} style={styles.miniPlayBtn}>
-              <Icon name={isPlaying ? "pause" : "play-arrow"} size={28} color="#1DB954" />
-            </TouchableOpacity>
-            {listenSessionId && (
-              <View style={styles.miniListenBadge}>
-                <Icon name="headset" size={14} color="#1DB954" />
-              </View>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
-
-      {/* Playback Controls Panel */}
-      {renderPlaybackControls()}
-
       {/* User Modal */}
       {renderUserModal()}
 
