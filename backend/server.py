@@ -480,6 +480,26 @@ async def get_player_state(authorization: str = Header(...)):
         logger.error(f"Error fetching player state: {str(e)}")
         return {"is_playing": False, "device": None}
 
+@api_router.get("/spotify/devices")
+async def get_devices(authorization: str = Header(...)):
+    """Get available Spotify devices"""
+    try:
+        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.get(
+                "https://api.spotify.com/v1/me/player/devices",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if response.status_code != 200:
+                return {"devices": []}
+            
+            return response.json()
+    except Exception as e:
+        logger.error(f"Error fetching devices: {str(e)}")
+        return {"devices": []}
+
 @api_router.get("/spotify/queue")
 async def get_queue(access_token: str = Query(...)):
     """Get user's playback queue"""
