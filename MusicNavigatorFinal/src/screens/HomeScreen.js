@@ -592,7 +592,7 @@ const HomeScreen = ({ navigation }) => {
                 <Icon name="chevron-right" size={24} color="#666" />
               </TouchableOpacity>
             )}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => item?.id || `playlist-${index}`}
             contentContainerStyle={styles.categoryPlaylistsList}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
