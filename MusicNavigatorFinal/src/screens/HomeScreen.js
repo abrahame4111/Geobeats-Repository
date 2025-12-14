@@ -188,17 +188,35 @@ const HomeScreen = ({ navigation }) => {
     }
 
     try {
-      await axios.put(`${API}/spotify/play/context`, null, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { context_uri: playlistUri }
-      });
+      console.log('🎵 Playing playlist:', playlistUri);
       
-      Alert.alert('🎵 Playing Playlist', selectedPlaylist?.name || 'Playlist');
-      setShowPlaylistModal(false);
-      fetchCurrentlyPlaying();
+      const response = await axios.put(
+        `${API}/spotify/play/context?context_uri=${encodeURIComponent(playlistUri)}`,
+        null,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }
+      );
+      
+      console.log('🎵 Play playlist response:', response.data);
+      
+      if (response.data.success) {
+        Alert.alert('🎵 Playing Playlist', selectedPlaylist?.name || 'Playlist');
+        setShowPlaylistModal(false);
+        setTimeout(fetchCurrentlyPlaying, 1000);
+      } else {
+        Alert.alert(
+          'Playback Error',
+          response.data.error || 'Failed to play playlist. Make sure Spotify is open.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
-      console.error('Play playlist error:', error);
-      Alert.alert('Error', 'Failed to play playlist. Make sure Spotify is open on a device.');
+      console.error('Play playlist error:', error.response?.data || error.message);
+      Alert.alert(
+        'Error', 
+        error.response?.data?.error || 'Failed to play playlist. Make sure Spotify is open on your phone or computer.'
+      );
     }
   };
 
