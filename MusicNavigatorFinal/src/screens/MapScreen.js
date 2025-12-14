@@ -1225,25 +1225,8 @@ const MapScreen = ({ navigation }) => {
           colors={['rgba(0, 0, 0, 0.85)', 'rgba(0, 0, 0, 0.5)', 'transparent']}
           style={styles.topGradient}
         >
-          {/* Centered Title */}
-          <View style={styles.topCenterContainer}>
-            <Text style={styles.topTitle}>Live Map</Text>
-            <View style={styles.statusRow}>
-              <Animated.View 
-                style={[
-                  styles.statusDot, 
-                  connectionStatus === 'connected' && styles.statusConnected,
-                  connectionStatus === 'connected' && { transform: [{ scale: pulseAnim }] }
-                ]} 
-              />
-              <Text style={styles.statusText}>
-                {onlineCount} online • {shareEnabled ? 'sharing' : 'private'}
-              </Text>
-            </View>
-          </View>
-          
-          {/* Buttons Row */}
-          <View style={styles.topButtonsRow}>
+          {/* Top Row with Home and Theme buttons */}
+          <View style={styles.topRowHeader}>
             <TouchableOpacity 
               onPress={() => navigation.navigate('Home')} 
               style={styles.topButton}
@@ -1253,22 +1236,47 @@ const MapScreen = ({ navigation }) => {
               </View>
             </TouchableOpacity>
             
-            <View style={styles.topButtonsSpacer} />
-            
-            <TouchableOpacity onPress={toggleShare} style={styles.topButton}>
-              <View style={[styles.shareButton, shareEnabled && { borderColor: 'rgba(29, 185, 84, 0.5)' }]}>
-                <Icon 
-                  name={shareEnabled ? "visibility" : "visibility-off"} 
-                  size={22} 
-                  color={shareEnabled ? "#1DB954" : "#888"} 
-                />
-              </View>
-            </TouchableOpacity>
+            <Text style={styles.topTitle}>Live Map</Text>
             
             <TouchableOpacity onPress={() => setShowThemeMenu(!showThemeMenu)} style={styles.topButton}>
               <View style={styles.themeButton}>
                 <Text style={styles.themeEmoji}>{THEMES.find(t => t.id === mapTheme)?.icon || '🗺️'}</Text>
               </View>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Status Row */}
+          <View style={styles.statusContainer}>
+            <View style={styles.statusRow}>
+              <Animated.View 
+                style={[
+                  styles.statusDot, 
+                  connectionStatus === 'connected' && styles.statusConnected,
+                  connectionStatus === 'connected' && { transform: [{ scale: pulseAnim }] }
+                ]} 
+              />
+              <Text style={styles.statusText}>
+                {onlineCount} online
+              </Text>
+            </View>
+          </View>
+          
+          {/* Share Button */}
+          <View style={styles.shareButtonContainer}>
+            <TouchableOpacity onPress={toggleShare} activeOpacity={0.8}>
+              <LinearGradient
+                colors={shareEnabled ? ['#1DB954', '#1ed760'] : ['#333', '#444']}
+                style={styles.shareButtonMain}
+              >
+                <Icon 
+                  name={shareEnabled ? "share-location" : "location-off"} 
+                  size={20} 
+                  color="#fff" 
+                />
+                <Text style={styles.shareButtonText}>
+                  {shareEnabled ? 'Sharing Live' : 'Start Sharing'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </LinearGradient>
