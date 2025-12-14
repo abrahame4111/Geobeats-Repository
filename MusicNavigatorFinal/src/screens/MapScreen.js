@@ -80,7 +80,6 @@ const MapScreen = ({ navigation }) => {
   const wsRef = useRef(null);
   const locationWatchId = useRef(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
   
   // Map State
   const [region, setRegion] = useState({
