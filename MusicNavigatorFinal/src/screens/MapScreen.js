@@ -1489,7 +1489,7 @@ const styles = StyleSheet.create({
   floatingControls: {
     position: 'absolute',
     right: 16,
-    bottom: 180,
+    bottom: 100,
     gap: 14,
   },
   controlButton: {
