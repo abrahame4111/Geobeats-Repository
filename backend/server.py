@@ -771,16 +771,49 @@ async def get_category_playlists(category_id: str, access_token: str = Query(...
     """Get playlists for a category"""
     try:
         async with httpx.AsyncClient() as http_client:
+            # First try the direct category playlists endpoint
             response = await http_client.get(
-                f"https://api.spotify.com/v1/browse/categories/{category_id}/playlists?limit=30",
+                f"https://api.spotify.com/v1/browse/categories/{category_id}/playlists?limit=30&country=US",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
             
-            if response.status_code != 200:
-                logger.error(f"Category playlists failed: {response.status_code}")
-                raise HTTPException(status_code=response.status_code, detail="Failed to get category playlists")
+            if response.status_code == 200:
+                return response.json()
             
-            return response.json()
+            # If that fails, try to search for playlists by category name
+            logger.info(f"Direct category fetch failed, trying search approach")
+            
+            # Get category info first
+            cat_response = await http_client.get(
+                f"https://api.spotify.com/v1/browse/categories/{category_id}",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if cat_response.status_code == 200:
+                cat_data = cat_response.json()
+                category_name = cat_data.get("name", "")
+                
+                # Search for playlists with that name
+                search_response = await http_client.get(
+                    f"https://api.spotify.com/v1/search?q={category_name}&type=playlist&limit=30",
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+                
+                if search_response.status_code == 200:
+                    search_data = search_response.json()
+                    return {"playlists": search_data.get("playlists", {"items": []})}
+            
+            # Last resort: return featured playlists
+            featured_response = await http_client.get(
+                "https://api.spotify.com/v1/browse/featured-playlists?limit=30",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if featured_response.status_code == 200:
+                return featured_response.json()
+            
+            return {"playlists": {"items": []}}
+            
     except HTTPException:
         raise
     except Exception as e:
