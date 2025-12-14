@@ -282,8 +282,9 @@ const MapScreen = ({ navigation }) => {
     
     Geolocation.getCurrentPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        const newLocation = { latitude, longitude };
+        const { latitude, longitude, accuracy } = position.coords;
+        const newLocation = { latitude, longitude, accuracy };
+        console.log('📍 Initial location:', latitude, longitude, 'accuracy:', accuracy);
         setMyLocation(newLocation);
         centerOnLocation(newLocation);
         
@@ -299,16 +300,18 @@ const MapScreen = ({ navigation }) => {
         showLocationError(error.code);
       },
       {
-        enableHighAccuracy: false,
-        timeout: 15000,
-        maximumAge: 10000,
+        enableHighAccuracy: true,
+        timeout: 20000,
+        maximumAge: 5000,
       }
     );
 
+    // Watch position with high accuracy for real-time updates
     locationWatchId.current = Geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        const newLocation = { latitude, longitude };
+        const { latitude, longitude, accuracy } = position.coords;
+        const newLocation = { latitude, longitude, accuracy };
+        console.log('📍 Location update:', latitude, longitude, 'accuracy:', accuracy);
         setMyLocation(newLocation);
         
         if (shareEnabled) {
@@ -318,9 +321,9 @@ const MapScreen = ({ navigation }) => {
       (error) => console.error('Watch error:', error),
       {
         enableHighAccuracy: true,
-        distanceFilter: 50,
-        interval: 10000,
-        fastestInterval: 5000,
+        distanceFilter: 10, // Update every 10 meters
+        interval: 3000, // Update every 3 seconds
+        fastestInterval: 1000, // Fastest update every 1 second
       }
     );
   };
