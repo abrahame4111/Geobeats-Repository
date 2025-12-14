@@ -1366,6 +1366,33 @@ const styles = StyleSheet.create({
     paddingTop: StatusBar.currentHeight + 10,
     paddingBottom: 20,
   },
+  topRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  statusContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  shareButtonContainer: {
+    alignItems: 'center',
+  },
+  shareButtonMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    gap: 8,
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   topCenterContainer: {
     alignItems: 'center',
     marginBottom: 12,
@@ -1392,7 +1419,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 5,
-    marginHorizontal: 4,
   },
   homeButton: {
     width: 44,
@@ -1432,7 +1458,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   topTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: '#fff',
     letterSpacing: 2,
@@ -1443,7 +1469,6 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
     backgroundColor: 'rgba(20, 20, 25, 0.8)',
     paddingHorizontal: 14,
     paddingVertical: 6,
