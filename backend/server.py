@@ -589,6 +589,69 @@ async def seek_to_position(authorization: str = Header(...), position_ms: int = 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/spotify/playlist/{playlist_id}/tracks")
+async def get_playlist_tracks(playlist_id: str, access_token: str = Query(...)):
+    """Get tracks from a playlist"""
+    try:
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.get(
+                f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks?limit=50",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Failed to get playlist tracks: {response.status_code}")
+                raise HTTPException(status_code=response.status_code, detail="Failed to get playlist tracks")
+            
+            return response.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching playlist tracks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/spotify/play/context")
+async def play_context(authorization: str = Header(...), context_uri: str = Query(...)):
+    """Play a context (playlist, album, artist)"""
+    try:
+        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.put(
+                "https://api.spotify.com/v1/me/player/play",
+                headers={"Authorization": f"Bearer {access_token}"},
+                json={"context_uri": context_uri}
+            )
+            
+            if response.status_code in [204, 200]:
+                return {"success": True}
+            else:
+                logger.error(f"Play context failed: {response.status_code} - {response.text}")
+                return {"success": False, "error": response.text}
+    except Exception as e:
+        logger.error(f"Play context error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/spotify/proxy")
+async def proxy_spotify_request(url: str = Query(...), access_token: str = Query(...)):
+    """Proxy any Spotify API request"""
+    try:
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.get(
+                url,
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Spotify API request failed")
+            
+            return response.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Proxy error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Listen Together endpoints
 @api_router.post("/listen-together/create")
 async def create_listen_session(authorization: str = Header(...)):
