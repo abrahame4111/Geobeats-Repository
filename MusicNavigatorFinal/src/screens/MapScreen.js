@@ -962,43 +962,80 @@ const MapScreen = ({ navigation }) => {
   };
 
   const renderMarker = (location, userId, isMe = false) => {
-    const profileImage = isMe ? userProfile?.images?.[0]?.url : location.profile_image;
-    const userName = isMe ? (user?.name || 'Me') : (location.user_name || 'User');
-    const hasListenSession = isMe ? !!listenSessionId : !!location.listen_session_id;
-    const showSongCard = isMe ? (shareEnabled && currentTrack) : location.current_song;
+    if (!location) return null;
+    
+    const profileImage = isMe ? userProfile?.images?.[0]?.url : location?.profile_image;
+    const userName = isMe ? (user?.name || 'Me') : (location?.user_name || 'User');
+    const hasListenSession = isMe ? !!listenSessionId : !!location?.listen_session_id;
+    const showSongCard = isMe ? (shareEnabled && currentTrack) : location?.current_song;
+    
+    const lat = isMe ? location.latitude : (location?.lat || location?.latitude);
+    const lng = isMe ? location.longitude : (location?.lng || location?.longitude);
+    
+    if (!lat || !lng) return null;
+    
+    const handleMarkerPress = () => {
+      try {
+        if (!isMe && location) {
+          setSelectedUser({ ...location, user_id: userId });
+          setShowUserModal(true);
+        }
+      } catch (error) {
+        console.error('Marker press error:', error);
+      }
+    };
     
     return (
       <Marker
         key={userId}
         coordinate={{
-          latitude: isMe ? location.latitude : (location.lat || location.latitude),
-          longitude: isMe ? location.longitude : (location.lng || location.longitude),
+          latitude: lat,
+          longitude: lng,
         }}
         anchor={{ x: 0.5, y: 0.95 }}
-        onPress={() => {
-          if (!isMe) {
-            setSelectedUser({ ...location, user_id: userId });
-            setShowUserModal(true);
-          } else if (currentTrack) {
-            setShowPlaybackControls(!showPlaybackControls);
-          }
-        }}
+        onPress={handleMarkerPress}
+        tracksViewChanges={false}
       >
         <View style={styles.markerWrapper}>
           {/* Song Card - positioned above profile */}
           {showSongCard && (
             <View style={styles.songCardWrapper}>
-              <SongCard 
-                track={isMe ? currentTrack : null}
-                location={location}
-                isMe={isMe}
-                onPress={() => {
-                  if (!isMe) {
-                    setSelectedUser({ ...location, user_id: userId });
-                    setShowUserModal(true);
-                  }
-                }}
-              />
+              <View style={styles.songCard}>
+                {/* Album Cover */}
+                <View style={styles.albumCoverContainer}>
+                  {(isMe ? currentTrack?.album?.images?.[0]?.url : location?.album_cover) ? (
+                    <Image 
+                      source={{ uri: isMe ? currentTrack?.album?.images?.[0]?.url : location?.album_cover }} 
+                      style={styles.albumCover} 
+                    />
+                  ) : (
+                    <View style={styles.albumPlaceholder}>
+                      <Icon name="music-note" size={20} color="#b3b3b3" />
+                    </View>
+                  )}
+                </View>
+                
+                {/* Song Info */}
+                <View style={styles.songInfo}>
+                  <Text style={styles.songTitle} numberOfLines={1}>
+                    {isMe ? currentTrack?.name : location?.current_song}
+                  </Text>
+                  <Text style={styles.artistName} numberOfLines={1}>
+                    {isMe 
+                      ? currentTrack?.artists?.map(a => a.name).join(', ') 
+                      : (location?.artist || 'Unknown Artist')}
+                  </Text>
+                </View>
+                
+                {/* Playing Indicator */}
+                <View style={styles.playingIndicator}>
+                  <View style={styles.soundWave}>
+                    <View style={[styles.soundBar, styles.soundBar1]} />
+                    <View style={[styles.soundBar, styles.soundBar2]} />
+                    <View style={[styles.soundBar, styles.soundBar3]} />
+                  </View>
+                </View>
+              </View>
               {/* Arrow pointing down to profile */}
               <View style={styles.songCardArrow} />
             </View>
