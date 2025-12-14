@@ -146,16 +146,34 @@ const HomeScreen = ({ navigation }) => {
     }
 
     try {
-      await axios.put(`${API}/spotify/play`, null, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { uri: trackUri }
-      });
+      console.log('🎵 Playing track:', trackUri);
       
-      Alert.alert('🎵 Now Playing', trackName);
-      fetchCurrentlyPlaying();
+      const response = await axios.put(
+        `${API}/spotify/play?uri=${encodeURIComponent(trackUri)}`,
+        null,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }
+      );
+      
+      console.log('🎵 Play response:', response.data);
+      
+      if (response.data.success) {
+        Alert.alert('🎵 Now Playing', trackName);
+        setTimeout(fetchCurrentlyPlaying, 1000);
+      } else {
+        Alert.alert(
+          'Playback Error',
+          response.data.error || 'Failed to play track. Make sure Spotify is open on a device.',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
-      console.error('Play error:', error);
-      Alert.alert('Error', 'Failed to play track. Make sure Spotify is open on a device.');
+      console.error('Play error:', error.response?.data || error.message);
+      Alert.alert(
+        'Error', 
+        error.response?.data?.error || 'Failed to play track. Make sure Spotify is open on your phone or computer.'
+      );
     }
   };
 
