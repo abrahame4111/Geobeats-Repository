@@ -771,17 +771,25 @@ async def get_category_playlists(category_id: str, access_token: str = Query(...
     """Get playlists for a category"""
     try:
         async with httpx.AsyncClient() as http_client:
-            # First try the direct category playlists endpoint
-            response = await http_client.get(
-                f"https://api.spotify.com/v1/browse/categories/{category_id}/playlists?limit=30&country=US",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
+            # Try direct category playlists endpoint with different locales
+            for locale in ["", "US", "GB"]:
+                country_param = f"&country={locale}" if locale else ""
+                response = await http_client.get(
+                    f"https://api.spotify.com/v1/browse/categories/{category_id}/playlists?limit=50{country_param}",
+                    headers={"Authorization": f"Bearer {access_token}"}
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get("playlists", {}).get("items", [])
+                    # Filter out null items
+                    valid_items = [item for item in items if item and item.get("id")]
+                    if valid_items:
+                        logger.info(f"Found {len(valid_items)} playlists for category {category_id}")
+                        return {"playlists": {"items": valid_items}}
             
-            if response.status_code == 200:
-                return response.json()
-            
-            # If that fails, try to search for playlists by category name
-            logger.info(f"Direct category fetch failed, trying search approach")
+            # If direct endpoint fails, search for playlists by category name
+            logger.info(f"Direct category fetch returned no results, trying search")
             
             # Get category info first
             cat_response = await http_client.get(
@@ -791,26 +799,34 @@ async def get_category_playlists(category_id: str, access_token: str = Query(...
             
             if cat_response.status_code == 200:
                 cat_data = cat_response.json()
-                category_name = cat_data.get("name", "")
+                category_name = cat_data.get("name", category_id)
                 
                 # Search for playlists with that name
                 search_response = await http_client.get(
-                    f"https://api.spotify.com/v1/search?q={category_name}&type=playlist&limit=30",
+                    f"https://api.spotify.com/v1/search?q={category_name}&type=playlist&limit=50",
                     headers={"Authorization": f"Bearer {access_token}"}
                 )
                 
                 if search_response.status_code == 200:
                     search_data = search_response.json()
-                    return {"playlists": search_data.get("playlists", {"items": []})}
+                    items = search_data.get("playlists", {}).get("items", [])
+                    valid_items = [item for item in items if item and item.get("id")]
+                    if valid_items:
+                        logger.info(f"Found {len(valid_items)} playlists via search for {category_name}")
+                        return {"playlists": {"items": valid_items}}
             
             # Last resort: return featured playlists
+            logger.info(f"Falling back to featured playlists")
             featured_response = await http_client.get(
-                "https://api.spotify.com/v1/browse/featured-playlists?limit=30",
+                "https://api.spotify.com/v1/browse/featured-playlists?limit=50",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
             
             if featured_response.status_code == 200:
-                return featured_response.json()
+                data = featured_response.json()
+                items = data.get("playlists", {}).get("items", [])
+                valid_items = [item for item in items if item and item.get("id")]
+                return {"playlists": {"items": valid_items}}
             
             return {"playlists": {"items": []}}
             
