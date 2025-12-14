@@ -741,11 +741,14 @@ const styles = StyleSheet.create({
   miniPlayer: {
     borderRadius: 12,
     overflow: 'hidden',
+    padding: 0,
   },
   miniPlayerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
+    marginHorizontal: -8,
+    marginVertical: -10,
   },
   miniAlbum: {
     width: 48,
