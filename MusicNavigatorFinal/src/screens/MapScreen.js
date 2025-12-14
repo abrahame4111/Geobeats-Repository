@@ -1662,12 +1662,6 @@ const styles = StyleSheet.create({
   },
   
   // Modal Styles
-    top: 8,
-    right: 8,
-    padding: 8,
-  },
-  
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
