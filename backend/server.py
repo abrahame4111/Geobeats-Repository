@@ -654,19 +654,53 @@ async def play_context(authorization: str = Header(...), context_uri: str = Quer
     """Play a context (playlist, album, artist)"""
     try:
         access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        logger.info(f"🎵 Play context request - URI: {context_uri}")
         
         async with httpx.AsyncClient() as http_client:
+            # First check if there's an active device
+            devices_response = await http_client.get(
+                "https://api.spotify.com/v1/me/player/devices",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            devices_data = devices_response.json() if devices_response.status_code == 200 else {"devices": []}
+            active_devices = devices_data.get("devices", [])
+            logger.info(f"🔊 Available devices: {len(active_devices)}")
+            
+            if not active_devices:
+                return {"success": False, "error": "No active Spotify device found. Please open Spotify on your phone or computer."}
+            
+            # Find an active device or use the first one
+            device_id = None
+            for device in active_devices:
+                if device.get("is_active"):
+                    device_id = device.get("id")
+                    break
+            if not device_id and active_devices:
+                device_id = active_devices[0].get("id")
+            
+            # Build the request
+            play_url = "https://api.spotify.com/v1/me/player/play"
+            if device_id:
+                play_url += f"?device_id={device_id}"
+            
             response = await http_client.put(
-                "https://api.spotify.com/v1/me/player/play",
+                play_url,
                 headers={"Authorization": f"Bearer {access_token}"},
                 json={"context_uri": context_uri}
             )
             
-            if response.status_code in [204, 200]:
+            logger.info(f"🎵 Play context response: {response.status_code}")
+            
+            if response.status_code in [204, 200, 202]:
                 return {"success": True}
+            elif response.status_code == 404:
+                return {"success": False, "error": "No active device found. Please open Spotify."}
+            elif response.status_code == 403:
+                return {"success": False, "error": "Premium required for playback control."}
             else:
                 logger.error(f"Play context failed: {response.status_code} - {response.text}")
-                return {"success": False, "error": response.text}
+                return {"success": False, "error": f"Playback failed: {response.text}"}
     except Exception as e:
         logger.error(f"Play context error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
