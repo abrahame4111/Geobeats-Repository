@@ -685,12 +685,20 @@ const MapScreen = ({ navigation }) => {
 
   const fetchUserProfile = async () => {
     try {
+      console.log('👤 Fetching user profile...');
       const response = await axios.get(`${API}${API_ENDPOINTS.SPOTIFY.ME}`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
+        headers: { Authorization: `Bearer ${accessToken}` },
+        timeout: 10000 // 10 second timeout
       });
       
       if (response.data) {
+        console.log('👤 Profile loaded:', response.data.display_name);
         setUserProfile(response.data);
+        
+        // Immediately prefetch the profile image
+        if (response.data.images?.[0]?.url) {
+          Image.prefetch(response.data.images[0].url);
+        }
       }
     } catch (error) {
       console.error('❌ Profile fetch error:', error.response?.data || error.message);
