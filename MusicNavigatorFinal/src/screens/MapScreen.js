@@ -1225,7 +1225,25 @@ const MapScreen = ({ navigation }) => {
           colors={['rgba(0, 0, 0, 0.85)', 'rgba(0, 0, 0, 0.5)', 'transparent']}
           style={styles.topGradient}
         >
-          <View style={styles.topBar}>
+          {/* Centered Title */}
+          <View style={styles.topCenterContainer}>
+            <Text style={styles.topTitle}>Live Map</Text>
+            <View style={styles.statusRow}>
+              <Animated.View 
+                style={[
+                  styles.statusDot, 
+                  connectionStatus === 'connected' && styles.statusConnected,
+                  connectionStatus === 'connected' && { transform: [{ scale: pulseAnim }] }
+                ]} 
+              />
+              <Text style={styles.statusText}>
+                {onlineCount} online • {shareEnabled ? 'sharing' : 'private'}
+              </Text>
+            </View>
+          </View>
+          
+          {/* Buttons Row */}
+          <View style={styles.topButtonsRow}>
             <TouchableOpacity 
               onPress={() => navigation.navigate('Home')} 
               style={styles.topButton}
@@ -1235,21 +1253,7 @@ const MapScreen = ({ navigation }) => {
               </View>
             </TouchableOpacity>
             
-            <View style={styles.topCenter}>
-              <Text style={styles.topTitle}>Live Map</Text>
-              <View style={styles.statusRow}>
-                <Animated.View 
-                  style={[
-                    styles.statusDot, 
-                    connectionStatus === 'connected' && styles.statusConnected,
-                    connectionStatus === 'connected' && { transform: [{ scale: pulseAnim }] }
-                  ]} 
-                />
-                <Text style={styles.statusText}>
-                  {onlineCount} online • {shareEnabled ? 'sharing' : 'private'}
-                </Text>
-              </View>
-            </View>
+            <View style={styles.topButtonsSpacer} />
             
             <TouchableOpacity onPress={toggleShare} style={styles.topButton}>
               <View style={[styles.shareButton, shareEnabled && { borderColor: 'rgba(29, 185, 84, 0.5)' }]}>
