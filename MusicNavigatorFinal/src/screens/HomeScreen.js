@@ -12,6 +12,9 @@ import {
   Dimensions,
   Modal,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useAuth } from '../context/AuthContext';
@@ -35,6 +38,18 @@ const HomeScreen = ({ navigation }) => {
   const [playlistTracks, setPlaylistTracks] = useState([]);
   const [loadingTracks, setLoadingTracks] = useState(false);
   const [showPlaylistModal, setShowPlaylistModal] = useState(false);
+  
+  // Category Modal State
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categoryPlaylists, setCategoryPlaylists] = useState([]);
+  const [loadingCategory, setLoadingCategory] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  
+  // Search State
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -83,12 +98,10 @@ const HomeScreen = ({ navigation }) => {
       if (response.data && response.data.item) {
         setCurrentlyPlaying(response.data);
       } else if (response.data && response.data.is_playing === false) {
-        // No track playing but we got a response
         setCurrentlyPlaying(null);
       }
     } catch (error) {
       console.log('Currently playing fetch error:', error.message);
-      // Don't clear currentlyPlaying on error to avoid flickering
     }
   };
 
@@ -114,20 +127,57 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
+  // Search functions
+  const searchSpotify = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setSearchLoading(true);
+    try {
+      const response = await axios.get(
+        `${API}/spotify/search?q=${encodeURIComponent(searchQuery)}&access_token=${accessToken}`
+      );
+      
+      setSearchResults(response.data.tracks?.items || []);
+    } catch (error) {
+      console.error('Search error:', error);
+      Alert.alert('Error', 'Failed to search. Please try again.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Category functions
+  const openCategory = async (category) => {
+    setSelectedCategory(category);
+    setShowCategoryModal(true);
+    setLoadingCategory(true);
+    
+    try {
+      const response = await axios.get(
+        `${API}/spotify/category/${category.id}/playlists?access_token=${accessToken}`
+      );
+      setCategoryPlaylists(response.data.playlists?.items || []);
+    } catch (error) {
+      console.error('Error loading category playlists:', error);
+      Alert.alert('Error', 'Failed to load category playlists');
+    } finally {
+      setLoadingCategory(false);
+    }
+  };
+
   const openPlaylist = async (playlist) => {
     setSelectedPlaylist(playlist);
     setShowPlaylistModal(true);
+    setShowCategoryModal(false);
     setLoadingTracks(true);
     
     try {
-      // Fetch playlist tracks directly from Spotify API through our backend
       const response = await axios.get(
         `${API}/spotify/playlist/${playlist.id}/tracks?access_token=${accessToken}`
       );
       setPlaylistTracks(response.data.items || []);
     } catch (error) {
       console.error('Error loading playlist tracks:', error);
-      // Try alternative endpoint
       try {
         const tracksUrl = playlist.tracks?.href;
         if (tracksUrl) {
@@ -167,6 +217,7 @@ const HomeScreen = ({ navigation }) => {
       
       if (response.data.success) {
         Alert.alert('🎵 Now Playing', trackName);
+        setShowSearchModal(false);
         setTimeout(fetchCurrentlyPlaying, 1000);
       } else {
         Alert.alert(
@@ -301,7 +352,6 @@ const HomeScreen = ({ navigation }) => {
             colors={['transparent', 'rgba(0,0,0,0.8)']}
             style={styles.playlistImageOverlay}
           />
-          {/* Play button overlay */}
           <View style={styles.playOverlay}>
             <LinearGradient colors={['#1DB954', '#1ed760']} style={styles.playButtonSmall}>
               <Icon name="play-arrow" size={24} color="#fff" />
@@ -321,32 +371,30 @@ const HomeScreen = ({ navigation }) => {
   );
 
   const renderCategory = ({ item, index }) => (
-    <GlassCard style={[styles.categoryCard, { marginLeft: index === 0 ? 16 : 8 }]}>
-      <TouchableOpacity 
-        style={styles.categoryContent}
-        onPress={() => Alert.alert('Browse', `Explore ${item.name} category coming soon!`)}
-        activeOpacity={0.7}
-      >
-        <Image
-          source={{
-            uri: item.icons?.[0]?.url || 'https://via.placeholder.com/200x200/1DB954/ffffff?text=Category'
-          }}
-          style={styles.categoryImage}
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.9)']}
-          style={styles.categoryImageOverlay}
-        />
-        <Text style={styles.categoryName}>
-          {item.name}
-        </Text>
-      </TouchableOpacity>
-    </GlassCard>
+    <TouchableOpacity 
+      style={[styles.categoryCard, { marginLeft: index === 0 ? 16 : 8 }]}
+      onPress={() => openCategory(item)}
+      activeOpacity={0.7}
+    >
+      <Image
+        source={{
+          uri: item.icons?.[0]?.url || 'https://via.placeholder.com/200x200/1DB954/ffffff?text=Category'
+        }}
+        style={styles.categoryImage}
+      />
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.9)']}
+        style={styles.categoryImageOverlay}
+      />
+      <Text style={styles.categoryName}>
+        {item.name}
+      </Text>
+    </TouchableOpacity>
   );
 
   const renderTrackItem = ({ item, index }) => {
-    const track = item.track;
-    if (!track) return null;
+    const track = item.track || item;
+    if (!track || !track.name) return null;
     
     return (
       <TouchableOpacity 
@@ -373,6 +421,191 @@ const HomeScreen = ({ navigation }) => {
       </TouchableOpacity>
     );
   };
+
+  const renderSearchResult = ({ item, index }) => (
+    <TouchableOpacity 
+      style={styles.searchResultItem}
+      onPress={() => playTrack(item.uri, item.name)}
+      activeOpacity={0.7}
+    >
+      {item.album?.images?.[0]?.url && (
+        <Image source={{ uri: item.album.images[0].url }} style={styles.searchAlbum} />
+      )}
+      <View style={styles.searchInfo}>
+        <Text style={styles.searchTrackName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.searchArtist} numberOfLines={1}>
+          {item.artists?.map(a => a.name).join(', ')}
+        </Text>
+      </View>
+      <TouchableOpacity 
+        style={styles.searchPlayBtn}
+        onPress={() => playTrack(item.uri, item.name)}
+      >
+        <Icon name="play-circle-filled" size={36} color="#1DB954" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  // Search Modal
+  const renderSearchModal = () => (
+    <Modal
+      visible={showSearchModal}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => setShowSearchModal(false)}
+    >
+      <LinearGradient colors={['#191414', '#0d0d0d', '#000000']} style={styles.modalContainer}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.searchHeader}>
+          <TouchableOpacity 
+            style={styles.searchBackBtn}
+            onPress={() => setShowSearchModal(false)}
+          >
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.searchTitle}>Search</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        
+        {/* Search Input */}
+        <View style={styles.searchInputContainer}>
+          <Icon name="search" size={24} color="#888" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search for songs, artists..."
+            placeholderTextColor="#888"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={searchSpotify}
+            returnKeyType="search"
+            autoFocus
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Icon name="close" size={24} color="#888" />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        {/* Search Button */}
+        <TouchableOpacity 
+          style={styles.searchButton}
+          onPress={searchSpotify}
+        >
+          <LinearGradient colors={['#1DB954', '#1ed760']} style={styles.searchButtonGradient}>
+            <Text style={styles.searchButtonText}>Search</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+        
+        {/* Results */}
+        {searchLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#1DB954" />
+            <Text style={styles.loadingText}>Searching...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={searchResults}
+            renderItem={renderSearchResult}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.searchResultsList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              searchQuery.length > 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Icon name="search-off" size={48} color="#666" />
+                  <Text style={styles.emptyText}>No results found</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Icon name="music-note" size={48} color="#666" />
+                  <Text style={styles.emptyText}>Search for your favorite songs</Text>
+                </View>
+              )
+            }
+          />
+        )}
+        
+        {!isPremium && (
+          <View style={styles.premiumBanner}>
+            <Icon name="lock" size={18} color="#FFD700" />
+            <Text style={styles.premiumBannerText}>
+              Upgrade to Premium to play songs
+            </Text>
+          </View>
+        )}
+      </LinearGradient>
+    </Modal>
+  );
+
+  // Category Modal
+  const renderCategoryModal = () => (
+    <Modal
+      visible={showCategoryModal}
+      animationType="slide"
+      transparent={false}
+      onRequestClose={() => setShowCategoryModal(false)}
+    >
+      <LinearGradient colors={['#191414', '#0d0d0d', '#000000']} style={styles.modalContainer}>
+        <StatusBar barStyle="light-content" />
+        
+        {/* Header */}
+        <View style={styles.modalHeader}>
+          <TouchableOpacity 
+            style={styles.modalBackBtn}
+            onPress={() => setShowCategoryModal(false)}
+          >
+            <Icon name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle} numberOfLines={1}>
+            {selectedCategory?.name}
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
+        
+        {/* Category Playlists */}
+        {loadingCategory ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#1DB954" />
+            <Text style={styles.loadingText}>Loading playlists...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={categoryPlaylists}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.categoryPlaylistItem}
+                onPress={() => openPlaylist(item)}
+                activeOpacity={0.7}
+              >
+                {item.images?.[0]?.url && (
+                  <Image source={{ uri: item.images[0].url }} style={styles.categoryPlaylistImage} />
+                )}
+                <View style={styles.categoryPlaylistInfo}>
+                  <Text style={styles.categoryPlaylistName} numberOfLines={1}>{item.name}</Text>
+                  <Text style={styles.categoryPlaylistDesc} numberOfLines={2}>
+                    {item.description || `${item.tracks?.total || 0} tracks`}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={24} color="#666" />
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.categoryPlaylistsList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Icon name="playlist-play" size={48} color="#666" />
+                <Text style={styles.emptyText}>No playlists found</Text>
+              </View>
+            }
+          />
+        )}
+      </LinearGradient>
+    </Modal>
+  );
 
   // Playlist Modal
   const renderPlaylistModal = () => (
@@ -486,10 +719,11 @@ const HomeScreen = ({ navigation }) => {
             </View>
           </View>
           
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <GlassCard style={styles.logoutButtonCard}>
-              <Icon name="logout" size={22} color="#fff" />
-            </GlassCard>
+          {/* Search Button instead of Logout */}
+          <TouchableOpacity style={styles.searchIconButton} onPress={() => setShowSearchModal(true)}>
+            <View style={styles.searchIconContainer}>
+              <Icon name="search" size={24} color="#1DB954" />
+            </View>
           </TouchableOpacity>
         </View>
       </View>
@@ -615,6 +849,7 @@ const HomeScreen = ({ navigation }) => {
         {/* Browse Categories */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Browse Categories</Text>
+          <Text style={styles.sectionSubtitle}>Explore by genre</Text>
           {loading ? (
             <View style={styles.loadingContainer}>
               <GlassCard style={styles.loadingCard}>
@@ -665,9 +900,17 @@ const HomeScreen = ({ navigation }) => {
             </GlassCard>
           </View>
         </View>
+        
+        {/* Logout Button */}
+        <TouchableOpacity style={styles.logoutSection} onPress={handleLogout}>
+          <Icon name="logout" size={20} color="#888" />
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {/* Playlist Modal */}
+      {/* Modals */}
+      {renderSearchModal()}
+      {renderCategoryModal()}
       {renderPlaylistModal()}
     </LinearGradient>
   );
@@ -727,15 +970,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#000',
   },
-  logoutButton: {
-    width: 48,
-    height: 48,
+  searchIconButton: {
+    marginLeft: 12,
   },
-  logoutButtonCard: {
+  searchIconContainer: {
     width: 48,
     height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(29, 185, 84, 0.3)',
   },
   
   // Mini Player
@@ -928,12 +1174,8 @@ const styles = StyleSheet.create({
     width: 170,
     height: 130,
     marginRight: 8,
-  },
-  categoryContent: {
-    flex: 1,
     borderRadius: 14,
     overflow: 'hidden',
-    justifyContent: 'flex-end',
   },
   categoryImage: {
     position: 'absolute',
@@ -948,11 +1190,13 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   categoryName: {
+    position: 'absolute',
+    bottom: 14,
+    left: 14,
+    right: 14,
     fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
-    textAlign: 'center',
-    padding: 14,
     textShadowColor: 'rgba(0, 0, 0, 0.9)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
@@ -991,6 +1235,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.7)',
     fontWeight: '600',
+  },
+  
+  // Logout
+  logoutSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    marginBottom: 30,
+  },
+  logoutText: {
+    color: '#888',
+    fontSize: 14,
+    marginLeft: 8,
   },
   
   // Modal Styles
@@ -1125,6 +1383,126 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  
+  // Search Modal
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: StatusBar.currentHeight + 10,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  searchBackBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#fff',
+    textAlign: 'center',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 16,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  searchIcon: {
+    marginRight: 12,
+  },
+  searchInput: {
+    flex: 1,
+    height: 50,
+    color: '#fff',
+    fontSize: 16,
+  },
+  searchButton: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 20,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  searchButtonGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  searchButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  searchResultsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 100,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  searchAlbum: {
+    width: 56,
+    height: 56,
+    borderRadius: 4,
+  },
+  searchInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  searchTrackName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  searchArtist: {
+    fontSize: 14,
+    color: '#b3b3b3',
+    marginTop: 4,
+  },
+  searchPlayBtn: {
+    padding: 8,
+  },
+  
+  // Category Modal
+  categoryPlaylistsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+  },
+  categoryPlaylistItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  categoryPlaylistImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+  },
+  categoryPlaylistInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  categoryPlaylistName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  categoryPlaylistDesc: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 4,
   },
 });
 
