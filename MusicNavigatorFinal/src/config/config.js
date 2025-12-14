@@ -44,7 +44,20 @@ export const API_ENDPOINTS = {
     ME: '/spotify/me',
     PLAYLISTS: '/spotify/playlists',
     CATEGORIES: '/spotify/categories',
-    CURRENTLY_PLAYING: '/spotify/currently-playing'
+    CURRENTLY_PLAYING: '/spotify/currently-playing',
+    PREMIUM_STATUS: '/spotify/premium-status',
+    PLAYER: '/spotify/player',
+    PLAY: '/spotify/play',
+    PAUSE: '/spotify/pause',
+    NEXT: '/spotify/next',
+    PREVIOUS: '/spotify/previous',
+    SEEK: '/spotify/seek'
+  },
+  LISTEN_TOGETHER: {
+    CREATE: '/listen-together/create',
+    JOIN: '/listen-together/join',
+    LEAVE: '/listen-together/leave',
+    SESSION: '/listen-together/session'
   },
   WEBSOCKET: '/ws'
 };
