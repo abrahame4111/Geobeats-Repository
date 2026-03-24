@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const BACKEND_URL = 'https://mapify-social.preview.emergentagent.com';
+  const BACKEND_URL = 'https://location-share-beta.preview.emergentagent.com';
   const API = `${BACKEND_URL}/api`;
 
   useEffect(() => {

@@ -20,7 +20,7 @@ The easiest solution is to **open the map page in a new browser tab**:
 4. Now click "Share Location" - it should work!
 
 ### Method 2: Manually Open
-1. Copy the URL: `https://mapify-social.preview.emergentagent.com/map`
+1. Copy the URL: `https://location-share-beta.preview.emergentagent.com/map`
 2. Open a new tab
 3. Paste and go
 4. Click "Share Location"
@@ -117,7 +117,7 @@ For best experience with location features:
 2. **Browse** your playlists and music (works everywhere)
 3. When you want to use the **Map feature**:
    - Click **"↗ Open in New Tab"** button
-   - Or manually open: `https://mapify-social.preview.emergentagent.com/map`
+   - Or manually open: `https://location-share-beta.preview.emergentagent.com/map`
 4. **Allow location** when browser prompts
 5. **Share your location** and see your marker!
 
@@ -183,7 +183,7 @@ If location still doesn't work after opening in new tab:
 
 1. **Bookmark the direct link**: 
    ```
-   https://mapify-social.preview.emergentagent.com/map
+   https://location-share-beta.preview.emergentagent.com/map
    ```
 
 2. **Save as PWA** (Chrome/Edge):
