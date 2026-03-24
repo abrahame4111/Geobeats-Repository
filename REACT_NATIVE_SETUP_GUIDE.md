@@ -150,7 +150,7 @@ cd android
 
 ## 🌐 Backend Connection
 
-The app connects to: `https://mapify-social.preview.emergentagent.com`
+The app connects to: `https://location-share-beta.preview.emergentagent.com`
 
 - **Spotify OAuth**: `/api/auth/login`
 - **WebSocket**: `/api/ws/{user_id}`

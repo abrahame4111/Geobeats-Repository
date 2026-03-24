@@ -103,7 +103,7 @@ MusicNavigatorFinal/
 
 ## 🔌 Backend Integration
 
-**Base URL**: `https://mapify-social.preview.emergentagent.com`
+**Base URL**: `https://location-share-beta.preview.emergentagent.com`
 
 ### API Endpoints
 - `/api/auth/login` - Spotify OAuth

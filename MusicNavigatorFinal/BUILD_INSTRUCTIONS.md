@@ -83,7 +83,7 @@ For cloud builds without local Android Studio:
 ### Backend URL
 The app is already configured to connect to:
 ```
-https://mapify-social.preview.emergentagent.com
+https://location-share-beta.preview.emergentagent.com
 ```
 
 If you need to change it, edit: `src/config/config.js`
