@@ -268,13 +268,14 @@ User's Android Device                    Cloud Server
 
 ## Pending Tasks (Priority Order)
 
-1. **P0 - Comprehensive Backend API Testing** - Test all 29 API endpoints
-2. **P0 - Fix & Verify Marquee Text** - Confirm scrolling works for long song names
-3. **P0 - Fix & Verify Artist Name** - Confirm no "undefined" appears
-4. **P0 - Package & Deliver** - Create clean archive with updated setup guide
-5. **P2 - Refactor Monolithic Files** - Break down MapScreen (2090 lines) and HomeScreen (1538 lines)
-6. **P3 - Persistent Storage** - Replace SimpleStorage with AsyncStorage
-7. **P3 - Token Auto-Refresh** - Implement automatic token renewal before expiry
+1. ~~**P0 - Comprehensive Backend API Testing**~~ - COMPLETED (29/29 endpoints pass)
+2. ~~**P0 - Fix & Verify Marquee Text**~~ - COMPLETED (MarqueeText now used in song card)
+3. ~~**P0 - Fix & Verify Artist Name**~~ - COMPLETED (robust null checking added)
+4. ~~**P0 - Fix Backend Exception Handling**~~ - COMPLETED (3 endpoints now return 401 instead of 500)
+5. ~~**P0 - Package & Deliver**~~ - COMPLETED (tar.gz archives created)
+6. **P2 - Refactor Monolithic Files** - Break down MapScreen (2090 lines) and HomeScreen (1538 lines)
+7. **P2 - Persistent Storage** - Replace SimpleStorage with AsyncStorage
+8. **P3 - Token Auto-Refresh** - Implement automatic token renewal before expiry
 
 ---
 

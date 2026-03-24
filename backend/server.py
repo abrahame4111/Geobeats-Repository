@@ -363,6 +363,8 @@ async def get_current_user(authorization: str = Header(...)):
                 raise HTTPException(status_code=response.status_code, detail="Failed to get user")
             
             return response.json()
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching Spotify profile: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -394,6 +396,8 @@ async def check_premium_status(authorization: str = Header(...)):
                 "user_id": profile.get("id"),
                 "display_name": profile.get("display_name")
             }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error checking premium status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -977,6 +981,8 @@ async def leave_listen_session(authorization: str = Header(...)):
                 })
         
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Leave session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
