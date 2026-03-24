@@ -1,159 +1,44 @@
-#====================================================================================================
-# START - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
-#====================================================================================================
+# Music Navigator Final - Test Plan
 
-# THIS SECTION CONTAINS CRITICAL TESTING INSTRUCTIONS FOR BOTH AGENTS
-# BOTH MAIN_AGENT AND TESTING_AGENT MUST PRESERVE THIS ENTIRE BLOCK
+## Backend API Tests Required
 
-# Communication Protocol:
-# If the `testing_agent` is available, main agent should delegate all testing tasks to it.
-#
-# You have access to a file called `test_result.md`. This file contains the complete testing state
-# and history, and is the primary means of communication between main and the testing agent.
-#
-# Main and testing agents must follow this exact format to maintain testing data. 
-# The testing data must be entered in yaml format Below is the data structure:
-# 
-## user_problem_statement: {problem_statement}
-## backend:
-##   - task: "Task name"
-##     implemented: true
-##     working: true  # or false or "NA"
-##     file: "file_path.py"
-##     stuck_count: 0
-##     priority: "high"  # or "medium" or "low"
-##     needs_retesting: false
-##     status_history:
-##         -working: true  # or false or "NA"
-##         -agent: "main"  # or "testing" or "user"
-##         -comment: "Detailed comment about status"
-##
-## frontend:
-##   - task: "Task name"
-##     implemented: true
-##     working: true  # or false or "NA"
-##     file: "file_path.js"
-##     stuck_count: 0
-##     priority: "high"  # or "medium" or "low"
-##     needs_retesting: false
-##     status_history:
-##         -working: true  # or false or "NA"
-##         -agent: "main"  # or "testing" or "user"
-##         -comment: "Detailed comment about status"
-##
-## metadata:
-##   created_by: "main_agent"
-##   version: "1.0"
-##   test_sequence: 0
-##   run_ui: false
-##
-## test_plan:
-##   current_focus:
-##     - "Task name 1"
-##     - "Task name 2"
-##   stuck_tasks:
-##     - "Task name with persistent issues"
-##   test_all: false
-##   test_priority: "high_first"  # or "sequential" or "stuck_first"
-##
-## agent_communication:
-##     -agent: "main"  # or "testing" or "user"
-##     -message: "Communication message between agents"
+### Authentication
+- [ ] GET /api/auth/login - Spotify OAuth initiation
+- [ ] GET /api/auth/callback - OAuth callback handling
+- [ ] POST /api/auth/refresh - Token refresh
 
-# Protocol Guidelines for Main agent
-#
-# 1. Update Test Result File Before Testing:
-#    - Main agent must always update the `test_result.md` file before calling the testing agent
-#    - Add implementation details to the status_history
-#    - Set `needs_retesting` to true for tasks that need testing
-#    - Update the `test_plan` section to guide testing priorities
-#    - Add a message to `agent_communication` explaining what you've done
-#
-# 2. Incorporate User Feedback:
-#    - When a user provides feedback that something is or isn't working, add this information to the relevant task's status_history
-#    - Update the working status based on user feedback
-#    - If a user reports an issue with a task that was marked as working, increment the stuck_count
-#    - Whenever user reports issue in the app, if we have testing agent and task_result.md file so find the appropriate task for that and append in status_history of that task to contain the user concern and problem as well 
-#
-# 3. Track Stuck Tasks:
-#    - Monitor which tasks have high stuck_count values or where you are fixing same issue again and again, analyze that when you read task_result.md
-#    - For persistent issues, use websearch tool to find solutions
-#    - Pay special attention to tasks in the stuck_tasks list
-#    - When you fix an issue with a stuck task, don't reset the stuck_count until the testing agent confirms it's working
-#
-# 4. Provide Context to Testing Agent:
-#    - When calling the testing agent, provide clear instructions about:
-#      - Which tasks need testing (reference the test_plan)
-#      - Any authentication details or configuration needed
-#      - Specific test scenarios to focus on
-#      - Any known issues or edge cases to verify
-#
-# 5. Call the testing agent with specific instructions referring to test_result.md
-#
-# IMPORTANT: Main agent must ALWAYS update test_result.md BEFORE calling the testing agent, as it relies on this file to understand what to test next.
+### Spotify Endpoints
+- [ ] GET /api/spotify/me - Get user profile
+- [ ] GET /api/spotify/premium-status - Check premium status
+- [ ] GET /api/spotify/playlists - Get user playlists
+- [ ] GET /api/spotify/categories - Get browse categories
+- [ ] GET /api/spotify/currently-playing - Get current track
+- [ ] GET /api/spotify/search - Search for tracks
+- [ ] GET /api/spotify/playlist/{id}/tracks - Get playlist tracks
+- [ ] GET /api/spotify/category/{id}/playlists - Get category playlists
+- [ ] PUT /api/spotify/play - Play track
+- [ ] PUT /api/spotify/pause - Pause playback
+- [ ] POST /api/spotify/next - Skip to next
+- [ ] POST /api/spotify/previous - Skip to previous
 
-#====================================================================================================
-# END - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
-#====================================================================================================
+### Listen Together
+- [ ] POST /api/listen-together/create - Create session
+- [ ] POST /api/listen-together/join/{id} - Join session
+- [ ] POST /api/listen-together/leave - Leave session
 
+### WebSocket
+- [ ] WS /api/ws/{user_id} - Real-time location updates
 
+### Health
+- [ ] GET /api/health - Server health check
 
-#====================================================================================================
-# Testing Data - Main Agent and testing sub agent both should log testing data below this section
-#====================================================================================================
+## Frontend Features to Test
+- Login flow
+- Home screen with playlists and categories
+- Mini player
+- Search functionality
+- Map screen with location
+- Share toggle
+- Theme switcher
+- Logout and re-login
 
-user_problem_statement: "Multiple users (friends) cannot see each other's live locations and songs on the map when using different devices. While the current user can see their own marker, the broadcasting mechanism for other users' data appears to be failing."
-
-backend:
-  - task: "WebSocket Broadcasting Multi-User Locations"
-    implemented: true
-    working: true
-    file: "server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-      - working: false
-        agent: "main"
-        comment: "WebSocket endpoint and ConnectionManager exist but multi-user broadcasting not working. Users can't see each other's locations and songs. Need to debug broadcast_update method and connection handling."
-      - working: true
-        agent: "testing"
-        comment: "FIXED: WebSocket endpoint was not properly configured for Kubernetes ingress. Moved WebSocket endpoint from @app.websocket('/ws/{user_id}') to @api_router.websocket('/ws/{user_id}') to match '/api' prefix requirement. Comprehensive testing completed: ✅ Multi-user connections (3 users tested), ✅ Real-time location broadcasting between all users, ✅ Message format verification (initial_locations and location_update), ✅ Disconnection handling, ✅ Initial locations sent to new connections. All WebSocket functionality working correctly at /api/ws/{user_id} endpoint."
-
-frontend:
-  - task: "WebSocket Connection and Message Handling" 
-    implemented: true
-    working: true
-    file: "MapPage.js"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-      - working: false
-        agent: "main"
-        comment: "WebSocket connection logic exists with handleLocationUpdate for initial_locations and location_update messages. User ID generation appears correct using Spotify ID. Need to verify message handling and marker updates for multiple users."
-      - working: true
-        agent: "main"
-        comment: "FIXED: Updated WebSocket URL from ${WS_URL}/ws/${userId} to ${WS_URL}/api/ws/${userId} to match the backend API router endpoint. Frontend should now connect properly to the fixed backend WebSocket endpoint."
-
-metadata:
-  created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 1
-  run_ui: false
-
-test_plan:
-  current_focus:
-    - "WebSocket Broadcasting Multi-User Locations"
-    - "WebSocket Connection and Message Handling"
-  stuck_tasks: []
-  test_all: false
-  test_priority: "high_first"
-
-agent_communication:
-  - agent: "main"
-    message: "Identified WebSocket broadcasting issue. Backend ConnectionManager appears to have correct logic for broadcasting to all connections, but multi-user visibility is failing. Need to add enhanced logging and debug the WebSocket message flow between users. Will add debugging logs and test with backend testing agent."
-  - agent: "testing"
-    message: "WebSocket broadcasting issue RESOLVED. Root cause: WebSocket endpoint was defined on main app instead of API router, causing routing conflicts with Kubernetes ingress rules. Fixed by moving @app.websocket('/ws/{user_id}') to @api_router.websocket('/ws/{user_id}'). All multi-user broadcasting functionality now working correctly. Backend testing complete - ready for frontend integration testing."
-  - agent: "main"
-    message: "Updated frontend WebSocket URL to match fixed backend endpoint. Changed from /ws/{userId} to /api/ws/{userId} in MapPage.js. Multi-user WebSocket broadcasting should now work correctly. Ready for user testing with friends."
