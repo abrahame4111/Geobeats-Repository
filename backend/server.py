@@ -904,8 +904,14 @@ async def join_listen_session(session_id: str, authorization: str = Header(...))
                 "https://api.spotify.com/v1/me",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
+            
+            if profile_response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired access token")
+            
             profile = profile_response.json()
-            user_id = profile["id"]
+            user_id = profile.get("id")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Could not retrieve user ID")
         
         session = listen_together_manager.join_session(user_id, session_id)
         if not session:
@@ -949,8 +955,14 @@ async def leave_listen_session(authorization: str = Header(...)):
                 "https://api.spotify.com/v1/me",
                 headers={"Authorization": f"Bearer {access_token}"}
             )
+            
+            if profile_response.status_code != 200:
+                raise HTTPException(status_code=401, detail="Invalid or expired access token")
+            
             profile = profile_response.json()
-            user_id = profile["id"]
+            user_id = profile.get("id")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Could not retrieve user ID")
         
         session_id = listen_together_manager.user_sessions.get(user_id)
         if session_id:
@@ -988,8 +1000,8 @@ async def get_maps_key():
 async def proxy_image(url: str = Query(...)):
     """Proxy images to avoid CORS issues"""
     try:
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.get(url, timeout=5.0)
+        async with httpx.AsyncClient(follow_redirects=True) as http_client:
+            response = await http_client.get(url, timeout=10.0)
             
             if response.status_code == 200:
                 from fastapi.responses import Response

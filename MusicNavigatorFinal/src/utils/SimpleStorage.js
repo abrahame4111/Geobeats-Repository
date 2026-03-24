@@ -19,5 +19,10 @@ export const SimpleStorage = {
   async multiRemove(keys) {
     keys.forEach(key => delete storage[key]);
     return Promise.resolve();
+  },
+
+  async clear() {
+    Object.keys(storage).forEach(key => delete storage[key]);
+    return Promise.resolve();
   }
 };

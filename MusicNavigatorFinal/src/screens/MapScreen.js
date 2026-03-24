@@ -589,8 +589,14 @@ const MapScreen = ({ navigation }) => {
     if (!shareEnabled) return;
     
     if (wsRef.current?.readyState === WebSocket.OPEN && user) {
-      // Get all artists as a string
-      const artistNames = currentTrack?.artists?.map(a => a.name).join(', ') || null;
+      // Get all artists as a string - with robust null checking
+      let artistNames = null;
+      if (currentTrack?.artists && Array.isArray(currentTrack.artists)) {
+        artistNames = currentTrack.artists
+          .map(a => a?.name || '')
+          .filter(Boolean)
+          .join(', ') || null;
+      }
       
       const message = JSON.stringify({
         type: 'location_update',
@@ -1131,13 +1137,18 @@ const MapScreen = ({ navigation }) => {
                 
                 {/* Song Info */}
                 <View style={styles.songInfo}>
-                  <Text style={styles.songTitle} numberOfLines={1}>
-                    {isMe ? currentTrack?.name : location?.current_song}
-                  </Text>
+                  <MarqueeText 
+                    text={isMe ? (currentTrack?.name || '') : (location?.current_song || '')}
+                    style={styles.songTitle}
+                  />
                   <Text style={styles.artistName} numberOfLines={1}>
                     {isMe 
-                      ? currentTrack?.artists?.map(a => a.name).join(', ') 
-                      : (location?.artist || 'Unknown Artist')}
+                      ? (currentTrack?.artists && Array.isArray(currentTrack.artists) 
+                          ? currentTrack.artists.map(a => a?.name || '').filter(Boolean).join(', ') 
+                          : 'Unknown Artist')
+                      : (location?.artist && location.artist !== 'undefined' && location.artist !== 'null'
+                          ? location.artist 
+                          : 'Unknown Artist')}
                   </Text>
                 </View>
                 
