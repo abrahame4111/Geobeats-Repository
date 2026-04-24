@@ -1,0 +1,114 @@
+{
+  "project_name": "SoundMap",
+  "theme": "dark",
+  "archetype": "5",
+  "archetype_description": "Jewel & Luxury (Premium, Depth, Mystery) integrated with Gen Z energy. Deep cinematic dark base with electric 'Volt Green' accents to represent live status.",
+  "colors": {
+    "background": "#05050A",
+    "surface": "#12121A",
+    "surface_glass": "rgba(18, 18, 26, 0.6)",
+    "primary": "#D4FF00",
+    "primary_hover": "#BEE600",
+    "secondary": "#FF4500",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "rgba(255, 255, 255, 0.6)",
+    "border": "rgba(255, 255, 255, 0.1)",
+    "map_style_reference": "mapbox://styles/mapbox/dark-v11"
+  },
+  "typography": {
+    "font_family": {
+      "heading": "Outfit, sans-serif",
+      "body": "Outfit, sans-serif"
+    },
+    "scale": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-black",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "body": "text-base font-normal leading-relaxed",
+      "label": "text-sm tracking-[0.1em] uppercase font-bold text-white/60"
+    }
+  },
+  "layout": {
+    "spacing": "Generous spacing. p-4 to p-8 for containers. Bottom sheet p-6.",
+    "border_radius": "rounded-3xl for cards and bottom sheets, rounded-full for buttons and markers.",
+    "strategy": "Minimalist full-screen map with overlapping floating UI. Floating elements must not clutter the map."
+  },
+  "surfaces": {
+    "glass_card": "backdrop-blur-3xl bg-black/60 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+    "solid_sheet": "bg-[#12121A] border-t border-white/10 shadow-[0_-8px_32px_rgba(0,0,0,0.6)]"
+  },
+  "components": {
+    "map_marker": {
+      "type": "custom",
+      "description": "Floating music bubble. A circular avatar with a glowing pulsing border (primary color #D4FF00) if active. Attached is a small glassmorphic pill showing the song name.",
+      "classes": "relative flex flex-col items-center justify-center gap-2",
+      "avatar_classes": "w-14 h-14 rounded-full border-2 border-[#D4FF00] shadow-[0_0_15px_rgba(212,255,0,0.4)] object-cover",
+      "pill_classes": "backdrop-blur-xl bg-black/70 border border-white/10 rounded-full px-3 py-1 text-xs font-bold flex items-center gap-2 max-w-[120px] truncate"
+    },
+    "listen_along_card": {
+      "type": "glass_card",
+      "description": "Appears on clicking a marker. Shows album art, user info, track details, and a massive 'Listen Along' CTA.",
+      "classes": "backdrop-blur-3xl bg-black/70 border border-white/10 rounded-3xl p-6 flex flex-col gap-6 absolute bottom-32 left-4 right-4 z-40"
+    },
+    "bottom_sheet": {
+      "type": "solid_sheet",
+      "description": "Fixed at the bottom of the screen showing the current user's playback status and controls.",
+      "classes": "fixed bottom-0 left-0 w-full rounded-t-3xl bg-[#12121A] border-t border-white/10 p-6 z-50 flex items-center justify-between"
+    },
+    "button_primary": {
+      "type": "button",
+      "description": "Used for 'Listen Along' and 'Login with Spotify'. Pill-shaped, high contrast.",
+      "classes": "w-full bg-[#D4FF00] text-black font-black text-lg rounded-full px-8 py-4 hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-[0_0_20px_rgba(212,255,0,0.3)] flex justify-center items-center gap-2"
+    },
+    "spotify_login_screen": {
+      "description": "Full screen dark mode view with abstract dark gradient/blur background.",
+      "classes": "min-h-screen bg-[#05050A] flex flex-col items-center justify-center p-8 relative overflow-hidden"
+    }
+  },
+  "motion": {
+    "hover": "Scale up (scale-[1.02]) for buttons and interactive cards.",
+    "active": "Scale down (scale-[0.98]) on press.",
+    "marker_pulse": "Continuous subtle scale and opacity pulse for the glowing border around active user markers to signify live playback.",
+    "sheet_slide": "Slide up from bottom (translate-y-full to translate-y-0) with spring physics (stiffness 300, damping 30)."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "style": "Duotone or bold weight for high visibility on dark backgrounds."
+  },
+  "media": {
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1570453584666-d5f09271751a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwyfHxjb29sJTIwZ2VuJTIweiUyMHBlcnNvbiUyMHBvcnRyYWl0JTIwbmVvbiUyMGxpZ2h0aW5nfGVufDB8fHx8MTc3NzA0NDA0OXww&ixlib=rb-4.1.0&q=85",
+        "description": "woman in black high-neck jacket",
+        "category": "user_avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1597038731169-dccd4bc96090?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDJ8MHwxfHNlYXJjaHwxfHxjb29sJTIwZ2VuJTIweiUyMHBlcnNvbiUyMHBvcnRyYWl0JTIwbmVvbiUyMGxpZ2h0aW5nfGVufDB8fHx8MTc3NzA0NDA0OXww&ixlib=rb-4.1.0&q=85",
+        "description": "man in white crew neck shirt",
+        "category": "user_avatar"
+      }
+    ],
+    "album_art": [
+      {
+        "url": "https://images.unsplash.com/photo-1768327239584-e97d004f1830?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMG11c2ljJTIwYWxidW0lMjBjb3ZlciUyMGFydCUyMGRhcmt8ZW58MHx8fHwxNzc3MDQ0MDQ5fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract blue and red shapes",
+        "category": "album_cover"
+      },
+      {
+        "url": "https://images.pexels.com/photos/15578335/pexels-photo-15578335.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Abstract artwork with dynamic warm colors",
+        "category": "album_cover"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Implement the UI as an Expo React Native app using NativeWind for Tailwind styling. Avoid Shadcn for raw UI here if NativeWind provides the building blocks, or adapt custom HTML elements closely for web version.",
+    "If building for web first, ensure the map takes up 100vh and 100vw (e.g., fixed inset-0), with UI elements floating over it using absolute/fixed positioning and high z-index.",
+    "Use Mapbox GL or equivalent with a dark style. The map background should essentially disappear into the deep obsidian #05050A, highlighting only roads and the bright floating markers.",
+    "The 'Listen Along' card must use high quality glassmorphism. For web, use backdrop-blur-3xl and bg-black/60 with a thin border-white/10. For Expo native, use Expo BlurView with dark tint.",
+    "Use Volt Green (#D4FF00) strictly for active states, 'Listen Along' CTA, and glowing rings around avatars to indicate live playback.",
+    "Map Markers should be animated. Use Framer Motion (for web) or Reanimated (for native) to add a subtle floating 'y' axis bobbing effect.",
+    "CRITICAL: Include data-testid on ALL interactive elements. e.g., data-testid='login-spotify-button', data-testid='map-marker-user', data-testid='listen-along-cta', data-testid='playback-play-pause'.",
+    "Never use Inter, Roboto, or generic fonts. Ensure Outfit font (or similar expressive Sans) is loaded globally."
+  ]
+}
