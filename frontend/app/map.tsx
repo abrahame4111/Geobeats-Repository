@@ -1,0 +1,471 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  Platform,
+  TouchableOpacity,
+} from "react-native";
+import { useRouter } from "expo-router";
+import * as Location from "expo-location";
+import { Ionicons } from "@expo/vector-icons";
+import SoundMapView, { MapMarker } from "../src/components/SoundMapView";
+import ListenAlongCard from "../src/components/ListenAlongCard";
+import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
+import {
+  BACKEND_URL,
+  StoredAuth,
+  clearAuth,
+  getActiveUsers,
+  getCurrentlyPlaying,
+  loadAuth,
+  playerAction,
+} from "../src/api";
+
+const GOOGLE_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string;
+
+type UsersMap = Record<string, any>;
+
+export default function MapScreen() {
+  const router = useRouter();
+  const [auth, setAuth] = useState<StoredAuth | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [usersMap, setUsersMap] = useState<UsersMap>({});
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [listenLoading, setListenLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "hosting">("idle");
+  const [hostId, setHostId] = useState<string | null>(null);
+  const [myTrack, setMyTrack] = useState<any>(null);
+  const [myIsPlaying, setMyIsPlaying] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const locIntervalRef = useRef<any>(null);
+  const trackIntervalRef = useRef<any>(null);
+  const syncIntervalRef = useRef<any>(null);
+  const pendingSyncRef = useRef<any>(null);
+
+  // ---- Init auth ----
+  useEffect(() => {
+    (async () => {
+      const a = await loadAuth();
+      if (!a) {
+        router.replace("/");
+        return;
+      }
+      setAuth(a);
+      setLoading(false);
+    })();
+  }, []);
+
+  // ---- WebSocket connection ----
+  useEffect(() => {
+    if (!auth) return;
+    const wsUrl = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws?user_id=${encodeURIComponent(
+      auth.user_id
+    )}&display_name=${encodeURIComponent(auth.display_name)}&profile_image=${encodeURIComponent(
+      auth.profile_image || ""
+    )}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      console.log("[ws] connected");
+    };
+    ws.onmessage = (e) => handleWsMessage(e.data);
+    ws.onclose = () => console.log("[ws] closed");
+    ws.onerror = (err) => console.warn("[ws] error", err);
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [auth?.user_id]);
+
+  const handleWsMessage = (raw: any) => {
+    try {
+      const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+      if (data.type === "users:snapshot") {
+        const next: UsersMap = {};
+        (data.users || []).forEach((u: any) => (next[u.user_id] = u));
+        setUsersMap(next);
+      } else if (data.type === "user:online") {
+        setUsersMap((p) => ({ ...p, [data.user.user_id]: { ...p[data.user.user_id], ...data.user } }));
+      } else if (data.type === "user:offline") {
+        setUsersMap((p) => {
+          const n = { ...p };
+          delete n[data.user_id];
+          return n;
+        });
+      } else if (data.type === "location:update") {
+        setUsersMap((p) => ({
+          ...p,
+          [data.user_id]: { ...p[data.user_id], user_id: data.user_id, lat: data.lat, lng: data.lng },
+        }));
+      } else if (data.type === "user:active_track") {
+        setUsersMap((p) => ({
+          ...p,
+          [data.user_id]: {
+            ...p[data.user_id],
+            user_id: data.user_id,
+            current_track: data.track,
+            is_playing: data.is_playing,
+          },
+        }));
+      } else if (data.type === "session:joined") {
+        setHostId(data.host_id);
+        setSyncStatus("syncing");
+        pendingSyncRef.current = {
+          track: data.track,
+          is_playing: data.is_playing,
+          position_ms: 0,
+          timestamp: Date.now() / 1000,
+        };
+        applySync();
+      } else if (data.type === "session:left") {
+        setHostId(null);
+        setSyncStatus("idle");
+      } else if (data.type === "session:update" || data.type === "session:sync") {
+        pendingSyncRef.current = data;
+        setSyncStatus("synced");
+        applySync();
+      } else if (data.type === "session:guest_joined") {
+        setSyncStatus("hosting");
+      }
+    } catch (e) {
+      console.warn("ws parse err", e);
+    }
+  };
+
+  // ---- Location tracking ----
+  useEffect(() => {
+    if (!auth) return;
+    (async () => {
+      try {
+        let lat = 40.758, lng = -73.9855; // fallback
+        if (Platform.OS === "web") {
+          if (typeof navigator !== "undefined" && (navigator as any).geolocation) {
+            (navigator as any).geolocation.getCurrentPosition(
+              (pos: any) => {
+                const la = pos.coords.latitude, ln = pos.coords.longitude;
+                setMyLocation({ lat: la, lng: ln });
+                sendLocation(la, ln);
+              },
+              () => {
+                // keep fallback + jitter for variety
+                const la = lat + (Math.random() - 0.5) * 0.02;
+                const ln = lng + (Math.random() - 0.5) * 0.02;
+                setMyLocation({ lat: la, lng: ln });
+                sendLocation(la, ln);
+              },
+              { enableHighAccuracy: false, timeout: 8000 }
+            );
+          } else {
+            setMyLocation({ lat, lng });
+            sendLocation(lat, lng);
+          }
+        } else {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            setPermissionError("Location permission denied. Using default location.");
+            setMyLocation({ lat, lng });
+            sendLocation(lat, lng);
+          } else {
+            const pos = await Location.getCurrentPositionAsync({});
+            const la = pos.coords.latitude, ln = pos.coords.longitude;
+            setMyLocation({ lat: la, lng: ln });
+            sendLocation(la, ln);
+          }
+        }
+
+        // Re-send location every 5 seconds with slight jitter if same
+        locIntervalRef.current = setInterval(async () => {
+          if (Platform.OS !== "web") {
+            try {
+              const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+              const la = pos.coords.latitude, ln = pos.coords.longitude;
+              setMyLocation({ lat: la, lng: ln });
+              sendLocation(la, ln);
+              return;
+            } catch {}
+          }
+          setMyLocation((prev) => {
+            if (!prev) return prev;
+            sendLocation(prev.lat, prev.lng);
+            return prev;
+          });
+        }, 5000);
+      } catch (e) {
+        console.warn("loc err", e);
+      }
+    })();
+    return () => clearInterval(locIntervalRef.current);
+  }, [auth?.user_id]);
+
+  const sendLocation = (lat: number, lng: number) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "location:update", lat, lng }));
+    }
+  };
+
+  // ---- Poll my own currently-playing & broadcast ----
+  useEffect(() => {
+    if (!auth) return;
+    const pull = async () => {
+      try {
+        const cp: any = await getCurrentlyPlaying(auth);
+        const playing = !!cp?.is_playing;
+        const item = cp?.item || null;
+        const ws = wsRef.current;
+        setMyTrack(item ? { item } : null);
+        setMyIsPlaying(playing);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(
+            JSON.stringify({
+              type: "user:active_track",
+              track: item ? { item } : null,
+              is_playing: playing,
+              position_ms: cp?.progress_ms || 0,
+            })
+          );
+        }
+        // If hosting and have session, push sync
+        if (syncStatus === "hosting" && item) {
+          ws?.send(
+            JSON.stringify({
+              type: "session:sync",
+              track: { item },
+              is_playing: playing,
+              position_ms: cp?.progress_ms || 0,
+            })
+          );
+        }
+      } catch (e) {
+        // Token may be expired or no active device, ignore
+      }
+    };
+    pull();
+    trackIntervalRef.current = setInterval(pull, 5000);
+    return () => clearInterval(trackIntervalRef.current);
+  }, [auth?.user_id, syncStatus]);
+
+  // ---- Apply sync (guest side) ----
+  const applySync = async () => {
+    if (!auth) return;
+    const sync = pendingSyncRef.current;
+    if (!sync || !sync.track) return;
+    try {
+      const uri = sync.track.item?.uri || sync.track.uri;
+      if (!uri) return;
+      // Estimate current host position based on elapsed time since message timestamp
+      const elapsed = Math.max(0, (Date.now() / 1000 - (sync.timestamp || Date.now() / 1000)) * 1000);
+      const targetPos = Math.floor((sync.position_ms || 0) + (sync.is_playing ? elapsed : 0));
+      if (sync.is_playing) {
+        await playerAction("play", auth, { track_uri: uri, position_ms: targetPos });
+      } else {
+        await playerAction("pause", auth, {});
+      }
+    } catch (e) {
+      // user may not have an active Spotify device; silent fail
+    }
+  };
+
+  // Periodic resync for guests every 5s
+  useEffect(() => {
+    if (syncStatus !== "synced") {
+      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+      return;
+    }
+    syncIntervalRef.current = setInterval(() => applySync(), 5000);
+    return () => clearInterval(syncIntervalRef.current);
+  }, [syncStatus, auth?.user_id]);
+
+  // ---- Map markers ----
+  const markers: MapMarker[] = useMemo(() => {
+    const list = Object.values(usersMap);
+    // Inject self marker if not present
+    if (auth && myLocation && !list.find((u: any) => u.user_id === auth.user_id)) {
+      list.push({
+        user_id: auth.user_id,
+        display_name: auth.display_name,
+        profile_image: auth.profile_image,
+        lat: myLocation.lat,
+        lng: myLocation.lng,
+        current_track: myTrack,
+        is_playing: myIsPlaying,
+      });
+    } else if (auth && myLocation) {
+      const me = list.find((u: any) => u.user_id === auth.user_id) as any;
+      if (me) {
+        me.lat = myLocation.lat;
+        me.lng = myLocation.lng;
+        me.profile_image = auth.profile_image;
+        me.display_name = auth.display_name;
+        me.current_track = myTrack || me.current_track;
+        me.is_playing = myIsPlaying;
+      }
+    }
+    return list.filter((u: any) => u.lat && u.lng) as MapMarker[];
+  }, [usersMap, myLocation, auth, myTrack, myIsPlaying]);
+
+  // Send self identity to map so self-marker renders in secondary color
+  const mapSelfId = auth?.user_id;
+  const mapMarkers = useMemo(() => {
+    return markers.map((m) => ({ ...m, isSelf: m.user_id === mapSelfId }));
+  }, [markers, mapSelfId]);
+
+  // ---- Handlers ----
+  const selectedUser = selectedUserId ? (usersMap[selectedUserId] || (selectedUserId === auth?.user_id ? { user_id: auth.user_id, display_name: auth.display_name, profile_image: auth.profile_image, current_track: myTrack, is_playing: myIsPlaying } : null)) : null;
+
+  const handleMarker = (uid: string) => setSelectedUserId(uid);
+
+  const handleListenAlong = () => {
+    if (!auth || !selectedUser) return;
+    const ws = wsRef.current;
+    if (!ws) return;
+    if (hostId === selectedUser.user_id) {
+      // Leave
+      ws.send(JSON.stringify({ type: "session:leave" }));
+      setHostId(null);
+      setSyncStatus("idle");
+      setSelectedUserId(null);
+    } else if (selectedUser.user_id !== auth.user_id) {
+      setListenLoading(true);
+      ws.send(JSON.stringify({ type: "session:join", host_id: selectedUser.user_id }));
+      setTimeout(() => setListenLoading(false), 1200);
+    }
+  };
+
+  const handlePlayPause = async () => {
+    if (!auth) return;
+    try {
+      if (myIsPlaying) await playerAction("pause", auth, {});
+      else await playerAction("play", auth, {});
+    } catch {}
+  };
+  const handleNext = async () => { if (!auth) return; try { await playerAction("next", auth, {}); } catch {} };
+  const handlePrev = async () => { if (!auth) return; try { await playerAction("previous", auth, {}); } catch {} };
+
+  const handleLogout = async () => {
+    await clearAuth();
+    router.replace("/");
+  };
+
+  if (loading || !auth) {
+    return (
+      <View style={styles.loadingWrap}>
+        <ActivityIndicator color="#D4FF00" size="large" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <SoundMapView
+        apiKey={GOOGLE_MAPS_KEY}
+        markers={mapMarkers}
+        myLocation={myLocation}
+        onMarkerPress={handleMarker}
+      />
+
+      {/* Top bar */}
+      <View style={styles.topBar} pointerEvents="box-none">
+        <View style={styles.topBarInner}>
+          <View style={styles.logoBadge}>
+            <Ionicons name="musical-notes" size={14} color="#D4FF00" />
+            <Text style={styles.logoText}>SOUNDMAP</Text>
+          </View>
+          <View style={styles.liveCount} testID="live-count">
+            <View style={styles.liveDot} />
+            <Text style={styles.liveCountText}>
+              {markers.length} {markers.length === 1 ? "LISTENER" : "LISTENERS"}
+            </Text>
+          </View>
+        </View>
+        {permissionError && (
+          <Text style={styles.permWarn} testID="perm-warn">
+            {permissionError}
+          </Text>
+        )}
+      </View>
+
+      {selectedUser && (
+        <ListenAlongCard
+          user={selectedUser as any}
+          onClose={() => setSelectedUserId(null)}
+          onListenAlong={handleListenAlong}
+          busy={listenLoading}
+          isActiveSession={hostId === selectedUser.user_id}
+        />
+      )}
+
+      <PlayerBottomSheet
+        profileImage={auth.profile_image}
+        displayName={auth.display_name}
+        track={myTrack}
+        isPlaying={myIsPlaying}
+        syncStatus={syncStatus}
+        onPlayPause={handlePlayPause}
+        onNext={handleNext}
+        onPrev={handlePrev}
+        onLogout={handleLogout}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#05050A" },
+  loadingWrap: { flex: 1, backgroundColor: "#05050A", alignItems: "center", justifyContent: "center" },
+  topBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: Platform.OS === "web" ? 16 : 52,
+    paddingHorizontal: 16,
+    zIndex: 30,
+  },
+  topBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  logoBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(10,10,18,0.85)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  logoText: { color: "#fff", fontWeight: "900", letterSpacing: 1.5, fontSize: 11 },
+  liveCount: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "rgba(10,10,18,0.85)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(212,255,0,0.25)",
+  },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D4FF00" },
+  liveCountText: { color: "#D4FF00", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  permWarn: {
+    marginTop: 8,
+    color: "#FF8A00",
+    fontSize: 12,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    padding: 6,
+    borderRadius: 8,
+    textAlign: "center",
+  },
+});
