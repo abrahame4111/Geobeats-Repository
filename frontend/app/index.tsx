@@ -37,8 +37,21 @@ export default function Login() {
     try {
       const url = await getLoginUrl();
       if (Platform.OS === "web") {
-        // Full page redirect
-        (window as any).location.href = url;
+        // Break out of any embedding iframe (e.g. preview shells) because
+        // Spotify refuses to render inside an iframe (X-Frame-Options: DENY).
+        const w = window as any;
+        try {
+          if (w.top && w.top !== w.self) {
+            w.top.location.href = url;
+            return;
+          }
+        } catch (_) {
+          // cross-origin frame; fall through to window.open
+        }
+        const opened = w.open(url, "_top");
+        if (!opened) {
+          w.location.href = url;
+        }
       } else {
         await Linking.openURL(url);
       }
