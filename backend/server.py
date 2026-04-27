@@ -100,10 +100,14 @@ class StateStore:
                     setattr(existing, k, v)
             existing.last_update = time.time()
         else:
+            # Provide sane defaults so partial upserts don't fail validation
+            fields.setdefault("display_name", fields.get("display_name") or "Guest")
             self.users[user_id] = ActiveUser(user_id=user_id, **fields)
         return self.users[user_id]
 
     def remove_user(self, user_id: str):
+        # Hard removal: used when user explicitly logs out. Not called on WS
+        # disconnect so short network blips don't wipe everyone off the map.
         self.users.pop(user_id, None)
         self.connections.pop(user_id, None)
         # Leave session
@@ -115,6 +119,10 @@ class StateStore:
             guests = self.sessions.pop(user_id, set())
             for g in guests:
                 self.guest_to_host.pop(g, None)
+
+    def drop_connection(self, user_id: str):
+        """Soft removal: WS dropped, but keep user state for reconnection grace period."""
+        self.connections.pop(user_id, None)
 
     def public_users(self) -> List[dict]:
         now = time.time()
@@ -555,15 +563,29 @@ async def get_session(host_id: str):
 @app.websocket("/api/ws")
 async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), display_name: str = Query("Guest"), profile_image: str = Query("")):
     await websocket.accept()
+    # If the same user_id already has an open socket, close the stale one first
+    stale = state.connections.get(user_id)
+    if stale is not None and stale is not websocket:
+        try:
+            await stale.close(code=1000)
+        except Exception:
+            pass
     state.connections[user_id] = websocket
     state.upsert_user(user_id, display_name=display_name, profile_image=profile_image)
 
     # Send current users snapshot to new connection
     try:
         await websocket.send_json({"type": "users:snapshot", "users": state.public_users()})
-        # Notify everyone a new user is online
+        # Notify everyone a new user is online — include any lat/lng we already know
+        existing = state.users.get(user_id)
         await broadcast({"type": "user:online", "user": {
-            "user_id": user_id, "display_name": display_name, "profile_image": profile_image
+            "user_id": user_id,
+            "display_name": display_name,
+            "profile_image": profile_image,
+            "lat": existing.lat if existing else None,
+            "lng": existing.lng if existing else None,
+            "current_track": existing.current_track if existing else None,
+            "is_playing": existing.is_playing if existing else False,
         }}, exclude=user_id)
 
         while True:
@@ -574,11 +596,18 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
                 lat = float(data.get("lat"))
                 lng = float(data.get("lng"))
                 state.upsert_user(user_id, lat=lat, lng=lng)
+                u = state.users.get(user_id)
+                # Broadcast full user payload so late-joiners (who only got a
+                # lightweight user:online) can populate the avatar on their map.
                 await broadcast({
                     "type": "location:update",
                     "user_id": user_id,
                     "lat": lat,
                     "lng": lng,
+                    "display_name": u.display_name if u else display_name,
+                    "profile_image": u.profile_image if u else profile_image,
+                    "current_track": u.current_track if u else None,
+                    "is_playing": u.is_playing if u else False,
                 }, exclude=user_id)
 
             elif msg_type == "user:active_track":
@@ -675,8 +704,11 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
     except Exception as e:
         logger.exception(f"WS error for {user_id}: {e}")
     finally:
-        state.remove_user(user_id)
-        await broadcast({"type": "user:offline", "user_id": user_id})
+        # Only drop the connection; keep user state so a quick reconnect
+        # (mobile background/resume, tunnel flaps) doesn't yank them off the
+        # map for everyone else. The 120s stale-prune in public_users() will
+        # clean truly-gone users.
+        state.drop_connection(user_id)
 
 
 # ------------------------ Mount ------------------------

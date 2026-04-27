@@ -65,26 +65,67 @@ export default function MapScreen() {
     })();
   }, []);
 
-  // ---- WebSocket connection ----
+  // ---- WebSocket connection with auto-reconnect + keepalive ----
+  const pingIntervalRef = useRef<any>(null);
+  const reconnectTimerRef = useRef<any>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const wsShouldRunRef = useRef(false);
+  const [wsConnected, setWsConnected] = useState(false);
+
   useEffect(() => {
     if (!auth) return;
-    const wsUrl = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws?user_id=${encodeURIComponent(
-      auth.user_id
-    )}&display_name=${encodeURIComponent(auth.display_name)}&profile_image=${encodeURIComponent(
-      auth.profile_image || ""
-    )}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    wsShouldRunRef.current = true;
 
-    ws.onopen = () => {
-      console.log("[ws] connected");
+    const connect = () => {
+      if (!wsShouldRunRef.current) return;
+      const wsUrl = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws?user_id=${encodeURIComponent(
+        auth.user_id
+      )}&display_name=${encodeURIComponent(auth.display_name)}&profile_image=${encodeURIComponent(
+        auth.profile_image || ""
+      )}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("[ws] connected");
+        reconnectAttemptsRef.current = 0;
+        setWsConnected(true);
+        // Immediately re-send our current location + track so peers see us
+        if (myLocation) {
+          ws.send(JSON.stringify({ type: "location:update", lat: myLocation.lat, lng: myLocation.lng }));
+        }
+        if (myTrack) {
+          ws.send(JSON.stringify({ type: "user:active_track", track: myTrack, is_playing: myIsPlaying }));
+        }
+        // Keepalive ping every 25s
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            try { ws.send(JSON.stringify({ type: "ping" })); } catch {}
+          }
+        }, 25000);
+      };
+      ws.onmessage = (e) => handleWsMessage(e.data);
+      ws.onclose = () => {
+        console.log("[ws] closed");
+        setWsConnected(false);
+        if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+        if (!wsShouldRunRef.current) return;
+        // Exponential backoff: 1s, 2s, 4s, … capped at 10s
+        const attempt = reconnectAttemptsRef.current++;
+        const delay = Math.min(10000, 1000 * 2 ** Math.min(attempt, 4));
+        console.log(`[ws] reconnect in ${delay}ms (attempt ${attempt + 1})`);
+        reconnectTimerRef.current = setTimeout(connect, delay);
+      };
+      ws.onerror = (err) => console.warn("[ws] error", err);
     };
-    ws.onmessage = (e) => handleWsMessage(e.data);
-    ws.onclose = () => console.log("[ws] closed");
-    ws.onerror = (err) => console.warn("[ws] error", err);
+    connect();
 
     return () => {
-      ws.close();
+      wsShouldRunRef.current = false;
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      try { wsRef.current?.close(); } catch {}
       wsRef.current = null;
     };
   }, [auth?.user_id]);
@@ -107,7 +148,18 @@ export default function MapScreen() {
       } else if (data.type === "location:update") {
         setUsersMap((p) => ({
           ...p,
-          [data.user_id]: { ...p[data.user_id], user_id: data.user_id, lat: data.lat, lng: data.lng },
+          [data.user_id]: {
+            ...p[data.user_id],
+            user_id: data.user_id,
+            lat: data.lat,
+            lng: data.lng,
+            // Server now includes display_name/profile_image/current_track so
+            // late-joining peers get a fully-rendered avatar immediately.
+            display_name: data.display_name || p[data.user_id]?.display_name,
+            profile_image: data.profile_image || p[data.user_id]?.profile_image,
+            current_track: data.current_track || p[data.user_id]?.current_track,
+            is_playing: typeof data.is_playing === "boolean" ? data.is_playing : p[data.user_id]?.is_playing,
+          },
         }));
       } else if (data.type === "user:active_track") {
         setUsersMap((p) => ({
@@ -350,14 +402,19 @@ export default function MapScreen() {
   const handleListenAlong = () => {
     if (!auth || !selectedUser) return;
     const ws = wsRef.current;
-    if (!ws) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn("[listen-along] ws not open", ws?.readyState);
+      showToast("CAN'T JOIN", "Reconnecting — try again in a sec", "ghost");
+      return;
+    }
     if (hostId === selectedUser.user_id) {
-      // Leave
+      console.log("[listen-along] leave", selectedUser.user_id);
       ws.send(JSON.stringify({ type: "session:leave" }));
       setHostId(null);
       setSyncStatus("idle");
       setSelectedUserId(null);
     } else if (selectedUser.user_id !== auth.user_id) {
+      console.log("[listen-along] join host", selectedUser.user_id);
       setListenLoading(true);
       ws.send(JSON.stringify({ type: "session:join", host_id: selectedUser.user_id }));
       setTimeout(() => setListenLoading(false), 1200);
@@ -401,9 +458,9 @@ export default function MapScreen() {
         <View style={styles.topBarInner}>
           <View style={styles.sideSpacer} />
           <View style={styles.liveCount} testID="live-count">
-            <View style={[styles.liveDot, !broadcastOn && styles.liveDotMuted]} />
+            <View style={[styles.liveDot, (!broadcastOn || !wsConnected) && styles.liveDotMuted]} />
             <Text style={styles.liveCountText}>
-              {markers.length} {markers.length === 1 ? "LISTENER" : "LISTENERS"}
+              {!wsConnected ? "RECONNECTING…" : `${markers.length} ${markers.length === 1 ? "LISTENER" : "LISTENERS"}`}
             </Text>
           </View>
           <View style={styles.sideSpacer}>
