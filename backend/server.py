@@ -59,6 +59,7 @@ class ActiveUser(BaseModel):
     lng: Optional[float] = None
     current_track: Optional[dict] = None
     is_playing: bool = False
+    visible: bool = True
     last_update: float = Field(default_factory=lambda: time.time())
 
 

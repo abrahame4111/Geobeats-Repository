@@ -409,25 +409,28 @@ export default function MapScreen() {
       {/* Top bar */}
       <View style={styles.topBar} pointerEvents="box-none">
         <View style={styles.topBarInner}>
+          <View style={styles.sideSpacer} />
           <View style={styles.liveCount} testID="live-count">
             <View style={[styles.liveDot, !broadcastOn && styles.liveDotMuted]} />
             <Text style={styles.liveCountText}>
               {markers.length} {markers.length === 1 ? "LISTENER" : "LISTENERS"}
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={toggleBroadcast}
-            style={[styles.ghostBtn, !broadcastOn && styles.ghostBtnOff]}
-            testID="ghost-toggle"
-            activeOpacity={0.8}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={broadcastOn ? "radio" : "eye-off"}
-              size={16}
-              color={broadcastOn ? "#D4FF00" : "rgba(255,255,255,0.55)"}
-            />
-          </TouchableOpacity>
+          <View style={styles.sideSpacer}>
+            <TouchableOpacity
+              onPress={toggleBroadcast}
+              style={[styles.ghostBtn, !broadcastOn && styles.ghostBtnOff]}
+              testID="ghost-toggle"
+              activeOpacity={0.8}
+              hitSlop={8}
+            >
+              <Ionicons
+                name={broadcastOn ? "radio" : "eye-off"}
+                size={19}
+                color={broadcastOn ? "#D4FF00" : "rgba(255,255,255,0.55)"}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
         {permissionError && (
           <Text style={styles.permWarn} testID="perm-warn">
@@ -524,16 +527,17 @@ const styles = StyleSheet.create({
   liveDotMuted: { backgroundColor: "rgba(255,255,255,0.4)" },
   liveCountText: { color: "#D4FF00", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   ghostBtn: {
-    position: "absolute",
-    right: 0,
-    top: "50%",
-    marginTop: -18,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "rgba(10,10,18,0.85)",
     borderWidth: 1,
     borderColor: "rgba(212,255,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sideSpacer: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
