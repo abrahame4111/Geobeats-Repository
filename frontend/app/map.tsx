@@ -320,9 +320,9 @@ export default function MapScreen() {
 
   // ---- Map markers ----
   const markers: MapMarker[] = useMemo(() => {
-    const list = Object.values(usersMap);
-    // Inject self marker if not present
-    if (auth && myLocation && !list.find((u: any) => u.user_id === auth.user_id)) {
+    const list = Object.values(usersMap).filter((u: any) => u.user_id !== auth?.user_id);
+    // Inject self marker only when broadcasting (not in ghost mode)
+    if (auth && myLocation && broadcastOn) {
       list.push({
         user_id: auth.user_id,
         display_name: auth.display_name,
@@ -332,19 +332,9 @@ export default function MapScreen() {
         current_track: myTrack,
         is_playing: myIsPlaying,
       });
-    } else if (auth && myLocation) {
-      const me = list.find((u: any) => u.user_id === auth.user_id) as any;
-      if (me) {
-        me.lat = myLocation.lat;
-        me.lng = myLocation.lng;
-        me.profile_image = auth.profile_image;
-        me.display_name = auth.display_name;
-        me.current_track = myTrack || me.current_track;
-        me.is_playing = myIsPlaying;
-      }
     }
     return list.filter((u: any) => u.lat && u.lng) as MapMarker[];
-  }, [usersMap, myLocation, auth, myTrack, myIsPlaying]);
+  }, [usersMap, myLocation, auth, myTrack, myIsPlaying, broadcastOn]);
 
   // Send self identity to map so self-marker renders in secondary color
   const mapSelfId = auth?.user_id;
