@@ -93,8 +93,12 @@ export async function api<T = any>(path: string, options: RequestInit = {}, auth
   return (await res.text()) as unknown as T;
 }
 
-export async function getLoginUrl(): Promise<string> {
-  const data = await api<{ auth_url: string }>("/api/spotify/login");
+export async function getLoginUrl(opts: { mobile_redirect?: string; popup?: boolean } = {}): Promise<string> {
+  const params = new URLSearchParams();
+  if (opts.mobile_redirect) params.set("mobile_redirect", opts.mobile_redirect);
+  if (opts.popup) params.set("popup", "1");
+  const qs = params.toString();
+  const data = await api<{ auth_url: string }>(`/api/spotify/login${qs ? `?${qs}` : ""}`);
   return data.auth_url;
 }
 

@@ -1,24 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Image,
   Platform,
-  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
-import { getLoginUrl, loadAuth } from "../src/api";
+import { getLoginUrl, loadAuth, saveAuth, StoredAuth } from "../src/api";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function Login() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const popupTimerRef = useRef<any>(null);
 
   useEffect(() => {
     (async () => {
@@ -31,29 +34,97 @@ export default function Login() {
     })();
   }, []);
 
+  // Listen for postMessage from popup (web)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handler = async (e: MessageEvent) => {
+      if (!e.data || typeof e.data !== "object") return;
+      if ((e.data as any).__soundmap_auth) {
+        const payload = (e.data as any).payload as StoredAuth;
+        await saveAuth(payload);
+        if (popupTimerRef.current) clearInterval(popupTimerRef.current);
+        router.replace("/map");
+      }
+      if ((e.data as any).__soundmap_auth_error) {
+        setErr((e.data as any).error || "Login failed");
+        setBusy(false);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  const parseTokenUrl = (url: string): StoredAuth | null => {
+    try {
+      const u = new URL(url);
+      const qs = u.searchParams.toString().length > 0 ? u.searchParams : new URLSearchParams(u.hash.replace(/^#/, "").replace(/^[^?]*\??/, ""));
+      const access_token = qs.get("access_token");
+      const user_id = qs.get("user_id");
+      if (!access_token || !user_id) return null;
+      return {
+        access_token,
+        refresh_token: qs.get("refresh_token") || "",
+        expires_at: Date.now() + Number(qs.get("expires_in") || 3600) * 1000,
+        user_id,
+        display_name: qs.get("display_name") || user_id,
+        profile_image: qs.get("profile_image") || "",
+        product: qs.get("product") || "free",
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const handleLogin = async () => {
     setBusy(true);
     setErr(null);
     try {
-      const url = await getLoginUrl();
       if (Platform.OS === "web") {
-        // Break out of any embedding iframe (e.g. preview shells) because
-        // Spotify refuses to render inside an iframe (X-Frame-Options: DENY).
-        const w = window as any;
-        try {
-          if (w.top && w.top !== w.self) {
-            w.top.location.href = url;
+        // Open OAuth in a popup window. The /auth-success page postMessages tokens back.
+        const url = await getLoginUrl({ popup: true });
+        const w = 520, h = 720;
+        const winW = (window as any).innerWidth || (window as any).screen.width;
+        const winH = (window as any).innerHeight || (window as any).screen.height;
+        const top = Math.max(0, (winH - h) / 2);
+        const left = Math.max(0, (winW - w) / 2);
+        const popup = (window as any).open(
+          url,
+          "soundmap_spotify_oauth",
+          `width=${w},height=${h},top=${top},left=${left}`
+        );
+        if (!popup) {
+          // Popup blocked – fall back to top-level redirect
+          (window as any).open(url, "_top");
+          return;
+        }
+        // Watch for popup closed without auth
+        popupTimerRef.current = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(popupTimerRef.current);
+            setBusy(false);
+          }
+        }, 800);
+      } else {
+        // Mobile / Expo Go – open in-app browser and capture redirect
+        const redirectUri = Linking.createURL("auth-success");
+        const url = await getLoginUrl({ mobile_redirect: redirectUri });
+        const result = await WebBrowser.openAuthSessionAsync(url, redirectUri, {
+          showInRecents: true,
+        });
+        if (result.type === "success" && (result as any).url) {
+          const parsed = parseTokenUrl((result as any).url);
+          if (parsed) {
+            await saveAuth(parsed);
+            router.replace("/map");
             return;
           }
-        } catch (_) {
-          // cross-origin frame; fall through to window.open
+          setErr("Auth response missing tokens");
+        } else if (result.type === "cancel" || result.type === "dismiss") {
+          setErr(null);
+        } else {
+          setErr("Login was cancelled");
         }
-        const opened = w.open(url, "_top");
-        if (!opened) {
-          w.location.href = url;
-        }
-      } else {
-        await Linking.openURL(url);
+        setBusy(false);
       }
     } catch (e: any) {
       setErr(e?.message || "Login failed");

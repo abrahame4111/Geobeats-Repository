@@ -173,18 +173,65 @@ def get_oauth() -> SpotifyOAuth:
 
 
 @api_router.get("/spotify/login")
-async def spotify_login():
-    auth_url = get_oauth().get_authorize_url()
+async def spotify_login(mobile_redirect: Optional[str] = None, popup: Optional[int] = 0):
+    """Return Spotify auth URL. Encode platform/return-target in `state` so the
+    callback can redirect to the right place (mobile deep link, popup poster, or web)."""
+    parts = []
+    if mobile_redirect:
+        parts.append(f"m={requests.utils.quote(mobile_redirect, safe='')}")
+    if popup:
+        parts.append("p=1")
+    state = "&".join(parts) if parts else None
+    oauth = get_oauth()
+    auth_url = oauth.get_authorize_url(state=state) if state else oauth.get_authorize_url()
     return {"auth_url": auth_url}
 
 
+def _parse_state(state: Optional[str]) -> dict:
+    if not state:
+        return {}
+    out: dict = {}
+    for kv in state.split("&"):
+        if "=" in kv:
+            k, v = kv.split("=", 1)
+            out[k] = requests.utils.unquote(v)
+        else:
+            out[kv] = "1"
+    return out
+
+
 @api_router.get("/spotify/callback")
-async def spotify_callback(code: Optional[str] = None, error: Optional[str] = None):
+async def spotify_callback(code: Optional[str] = None, error: Optional[str] = None, state: Optional[str] = None):
     """Spotify redirects here after user login. Exchange code for tokens and redirect back to app."""
+    st = _parse_state(state)
+    mobile_redirect = st.get("m")
+
+    def _build_redirect(params: str) -> str:
+        if mobile_redirect:
+            sep = "&" if ("?" in mobile_redirect) else "?"
+            return f"{mobile_redirect}{sep}{params}"
+        # Web: route to /auth-success (popup or top-level both work the same)
+        return f"{FRONTEND_URL}/auth-success?{params}"
+
+    def _render_redirect(target: str):
+        """Render an HTML page that JS-redirects to `target`. Some browsers block 307
+        redirects to non-http(s) schemes (e.g. exp:// for Expo Go) — this works reliably."""
+        if mobile_redirect:
+            html = f"""<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>SoundMap</title>
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<style>body{{margin:0;background:#05050A;color:#fff;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px}}
+.s{{width:32px;height:32px;border:3px solid #D4FF00;border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite}}
+@keyframes s{{to{{transform:rotate(360deg)}}}}</style>
+</head><body><div class=\"s\"></div><div>Returning to SoundMap…</div>
+<script>window.location.replace({json.dumps(target)});setTimeout(function(){{window.location.href={json.dumps(target)}}},250);</script>
+</body></html>"""
+            return HTMLResponse(html)
+        return RedirectResponse(target)
+
     if error:
-        return RedirectResponse(f"{FRONTEND_URL}/auth-success?error={error}")
+        return _render_redirect(_build_redirect(f"error={error}"))
     if not code:
-        return RedirectResponse(f"{FRONTEND_URL}/auth-success?error=missing_code")
+        return _render_redirect(_build_redirect("error=missing_code"))
     try:
         oauth = get_oauth()
         token_info = oauth.get_access_token(code, as_dict=True, check_cache=False)
@@ -223,10 +270,10 @@ async def spotify_callback(code: Optional[str] = None, error: Optional[str] = No
             f"&profile_image={requests.utils.quote(profile_image)}"
             f"&product={me.get('product', 'free')}"
         )
-        return RedirectResponse(f"{FRONTEND_URL}/auth-success?{params}")
+        return _render_redirect(_build_redirect(params))
     except Exception as e:
         logger.exception("Spotify callback failed")
-        return RedirectResponse(f"{FRONTEND_URL}/auth-success?error={str(e)}")
+        return _render_redirect(_build_redirect(f"error={requests.utils.quote(str(e))}"))
 
 
 @api_router.post("/spotify/refresh")

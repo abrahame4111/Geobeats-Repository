@@ -19,27 +19,28 @@ export default function AuthSuccess() {
 
   useEffect(() => {
     (async () => {
-      // On web, Expo Router reads params from hash; also support window.location
-      let p = { ...params };
-      if (Platform.OS === "web" && (!p.access_token || !p.user_id)) {
-        const qs = new URLSearchParams(
-          (window as any).location.search?.replace(/^\?/, "") ||
-            (window as any).location.hash?.replace(/^#\/?auth-success\??/, "") ||
-            ""
-        );
-        p = {
-          access_token: qs.get("access_token") || p.access_token,
-          refresh_token: qs.get("refresh_token") || p.refresh_token,
-          expires_in: qs.get("expires_in") || p.expires_in,
-          user_id: qs.get("user_id") || p.user_id,
-          display_name: qs.get("display_name") || p.display_name,
-          profile_image: qs.get("profile_image") || p.profile_image,
-          product: qs.get("product") || p.product,
-          error: qs.get("error") || p.error,
-        } as any;
+      // On web, also read params from window.location (router can lose them across redirects)
+      let p: any = { ...params };
+      if (Platform.OS === "web") {
+        const w = window as any;
+        const search = (w.location?.search || "").replace(/^\?/, "");
+        const hash = (w.location?.hash || "").replace(/^#/, "");
+        const fromHashQs = hash.includes("?") ? hash.split("?").slice(1).join("?") : "";
+        const qs = new URLSearchParams(search || fromHashQs);
+        ["access_token","refresh_token","expires_in","user_id","display_name","profile_image","product","error"].forEach((k) => {
+          if (!p[k] && qs.get(k)) p[k] = qs.get(k);
+        });
       }
 
+      // Detect popup mode (window.opener exists)
+      const isPopup = Platform.OS === "web" && !!(window as any).opener && (window as any).opener !== window;
+
       if (p.error) {
+        if (isPopup) {
+          (window as any).opener.postMessage({ __soundmap_auth_error: true, error: p.error }, "*");
+          (window as any).close();
+          return;
+        }
         setMsg(`Error: ${p.error}`);
         setTimeout(() => router.replace("/"), 2500);
         return;
@@ -50,7 +51,7 @@ export default function AuthSuccess() {
         return;
       }
 
-      await saveAuth({
+      const payload = {
         access_token: p.access_token!,
         refresh_token: p.refresh_token || "",
         expires_at: Date.now() + Number(p.expires_in || 3600) * 1000,
@@ -58,9 +59,18 @@ export default function AuthSuccess() {
         display_name: p.display_name || p.user_id!,
         profile_image: p.profile_image || "",
         product: p.product || "free",
-      });
+      };
+
+      if (isPopup) {
+        (window as any).opener.postMessage({ __soundmap_auth: true, payload }, "*");
+        setMsg("Connected! You can close this window.");
+        setTimeout(() => { try { (window as any).close(); } catch (_) {} }, 400);
+        return;
+      }
+
+      await saveAuth(payload);
       setMsg("Welcome to SoundMap");
-      setTimeout(() => router.replace("/map"), 500);
+      setTimeout(() => router.replace("/map"), 400);
     })();
   }, []);
 
