@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Platform,
   TouchableOpacity,
+  Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
@@ -45,6 +46,11 @@ export default function MapScreen() {
   const trackIntervalRef = useRef<any>(null);
   const syncIntervalRef = useRef<any>(null);
   const pendingSyncRef = useRef<any>(null);
+  const [broadcastOn, setBroadcastOn] = useState(true);
+  const broadcastOnRef = useRef(true);
+  const [toast, setToast] = useState<{ title: string; subtitle: string; tone: "live" | "ghost" } | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimerRef = useRef<any>(null);
 
   // ---- Init auth ----
   useEffect(() => {
@@ -204,9 +210,39 @@ export default function MapScreen() {
   }, [auth?.user_id]);
 
   const sendLocation = (lat: number, lng: number) => {
+    if (!broadcastOnRef.current) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "location:update", lat, lng }));
+    }
+  };
+
+  const showToast = (title: string, subtitle: string, tone: "live" | "ghost") => {
+    setToast({ title, subtitle, tone });
+    Animated.timing(toastAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 240, useNativeDriver: true }).start(({ finished }) => {
+        if (finished) setToast(null);
+      });
+    }, 2400);
+  };
+
+  const toggleBroadcast = () => {
+    const next = !broadcastOnRef.current;
+    broadcastOnRef.current = next;
+    setBroadcastOn(next);
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "user:set_visibility", visible: next }));
+      if (next && myLocation) {
+        ws.send(JSON.stringify({ type: "location:update", lat: myLocation.lat, lng: myLocation.lng }));
+      }
+    }
+    if (next) {
+      showToast("YOU'RE LIVE", "Your vibe is on the map", "live");
+    } else {
+      showToast("GHOST MODE", "You've vanished from the map", "ghost");
     }
   };
 
@@ -374,11 +410,24 @@ export default function MapScreen() {
       <View style={styles.topBar} pointerEvents="box-none">
         <View style={styles.topBarInner}>
         <View style={styles.liveCount} testID="live-count">
-          <View style={styles.liveDot} />
+          <View style={[styles.liveDot, !broadcastOn && styles.liveDotMuted]} />
           <Text style={styles.liveCountText}>
             {markers.length} {markers.length === 1 ? "LISTENER" : "LISTENERS"}
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={toggleBroadcast}
+          style={[styles.ghostBtn, !broadcastOn && styles.ghostBtnOff]}
+          testID="ghost-toggle"
+          activeOpacity={0.8}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={broadcastOn ? "radio" : "eye-off"}
+            size={16}
+            color={broadcastOn ? "#D4FF00" : "rgba(255,255,255,0.55)"}
+          />
+        </TouchableOpacity>
       </View>
         {permissionError && (
           <Text style={styles.permWarn} testID="perm-warn">
@@ -386,6 +435,37 @@ export default function MapScreen() {
           </Text>
         )}
       </View>
+
+      {toast && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.toast,
+            toast.tone === "ghost" ? styles.toastGhost : styles.toastLive,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }),
+                },
+              ],
+            },
+          ]}
+          testID="broadcast-toast"
+        >
+          <Ionicons
+            name={toast.tone === "ghost" ? "eye-off" : "radio"}
+            size={16}
+            color={toast.tone === "ghost" ? "#fff" : "#D4FF00"}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toastTitle, toast.tone === "ghost" && { color: "#fff" }]}>
+              {toast.title}
+            </Text>
+            <Text style={styles.toastSubtitle}>{toast.subtitle}</Text>
+          </View>
+        </Animated.View>
+      )}
 
       {selectedUser && (
         <ListenAlongCard
@@ -427,6 +507,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
   },
   liveCount: {
     flexDirection: "row",
@@ -440,7 +521,45 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212,255,0,0.25)",
   },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D4FF00" },
+  liveDotMuted: { backgroundColor: "rgba(255,255,255,0.4)" },
   liveCountText: { color: "#D4FF00", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  ghostBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(10,10,18,0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(212,255,0,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ghostBtnOff: {
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  toast: {
+    position: "absolute",
+    top: Platform.OS === "web" ? 70 : 105,
+    left: 24,
+    right: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    zIndex: 60,
+  },
+  toastLive: {
+    backgroundColor: "rgba(20,28,5,0.95)",
+    borderColor: "rgba(212,255,0,0.5)",
+  },
+  toastGhost: {
+    backgroundColor: "rgba(15,15,22,0.95)",
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  toastTitle: { color: "#D4FF00", fontWeight: "900", fontSize: 12, letterSpacing: 1.5 },
+  toastSubtitle: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
   permWarn: {
     marginTop: 8,
     color: "#FF8A00",

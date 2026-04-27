@@ -129,7 +129,7 @@ class StateStore:
                 "host_session": u.user_id in self.sessions and len(self.sessions[u.user_id]) > 0,
             }
             for u in self.users.values()
-            if now - u.last_update < 120  # prune stale after 2 min
+            if now - u.last_update < 120 and getattr(u, "visible", True)  # prune stale; hide ghosts
         ]
 
 
@@ -643,6 +643,28 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
                         "position_ms": data.get("position_ms"),
                         "timestamp": time.time(),
                     })
+
+            elif msg_type == "user:set_visibility":
+                # Allow user to go ghost / come back online
+                visible = bool(data.get("visible", True))
+                user = state.users.get(user_id)
+                if user is not None:
+                    setattr(user, "visible", visible)
+                if visible:
+                    # Re-broadcast online with last known data
+                    u = state.users.get(user_id)
+                    if u:
+                        await broadcast({"type": "user:online", "user": {
+                            "user_id": user_id,
+                            "display_name": u.display_name,
+                            "profile_image": u.profile_image,
+                            "lat": u.lat,
+                            "lng": u.lng,
+                            "current_track": u.current_track,
+                            "is_playing": u.is_playing,
+                        }}, exclude=user_id)
+                else:
+                    await broadcast({"type": "user:offline", "user_id": user_id}, exclude=user_id)
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong", "ts": time.time()})
