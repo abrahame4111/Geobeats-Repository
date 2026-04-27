@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Platform, StyleSheet, View, Text, ActivityIndicator } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
 export type MapMarker = {
@@ -30,7 +30,9 @@ function buildHtml(apiKey: string): string {
 <head>
 <meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
 <style>
-  html, body, #map { height: 100%; margin: 0; padding: 0; background:#05050A; }
+  html, body, #map { height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }
+  #status { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; pointer-events:none; }
+  #status .err { color:#FF4500; max-width: 80vw; word-break: break-word; }
   .bubble {
     position: relative;
     display: flex; flex-direction: column; align-items: center;
@@ -79,17 +81,33 @@ function buildHtml(apiKey: string): string {
 </head>
 <body>
 <div id="map"></div>
+<div id="status">Loading map…</div>
 <script>
   let map;
   let markers = {};
   let meId = null;
+  const statusEl = document.getElementById('status');
+  function setStatus(t, isError){ if(!statusEl) return; statusEl.innerHTML = isError ? '<div class="err">'+t+'</div>' : t; }
 
   function post(msg){
     try { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); } catch(e) {}
     try { window.parent && window.parent.postMessage(JSON.stringify(msg), '*'); } catch(e) {}
   }
 
+  window.gm_authFailure = function(){
+    setStatus('Map failed to load: Google Maps key restrictions are blocking this request. Remove HTTP referrer / Application restrictions on the key, or whitelist this origin.', true);
+    post({ type: 'map:auth_failure' });
+  };
+
+  window.addEventListener('error', function(e){
+    if (!map) {
+      setStatus('Script error: ' + (e.message || 'unknown'), true);
+      post({ type: 'map:script_error', message: String(e.message || '') });
+    }
+  });
+
   window.initMap = function() {
+    if (statusEl) statusEl.style.display = 'none';
     map = new google.maps.Map(document.getElementById('map'), {
       center: { lat: ${center.lat}, lng: ${center.lng} },
       zoom: 12,
@@ -208,6 +226,7 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
   const iframeRef = useRef<any>(null);
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   const postToMap = (msg: any) => {
     const json = JSON.stringify(msg);
@@ -235,10 +254,15 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
       const d = JSON.parse(dataRaw);
       if (d.type === "map:ready") {
         readyRef.current = true;
+        setMapError(null);
         postToMap({ type: "set_markers", markers });
         if (myLocation) postToMap({ type: "center", ...myLocation });
       } else if (d.type === "marker:click" && onMarkerPress) {
         onMarkerPress(d.user_id);
+      } else if (d.type === "map:auth_failure") {
+        setMapError("Google Maps key restrictions are blocking this domain. Open the Google Cloud Console → Credentials → your API key, and either remove HTTP referrer restrictions or add https://*.preview.emergentagent.com/* and exp://* as allowed referrers.");
+      } else if (d.type === "map:script_error") {
+        setMapError("Map script error: " + (d.message || "unknown"));
       }
     } catch (_) {}
   };
@@ -265,26 +289,79 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
           title: "soundmap",
           "data-testid": "soundmap-iframe",
         })}
+        {mapError && <ErrorOverlay message={mapError} />}
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <View style={styles.fallback} pointerEvents="none">
+        <ActivityIndicator color="#D4FF00" />
+        <Text style={styles.fallbackText}>Loading map…</Text>
+      </View>
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
-        source={{ html, baseUrl: "https://maps.google.com" }}
+        source={{ html }}
         onMessage={(e: WebViewMessageEvent) => handleMessage(e.nativeEvent.data)}
         javaScriptEnabled
         domStorageEnabled
-        style={{ flex: 1, backgroundColor: "#05050A" }}
+        mixedContentMode="always"
+        allowsInlineMediaPlayback
+        setSupportMultipleWindows={false}
+        style={styles.webview}
+        containerStyle={styles.webviewContainer}
         testID="soundmap-webview"
+        onError={(e) => setMapError("WebView error: " + (e?.nativeEvent?.description || "unknown"))}
+        onHttpError={(e) => setMapError("Network error: HTTP " + (e?.nativeEvent?.statusCode || "?"))}
       />
+      {mapError && <ErrorOverlay message={mapError} />}
+    </View>
+  );
+}
+
+function ErrorOverlay({ message }: { message: string }) {
+  return (
+    <View style={styles.errorOverlay} pointerEvents="box-none">
+      <View style={styles.errorBox}>
+        <Text style={styles.errorTitle}>Map can&apos;t load</Text>
+        <Text style={styles.errorBody}>{message}</Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#05050A" },
+  webview: { flex: 1, backgroundColor: "#05050A" },
+  webviewContainer: { flex: 1, backgroundColor: "#05050A" },
+  fallback: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    backgroundColor: "#05050A",
+  },
+  fallbackText: { color: "rgba(255,255,255,0.5)", fontSize: 13, fontWeight: "600", letterSpacing: 1 },
+  errorOverlay: {
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(5,5,10,0.92)",
+  },
+  errorBox: {
+    backgroundColor: "#12121A",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,69,0,0.4)",
+    maxWidth: 360,
+    gap: 8,
+  },
+  errorTitle: { color: "#FF4500", fontWeight: "900", fontSize: 14, letterSpacing: 1 },
+  errorBody: { color: "rgba(255,255,255,0.75)", fontSize: 13, lineHeight: 19 },
 });
