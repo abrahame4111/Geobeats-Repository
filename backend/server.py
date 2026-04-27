@@ -403,6 +403,132 @@ async def root():
     return {"service": "soundmap", "status": "ok"}
 
 
+@api_router.get("/map.html")
+async def map_html(key: str):
+    """Serve the map HTML so the WebView gets a proper HTTPS origin
+    (raw HTML strings get a `null` origin which Google Maps rejects)."""
+    html = f"""<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
+<style>
+  html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }}
+  #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; }}
+  #status .err {{ color:#FF4500; max-width: 80vw; word-break: break-word; }}
+  .bubble {{ position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; }}
+  .avatar-wrap {{ width: 56px; height: 56px; border-radius: 50%; padding: 3px; background: linear-gradient(135deg, #D4FF00, #BEE600); box-shadow: 0 0 18px rgba(212,255,0,0.55); animation: pulse 2.4s ease-in-out infinite; }}
+  .avatar-wrap.self {{ background: linear-gradient(135deg, #FF4500, #FF8A00); box-shadow: 0 0 18px rgba(255,69,0,0.55);}}
+  .avatar-wrap.hosting {{ background: linear-gradient(135deg, #D4FF00, #00FFE0); animation: pulse 1.3s ease-in-out infinite;}}
+  .avatar-wrap.paused {{ background: rgba(255,255,255,0.25); box-shadow: none; animation: none;}}
+  .avatar {{ width: 100%; height: 100%; border-radius: 50%; background-size: cover; background-position: center; background-color: #12121A; border: 2px solid #05050A; }}
+  .pill {{ margin-top: 6px; max-width: 160px; padding: 4px 10px; background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; color: #fff; font: 600 11px -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }}
+  .pill .dot {{ width:6px; height:6px; border-radius:50%; background:#D4FF00; box-shadow:0 0 6px #D4FF00;}}
+  .pill.paused .dot {{ background: rgba(255,255,255,0.35); box-shadow:none; }}
+  @keyframes pulse {{ 0%,100% {{ transform: scale(1); }} 50% {{ transform: scale(1.08); }} }}
+</style>
+</head><body>
+<div id="map"></div>
+<div id="status">Initializing…</div>
+<script>
+  let map; let markers = {{}}; let meId = null;
+  const statusEl = document.getElementById('status');
+  function setStatus(t, isError){{ if(!statusEl) return; statusEl.style.display='flex'; statusEl.innerHTML = isError ? '<div class="err">'+t+'</div>' : t; }}
+  function post(msg){{
+    try {{ window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }} catch(e) {{}}
+    try {{ window.parent && window.parent.postMessage(JSON.stringify(msg), '*'); }} catch(e) {{}}
+  }}
+  post({{ type: 'map:html_loaded' }});
+  setStatus('Loading Google Maps…');
+  const mapsTimeout = setTimeout(function(){{
+    if (!map) {{
+      setStatus('Google Maps did not load within 10s. Enable Maps JavaScript API in Google Cloud Console, and remove HTTP referrer restrictions on the API key.', true);
+      post({{ type: 'map:timeout' }});
+    }}
+  }}, 10000);
+  window.gm_authFailure = function(){{
+    clearTimeout(mapsTimeout);
+    setStatus('Google Maps key blocked this request. Enable Maps JavaScript API or remove restrictions on the key.', true);
+    post({{ type: 'map:auth_failure' }});
+  }};
+  window.addEventListener('error', function(e){{
+    if (!map) {{
+      const msg = (e && (e.message || (e.error && e.error.message))) || 'unknown';
+      setStatus('Script error: ' + msg, true);
+      post({{ type: 'map:script_error', message: String(msg) }});
+    }}
+  }});
+  window.initMap = function() {{
+    clearTimeout(mapsTimeout);
+    if (statusEl) statusEl.style.display = 'none';
+    map = new google.maps.Map(document.getElementById('map'), {{
+      center: {{ lat: 40.758, lng: -73.9855 }},
+      zoom: 12,
+      disableDefaultUI: true,
+      gestureHandling: 'greedy',
+      backgroundColor: '#05050A',
+      styles: DARK_STYLE,
+    }});
+    post({{ type: 'map:ready' }});
+  }};
+  function upsertMarker(u) {{
+    if (!u.lat || !u.lng) return;
+    const existing = markers[u.user_id];
+    if (existing) {{
+      existing.setPosition(new google.maps.LatLng(u.lat, u.lng));
+      existing.__data = u; refreshContent(existing); return;
+    }}
+    const div = document.createElement('div');
+    div.className = 'bubble';
+    div.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
+    const marker = new AdvancedBubble(new google.maps.LatLng(u.lat, u.lng), map, div);
+    marker.__el = div; marker.__data = u; refreshContent(marker);
+    markers[u.user_id] = marker;
+  }}
+  function refreshContent(marker) {{
+    const u = marker.__data;
+    const self = u.user_id === meId;
+    const hosting = !!u.host_session;
+    const playing = !!u.is_playing;
+    const track = u.current_track;
+    const title = track && track.item ? track.item.name : (track && track.name ? track.name : '');
+    const img = u.profile_image || '';
+    const classes = ['avatar-wrap'];
+    if (self) classes.push('self'); else if (hosting) classes.push('hosting'); else if (!playing) classes.push('paused');
+    marker.__el.innerHTML = '<div class="'+classes.join(' ')+'"><div class="avatar" style="background-image:url(\\\\''+img+'\\\\')"></div></div>' + (title ? '<div class="pill '+(playing?'':'paused')+'"><span class="dot"></span><span>'+escapeHtml(title)+'</span></div>' : '');
+  }}
+  function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g,c=>({{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}}[c])); }}
+  function removeMarker(uid){{ if(markers[uid]){{ markers[uid].setMap(null); delete markers[uid]; }} }}
+  function handle(data) {{
+    if (data.type === 'set_self') {{ meId = data.user_id; }}
+    else if (data.type === 'set_markers') {{
+      const keep = new Set();
+      (data.markers || []).forEach(m => {{ upsertMarker(m); keep.add(m.user_id); }});
+      Object.keys(markers).forEach(id => {{ if (!keep.has(id)) removeMarker(id); }});
+    }} else if (data.type === 'center') {{ if (map) map.panTo({{ lat: data.lat, lng: data.lng }}); }}
+  }}
+  window.__handle = handle;
+  window.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
+  document.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
+  function AdvancedBubble(position, map, el){{ this.position = position; this.el = el; this.setMap(map); }}
+  AdvancedBubble.prototype = new google.maps.OverlayView();
+  AdvancedBubble.prototype.onAdd = function(){{ const panes = this.getPanes(); this.el.style.position = 'absolute'; panes.overlayMouseTarget.appendChild(this.el); }};
+  AdvancedBubble.prototype.draw = function(){{ const proj = this.getProjection(); if (!proj) return; const p = proj.fromLatLngToDivPixel(this.position); this.el.style.left = p.x + 'px'; this.el.style.top = p.y + 'px'; }};
+  AdvancedBubble.prototype.onRemove = function(){{ if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el); }};
+  AdvancedBubble.prototype.setPosition = function(latLng){{ this.position = latLng; this.draw(); }};
+  const DARK_STYLE = [
+    {{elementType:'geometry',stylers:[{{color:'#0a0a12'}}]}},
+    {{elementType:'labels.text.stroke',stylers:[{{color:'#0a0a12'}}]}},
+    {{elementType:'labels.text.fill',stylers:[{{color:'#746855'}}]}},
+    {{featureType:'poi.park',elementType:'geometry',stylers:[{{color:'#10231a'}}]}},
+    {{featureType:'road',elementType:'geometry',stylers:[{{color:'#1a1a28'}}]}},
+    {{featureType:'road',elementType:'labels.text.fill',stylers:[{{color:'#9ca3af'}}]}},
+    {{featureType:'water',elementType:'geometry',stylers:[{{color:'#020617'}}]}},
+  ];
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={key}&callback=initMap" async defer></script>
+</body></html>"""
+    return HTMLResponse(html)
+
+
 @api_router.get("/users/active")
 async def active_users():
     return {"users": state.public_users()}

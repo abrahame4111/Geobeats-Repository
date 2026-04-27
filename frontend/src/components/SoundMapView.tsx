@@ -236,7 +236,10 @@ function buildHtml(apiKey: string): string {
 }
 
 export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPress }: Props) {
-  const html = useMemo(() => buildHtml(apiKey), [apiKey]);
+  const mapUrl = useMemo(() => {
+    const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
+    return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}`;
+  }, [apiKey]);
   const iframeRef = useRef<any>(null);
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
@@ -298,7 +301,7 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
       <View style={styles.container}>
         {React.createElement("iframe", {
           ref: iframeRef,
-          srcDoc: html,
+          src: mapUrl,
           style: {
             border: "none",
             width: "100%",
@@ -322,7 +325,7 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
-        source={{ html }}
+        source={{ uri: mapUrl }}
         onMessage={(e: WebViewMessageEvent) => handleMessage(e.nativeEvent.data)}
         javaScriptEnabled
         domStorageEnabled
