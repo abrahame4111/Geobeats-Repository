@@ -493,7 +493,7 @@ async def map_html(key: str):
     const img = u.profile_image || '';
     const classes = ['avatar-wrap'];
     if (self) classes.push('self'); else if (hosting) classes.push('hosting'); else if (!playing) classes.push('paused');
-    marker.__el.innerHTML = '<div class="'+classes.join(' ')+'"><div class="avatar" style="background-image:url(\\\\''+img+'\\\\')"></div></div>' + (title ? '<div class="pill '+(playing?'':'paused')+'"><span class="dot"></span><span>'+escapeHtml(title)+'</span></div>' : '');
+    marker.__el.innerHTML = '<div class="'+classes.join(' ')+'"><div class="avatar" style="background-image:url('+img+')"></div></div>' + (title ? '<div class="pill '+(playing?'':'paused')+'"><span class="dot"></span><span>'+escapeHtml(title)+'</span></div>' : '');
   }}
   function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g,c=>({{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}}[c])); }}
   function removeMarker(uid){{ if(markers[uid]){{ markers[uid].setMap(null); delete markers[uid]; }} }}
