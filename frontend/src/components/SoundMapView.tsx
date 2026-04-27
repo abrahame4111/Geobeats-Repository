@@ -81,7 +81,7 @@ function buildHtml(apiKey: string): string {
 </head>
 <body>
 <div id="map"></div>
-<div id="status">Loading map…</div>
+<div id="status">Initializing…</div>
 <script>
   let map;
   let markers = {};
@@ -94,19 +94,33 @@ function buildHtml(apiKey: string): string {
     try { window.parent && window.parent.postMessage(JSON.stringify(msg), '*'); } catch(e) {}
   }
 
+  post({ type: 'map:html_loaded' });
+  setStatus('Loading Google Maps…');
+
+  // Timeout safety net – if Google Maps script doesn't fire initMap within 10s, surface an error
+  const mapsTimeout = setTimeout(function(){
+    if (!map) {
+      setStatus('Google Maps did not load within 10s. Likely API key restriction or no internet inside the WebView.', true);
+      post({ type: 'map:timeout' });
+    }
+  }, 10000);
+
   window.gm_authFailure = function(){
-    setStatus('Map failed to load: Google Maps key restrictions are blocking this request. Remove HTTP referrer / Application restrictions on the key, or whitelist this origin.', true);
+    clearTimeout(mapsTimeout);
+    setStatus('Google Maps key blocked this request (gm_authFailure). Remove HTTP referrer / Application restrictions on the key, or whitelist this origin.', true);
     post({ type: 'map:auth_failure' });
   };
 
   window.addEventListener('error', function(e){
     if (!map) {
-      setStatus('Script error: ' + (e.message || 'unknown'), true);
-      post({ type: 'map:script_error', message: String(e.message || '') });
+      const msg = (e && (e.message || (e.error && e.error.message))) || 'unknown';
+      setStatus('Script error: ' + msg, true);
+      post({ type: 'map:script_error', message: String(msg) });
     }
   });
 
   window.initMap = function() {
+    clearTimeout(mapsTimeout);
     if (statusEl) statusEl.style.display = 'none';
     map = new google.maps.Map(document.getElementById('map'), {
       center: { lat: ${center.lat}, lng: ${center.lng} },
@@ -261,8 +275,13 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
         onMarkerPress(d.user_id);
       } else if (d.type === "map:auth_failure") {
         setMapError("Google Maps key restrictions are blocking this domain. Open the Google Cloud Console → Credentials → your API key, and either remove HTTP referrer restrictions or add https://*.preview.emergentagent.com/* and exp://* as allowed referrers.");
+      } else if (d.type === "map:timeout") {
+        setMapError("Google Maps script did not load in 10s. Most likely your API key has restrictions blocking this WebView. In Google Cloud Console set Application restrictions to 'None' for testing, and make sure the Maps JavaScript API is enabled.");
       } else if (d.type === "map:script_error") {
         setMapError("Map script error: " + (d.message || "unknown"));
+      } else if (d.type === "map:html_loaded") {
+        // helpful trace; do nothing
+        console.log("[map] html loaded inside webview");
       }
     } catch (_) {}
   };
