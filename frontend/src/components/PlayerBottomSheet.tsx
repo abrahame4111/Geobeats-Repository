@@ -100,11 +100,6 @@ export default function PlayerBottomSheet({
           </TouchableOpacity>
         </View>
       </View>
-
-      <TouchableOpacity onPress={onLogout} style={styles.logoutBtn} testID="logout-button">
-        <Ionicons name="log-out-outline" size={14} color="rgba(255,255,255,0.5)" />
-        <Text style={styles.logoutText}>Sign out</Text>
-      </TouchableOpacity>
     </View>
   );
 }

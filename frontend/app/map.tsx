@@ -373,17 +373,13 @@ export default function MapScreen() {
       {/* Top bar */}
       <View style={styles.topBar} pointerEvents="box-none">
         <View style={styles.topBarInner}>
-          <View style={styles.logoBadge}>
-            <Ionicons name="musical-notes" size={14} color="#D4FF00" />
-            <Text style={styles.logoText}>SOUNDMAP</Text>
-          </View>
-          <View style={styles.liveCount} testID="live-count">
-            <View style={styles.liveDot} />
-            <Text style={styles.liveCountText}>
-              {markers.length} {markers.length === 1 ? "LISTENER" : "LISTENERS"}
-            </Text>
-          </View>
+        <View style={styles.liveCount} testID="live-count">
+          <View style={styles.liveDot} />
+          <Text style={styles.liveCountText}>
+            {markers.length} {markers.length === 1 ? "LISTENER" : "LISTENERS"}
+          </Text>
         </View>
+      </View>
         {permissionError && (
           <Text style={styles.permWarn} testID="perm-warn">
             {permissionError}
@@ -410,7 +406,6 @@ export default function MapScreen() {
         onPlayPause={handlePlayPause}
         onNext={handleNext}
         onPrev={handlePrev}
-        onLogout={handleLogout}
       />
     </View>
   );
@@ -431,21 +426,8 @@ const styles = StyleSheet.create({
   topBarInner: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    justifyContent: "center",
   },
-  logoBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: "rgba(10,10,18,0.85)",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  logoText: { color: "#fff", fontWeight: "900", letterSpacing: 1.5, fontSize: 11 },
   liveCount: {
     flexDirection: "row",
     alignItems: "center",
