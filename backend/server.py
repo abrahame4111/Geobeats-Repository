@@ -459,6 +459,11 @@ async def map_html(key: str):
   window.initMap = function() {{
     clearTimeout(mapsTimeout);
     if (statusEl) statusEl.style.display = 'none';
+    AdvancedBubble.prototype = new google.maps.OverlayView();
+    AdvancedBubble.prototype.onAdd = function(){{ const panes = this.getPanes(); this.el.style.position = 'absolute'; panes.overlayMouseTarget.appendChild(this.el); }};
+    AdvancedBubble.prototype.draw = function(){{ const proj = this.getProjection(); if (!proj) return; const p = proj.fromLatLngToDivPixel(this.position); this.el.style.left = p.x + 'px'; this.el.style.top = p.y + 'px'; }};
+    AdvancedBubble.prototype.onRemove = function(){{ if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el); }};
+    AdvancedBubble.prototype.setPosition = function(latLng){{ this.position = latLng; this.draw(); }};
     map = new google.maps.Map(document.getElementById('map'), {{
       center: {{ lat: 40.758, lng: -73.9855 }},
       zoom: 12,
@@ -509,11 +514,6 @@ async def map_html(key: str):
   window.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
   document.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
   function AdvancedBubble(position, map, el){{ this.position = position; this.el = el; this.setMap(map); }}
-  AdvancedBubble.prototype = new google.maps.OverlayView();
-  AdvancedBubble.prototype.onAdd = function(){{ const panes = this.getPanes(); this.el.style.position = 'absolute'; panes.overlayMouseTarget.appendChild(this.el); }};
-  AdvancedBubble.prototype.draw = function(){{ const proj = this.getProjection(); if (!proj) return; const p = proj.fromLatLngToDivPixel(this.position); this.el.style.left = p.x + 'px'; this.el.style.top = p.y + 'px'; }};
-  AdvancedBubble.prototype.onRemove = function(){{ if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el); }};
-  AdvancedBubble.prototype.setPosition = function(latLng){{ this.position = latLng; this.draw(); }};
   const DARK_STYLE = [
     {{elementType:'geometry',stylers:[{{color:'#0a0a12'}}]}},
     {{elementType:'labels.text.stroke',stylers:[{{color:'#0a0a12'}}]}},
