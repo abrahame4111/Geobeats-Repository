@@ -66,30 +66,40 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
     }
   }, [visible]);
 
-  // Debounced search
+  // Debounced search with "latest wins" guard so faster requests can't be
+  // overwritten by slower in-flight ones (e.g. when user deletes letters
+  // quickly and an older longer-query response arrives last).
+  const reqIdRef = useRef(0);
   useEffect(() => {
     if (!visible) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!query.trim()) {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      reqIdRef.current += 1; // invalidate any in-flight requests
       setResults([]);
       setError(null);
+      setLoading(false);
       return;
     }
     debounceRef.current = setTimeout(async () => {
       if (!auth) return;
+      const myReq = ++reqIdRef.current;
       setLoading(true);
       setError(null);
       try {
-        const data: any = await searchTracks(auth, query.trim());
+        const data: any = await searchTracks(auth, trimmed);
+        // Drop response if a newer request has been issued since
+        if (myReq !== reqIdRef.current) return;
         const items = data?.tracks?.items || [];
         setResults(items);
       } catch (e: any) {
+        if (myReq !== reqIdRef.current) return;
         setError("Search failed. Try again.");
         setResults([]);
       } finally {
-        setLoading(false);
+        if (myReq === reqIdRef.current) setLoading(false);
       }
-    }, 280);
+    }, 150);
     return () => clearTimeout(debounceRef.current);
   }, [query, auth, visible]);
 
