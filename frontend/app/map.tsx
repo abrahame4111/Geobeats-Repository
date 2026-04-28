@@ -14,9 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import SoundMapView, { MapMarker } from "../src/components/SoundMapView";
 import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
+import SearchSheet from "../src/components/SearchSheet";
 import {
   BACKEND_URL,
   StoredAuth,
+  addToQueue,
   clearAuth,
   getActiveUsers,
   getCurrentlyPlaying,
@@ -51,6 +53,7 @@ export default function MapScreen() {
   const [toast, setToast] = useState<{ title: string; subtitle: string; tone: "live" | "ghost" } | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimerRef = useRef<any>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // ---- Init auth ----
   useEffect(() => {
@@ -190,6 +193,19 @@ export default function MapScreen() {
         applySync();
       } else if (data.type === "session:guest_joined") {
         setSyncStatus("hosting");
+      } else if (data.type === "session:queue_add") {
+        // Host receives a track URI from a guest; queue it on host's Spotify
+        if (auth && data.track_uri) {
+          (async () => {
+            try {
+              await addToQueue(auth, data.track_uri);
+              showToast("QUEUED", `${data.from_display_name || "Guest"} added "${data.track_name || "a track"}"`, "live");
+            } catch (e) {
+              console.warn("[queue] host add failed", e);
+              showToast("QUEUE FAILED", "Open Spotify on your device", "ghost");
+            }
+          })();
+        }
       }
     } catch (e) {
       console.warn("ws parse err", e);
@@ -456,7 +472,17 @@ export default function MapScreen() {
       {/* Top bar */}
       <View style={styles.topBar} pointerEvents="box-none">
         <View style={styles.topBarInner}>
-          <View style={styles.sideSpacer} />
+          <View style={styles.sideSpacer}>
+            <TouchableOpacity
+              onPress={() => setSearchOpen(true)}
+              style={styles.ghostBtn}
+              testID="search-toggle"
+              activeOpacity={0.8}
+              hitSlop={8}
+            >
+              <Ionicons name="search" size={19} color="#D4FF00" />
+            </TouchableOpacity>
+          </View>
           <View style={styles.liveCount} testID="live-count">
             <View style={[styles.liveDot, (!broadcastOn || !wsConnected) && styles.liveDotMuted]} />
             <Text style={styles.liveCountText}>
@@ -536,6 +562,21 @@ export default function MapScreen() {
         onPlayPause={handlePlayPause}
         onNext={handleNext}
         onPrev={handlePrev}
+      />
+      <SearchSheet
+        visible={searchOpen}
+        auth={auth}
+        isInSession={!!hostId && hostId !== auth.user_id}
+        hostName={hostId ? usersMap[hostId]?.display_name : null}
+        onClose={() => setSearchOpen(false)}
+        onForwardToHost={(trackUri, trackName) => {
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({ type: "session:queue_add", track_uri: trackUri, track_name: trackName })
+            );
+          }
+        }}
       />
     </View>
   );

@@ -674,6 +674,22 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
                         "timestamp": time.time(),
                     })
 
+            elif msg_type == "session:queue_add":
+                # Guest forwards a track URI to be queued on the host's Spotify
+                track_uri = data.get("track_uri")
+                track_name = data.get("track_name") or ""
+                host_id = state.guest_to_host.get(user_id)
+                if host_id and track_uri:
+                    guest = state.users.get(user_id)
+                    await send_to(host_id, {
+                        "type": "session:queue_add",
+                        "track_uri": track_uri,
+                        "track_name": track_name,
+                        "from_user_id": user_id,
+                        "from_display_name": guest.display_name if guest else "Guest",
+                        "from_profile_image": guest.profile_image if guest else None,
+                    })
+
             elif msg_type == "user:set_visibility":
                 # Allow user to go ghost / come back online
                 visible = bool(data.get("visible", True))

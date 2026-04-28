@@ -128,4 +128,17 @@ export async function getActiveUsers() {
   return api<{ users: any[] }>("/api/users/active");
 }
 
+export async function searchTracks(auth: StoredAuth, q: string): Promise<any> {
+  const t = await ensureFreshToken(auth);
+  return api(`/api/spotify/search?q=${encodeURIComponent(q)}&access_token=${encodeURIComponent(t)}`);
+}
+
+export async function addToQueue(auth: StoredAuth, trackUri: string, deviceId?: string) {
+  const t = await ensureFreshToken(auth);
+  return api(`/api/spotify/queue`, {
+    method: "POST",
+    body: JSON.stringify({ access_token: t, track_uri: trackUri, device_id: deviceId }),
+  });
+}
+
 export { BACKEND_URL };
