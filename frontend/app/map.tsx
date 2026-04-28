@@ -7,6 +7,7 @@ import {
   Platform,
   TouchableOpacity,
   Animated,
+  AppState,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
@@ -434,8 +435,21 @@ export default function MapScreen() {
     };
     pull();
     trackIntervalRef.current = setInterval(pull, 5000);
+    pullRef.current = pull;
     return () => clearInterval(trackIntervalRef.current);
   }, [auth?.user_id, syncStatus]);
+
+  // ---- Re-poll on app foreground (so OPEN SPOTIFY state refreshes when user returns) ----
+  const pullRef = useRef<(() => Promise<void>) | null>(null);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        // Immediate re-poll so the player UI updates without waiting for next 5s tick
+        pullRef.current?.();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // ---- Apply sync (guest side) ----
   const applySync = async () => {
