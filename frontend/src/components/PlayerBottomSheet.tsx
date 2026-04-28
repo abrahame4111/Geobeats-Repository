@@ -61,10 +61,16 @@ export default function PlayerBottomSheet({
       )}
 
       <View style={styles.row}>
-        <Image
-          source={{ uri: t?.art || profileImage || "https://placehold.co/100x100/121218/D4FF00?text=M" }}
-          style={[styles.art, !isPlaying && styles.artDim]}
-        />
+        {t && isPlaying ? (
+          <Image
+            source={{ uri: t.art || profileImage || "https://placehold.co/100x100/121218/D4FF00?text=M" }}
+            style={styles.art}
+          />
+        ) : (
+          <View style={[styles.art, styles.artEmpty]}>
+            <Ionicons name="musical-notes-outline" size={22} color="rgba(255,255,255,0.25)" />
+          </View>
+        )}
         <View style={styles.meta}>
           {t && isPlaying ? (
             <>
@@ -158,6 +164,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#12121A",
   },
   artDim: { opacity: 0.45 },
+  artEmpty: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
   meta: { flex: 1, gap: 2 },
   title: { color: "#fff", fontSize: 15, fontWeight: "700" },
   artist: { color: "rgba(255,255,255,0.55)", fontSize: 12 },
