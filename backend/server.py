@@ -357,6 +357,46 @@ def _ensure_device(sp, device_id: Optional[str] = None) -> Optional[str]:
     return target_id
 
 
+class PlayNowRequest(BaseModel):
+    access_token: str
+    track_uri: str
+    device_id: Optional[str] = None
+
+
+@api_router.post("/spotify/play-now")
+async def spotify_play_now(body: PlayNowRequest):
+    """Play the given track immediately while preserving the upcoming queue.
+
+    Spotify's start_playback with `uris=[X]` would clear the user-built queue.
+    Workaround: read current queue first, then start_playback with [X, ...queue]
+    so the clicked track plays now and the prior queue continues after.
+    """
+    try:
+        sp = _sp(body.access_token)
+        resolved = _ensure_device(sp, body.device_id)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="No Spotify devices available. Open Spotify on any of your devices to start playback.")
+        queue_uris: list = []
+        try:
+            qresp = sp._get("me/player/queue") or {}
+            for t in (qresp.get("queue") or []):
+                uri = t.get("uri")
+                if uri and uri != body.track_uri:
+                    queue_uris.append(uri)
+        except Exception:
+            pass
+        # Spotify start_playback `uris` is capped at 100 items; trim defensively.
+        uris = [body.track_uri] + queue_uris[:99]
+        sp.start_playback(device_id=resolved, uris=uris)
+        return {"status": "playing", "device_id": resolved, "preserved_queue_size": len(queue_uris)}
+    except HTTPException:
+        raise
+    except spotipy.SpotifyException as e:
+        raise HTTPException(status_code=e.http_status or 400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.post("/spotify/play")
 async def spotify_play(body: PlayRequest):
     try:

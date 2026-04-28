@@ -154,4 +154,12 @@ export async function setRepeat(auth: StoredAuth, state: "off" | "track" | "cont
   });
 }
 
+export async function playNow(auth: StoredAuth, trackUri: string, deviceId?: string) {
+  const t = await ensureFreshToken(auth);
+  return api(`/api/spotify/play-now`, {
+    method: "POST",
+    body: JSON.stringify({ access_token: t, track_uri: trackUri, device_id: deviceId }),
+  });
+}
+
 export { BACKEND_URL };

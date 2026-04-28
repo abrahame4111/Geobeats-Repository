@@ -14,7 +14,7 @@ import {
   Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { addToQueue, searchTracks, setRepeat, StoredAuth } from "../api";
+import { addToQueue, playNow, searchTracks, setRepeat, StoredAuth } from "../api";
 
 type Track = {
   uri: string;
@@ -205,8 +205,30 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
             renderItem={({ item }) => {
               const status = queuedIds[item.id];
               const art = item.album?.images?.[item.album.images.length - 1]?.url || item.album?.images?.[0]?.url;
+              const handlePlayNow = async () => {
+                if (!auth) return;
+                setQueuedIds((p) => ({ ...p, [`play-${item.id}`]: "loading" }));
+                try {
+                  try { await setRepeat(auth, "off"); } catch {}
+                  await playNow(auth, item.uri);
+                  onQueued?.(item.uri);
+                } catch (e) {
+                  console.warn("[play-now] failed", e);
+                } finally {
+                  setQueuedIds((p) => {
+                    const n = { ...p };
+                    delete n[`play-${item.id}`];
+                    return n;
+                  });
+                }
+              };
               return (
-                <View style={styles.row}>
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={handlePlayNow}
+                  activeOpacity={0.6}
+                  testID={`play-now-${item.id}`}
+                >
                   {art ? <Image source={{ uri: art }} style={styles.art} /> : <View style={[styles.art, { backgroundColor: "#1a1a26" }]} />}
                   <View style={{ flex: 1 }}>
                     <Text style={styles.trackName} numberOfLines={1}>{item.name}</Text>
@@ -220,7 +242,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
                       status === "ok" && styles.queueBtnOk,
                       status === "err" && styles.queueBtnErr,
                     ]}
-                    onPress={() => handleQueue(item)}
+                    onPress={(e) => { e.stopPropagation(); handleQueue(item); }}
                     disabled={status === "loading" || status === "ok"}
                     activeOpacity={0.85}
                   >
@@ -234,7 +256,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
                       <Ionicons name="add" size={20} color="#05050A" />
                     )}
                   </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               );
             }}
           />
