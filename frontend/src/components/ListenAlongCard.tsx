@@ -76,23 +76,6 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
         </View>
       )}
 
-      <TouchableOpacity
-        style={[styles.cta, (!t?.name || busy) && styles.ctaDisabled, isActiveSession && styles.ctaActive]}
-        onPress={onListenAlong}
-        disabled={!t?.name || busy}
-        testID="listen-along-cta"
-        activeOpacity={0.85}
-      >
-        {busy ? (
-          <ActivityIndicator color="#000" />
-        ) : (
-          <>
-            <Ionicons name={isActiveSession ? "stop-circle" : "headset"} size={22} color="#000" />
-            <Text style={styles.ctaText}>{isActiveSession ? "LEAVE SESSION" : "LISTEN ALONG"}</Text>
-          </>
-        )}
-      </TouchableOpacity>
-
       {/* Reactions row — hidden when viewing own card */}
       {!isSelf && onReact ? (
         <View style={styles.reactionRow} testID="reaction-row">
@@ -110,6 +93,23 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
           ))}
         </View>
       ) : null}
+
+      <TouchableOpacity
+        style={[styles.cta, (!t?.name || busy) && styles.ctaDisabled, isActiveSession && styles.ctaActive]}
+        onPress={onListenAlong}
+        disabled={!t?.name || busy}
+        testID="listen-along-cta"
+        activeOpacity={0.85}
+      >
+        {busy ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <>
+            <Ionicons name={isActiveSession ? "stop-circle" : "headset"} size={22} color="#000" />
+            <Text style={styles.ctaText}>{isActiveSession ? "LEAVE SESSION" : "LISTEN ALONG"}</Text>
+          </>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
