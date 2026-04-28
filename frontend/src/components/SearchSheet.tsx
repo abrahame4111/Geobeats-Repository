@@ -104,13 +104,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
         onForwardToHost(track.uri, track.name);
       }
       setQueuedIds((p) => ({ ...p, [track.id]: "ok" }));
-      setTimeout(() => {
-        setQueuedIds((p) => {
-          const n = { ...p };
-          delete n[track.id];
-          return n;
-        });
-      }, 1800);
+      // Keep "ok" state permanently — once a track is added, it stays added
     } catch (e) {
       setQueuedIds((p) => ({ ...p, [track.id]: "err" }));
       setTimeout(() => {
@@ -204,7 +198,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
                       status === "err" && styles.queueBtnErr,
                     ]}
                     onPress={() => handleQueue(item)}
-                    disabled={status === "loading"}
+                    disabled={status === "loading" || status === "ok"}
                     activeOpacity={0.85}
                   >
                     {status === "loading" ? (
