@@ -89,7 +89,7 @@ export default function PlayerBottomSheet({
                 Not playing currently
               </Text>
               <Text style={styles.artist} numberOfLines={1}>
-                Press play in Spotify to go live
+                Play a song to go live
               </Text>
             </>
           ) : (
