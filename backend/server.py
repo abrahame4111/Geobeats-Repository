@@ -332,19 +332,49 @@ async def spotify_devices(access_token: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+def _ensure_device(sp, device_id: Optional[str] = None) -> Optional[str]:
+    """Return an active or available device id. If none is active, transfer
+    playback to the first available device so subsequent commands succeed.
+    Returns the resolved device id, or None if no devices exist at all."""
+    try:
+        devs = (sp.devices() or {}).get("devices", [])
+    except Exception:
+        return device_id
+    if not devs:
+        return None
+    if device_id and any(d.get("id") == device_id for d in devs):
+        return device_id
+    active = next((d for d in devs if d.get("is_active")), None)
+    if active:
+        return active.get("id")
+    # No active device — pick first non-restricted device and transfer
+    target = next((d for d in devs if not d.get("is_restricted")), devs[0])
+    target_id = target.get("id")
+    try:
+        sp.transfer_playback(target_id, force_play=False)
+    except Exception:
+        pass
+    return target_id
+
+
 @api_router.post("/spotify/play")
 async def spotify_play(body: PlayRequest):
     try:
         sp = _sp(body.access_token)
-        kwargs = {}
-        if body.device_id:
-            kwargs["device_id"] = body.device_id
+        # Auto-pick a device if none is active so users can start playback
+        # straight from our app without having to open Spotify first.
+        resolved = _ensure_device(sp, body.device_id)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="No Spotify devices available. Open Spotify on any of your devices to start playback.")
+        kwargs = {"device_id": resolved}
         if body.track_uri:
             kwargs["uris"] = [body.track_uri]
         if body.position_ms is not None:
             kwargs["position_ms"] = body.position_ms
         sp.start_playback(**kwargs)
-        return {"status": "playing"}
+        return {"status": "playing", "device_id": resolved}
+    except HTTPException:
+        raise
     except spotipy.SpotifyException as e:
         raise HTTPException(status_code=e.http_status or 400, detail=str(e))
     except Exception as e:
@@ -391,8 +421,14 @@ async def spotify_seek(body: PlayRequest):
 @api_router.post("/spotify/queue")
 async def spotify_queue(body: QueueRequest):
     try:
-        _sp(body.access_token).add_to_queue(body.track_uri, device_id=body.device_id)
-        return {"status": "queued"}
+        sp = _sp(body.access_token)
+        resolved = _ensure_device(sp, body.device_id)
+        if resolved is None:
+            raise HTTPException(status_code=404, detail="No Spotify devices available. Open Spotify to start playback.")
+        sp.add_to_queue(body.track_uri, device_id=resolved)
+        return {"status": "queued", "device_id": resolved}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -602,7 +638,7 @@ async def map_html(key: str):
     const img = u.profile_image || '';
     const classes = ['avatar-wrap'];
     if (self) classes.push('self'); else if (hosting) classes.push('hosting'); else if (!playing) classes.push('paused');
-    marker.__el.innerHTML = '<div class="'+classes.join(' ')+'"><div class="avatar" style="background-image:url('+img+')"></div></div>' + (title ? '<div class="pill '+(playing?'':'paused')+'"><span class="dot"></span><span>'+escapeHtml(title)+'</span></div>' : '');
+    marker.__el.innerHTML = '<div class="'+classes.join(' ')+'"><div class="avatar" style="background-image:url('+img+')"></div></div>' + (title && playing ? '<div class="pill"><span class="dot"></span><span>'+escapeHtml(title)+'</span></div>' : '');
   }}
   function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g,c=>({{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}}[c])); }}
   function removeMarker(uid){{ if(markers[uid]){{ markers[uid].setMap(null); delete markers[uid]; }} }}
