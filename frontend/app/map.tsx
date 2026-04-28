@@ -26,6 +26,7 @@ import {
   getCurrentlyPlaying,
   loadAuth,
   playerAction,
+  setRepeat,
 } from "../src/api";
 
 const GOOGLE_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string;
@@ -217,6 +218,8 @@ export default function MapScreen() {
         if (auth && data.track_uri) {
           (async () => {
             try {
+              // Disable repeat so playback doesn't loop the same track forever
+              try { await setRepeat(auth, "off"); } catch {}
               await addToQueue(auth, data.track_uri);
               showToast("QUEUED", `${data.from_display_name || "Guest"} added "${data.track_name || "a track"}"`, "live");
             } catch (e) {

@@ -79,7 +79,19 @@ export default function ListenersSheet({
         const data: any = await getQueue(auth);
         if (cancelled) return;
         setCurrentlyPlaying(data?.currently_playing || null);
-        setQueue(data?.queue || []);
+        // Spotify's queue endpoint repeats the currently-playing track many
+        // times when repeat=track or autoplay is on. Dedupe consecutive
+        // duplicates so the UI doesn't show 10× of the same song.
+        const raw: any[] = data?.queue || [];
+        const deduped: any[] = [];
+        let prevId: string | null = null;
+        for (const t of raw) {
+          const id = t?.id || t?.uri;
+          if (id && id === prevId) continue;
+          deduped.push(t);
+          prevId = id;
+        }
+        setQueue(deduped);
       } catch (e) {
         if (!cancelled) setQueueError("Couldn't load queue");
       } finally {

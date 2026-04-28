@@ -408,6 +408,20 @@ async def spotify_get_queue(access_token: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+class RepeatRequest(BaseModel):
+    access_token: str
+    state: str  # 'off' | 'track' | 'context'
+
+
+@api_router.post("/spotify/repeat")
+async def spotify_repeat(body: RepeatRequest):
+    try:
+        _sp(body.access_token).repeat(body.state)
+        return {"status": "ok", "repeat": body.state}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.get("/spotify/search")
 async def spotify_search(q: str, access_token: str):
     try:
