@@ -401,12 +401,12 @@ export default function MapScreen() {
         setMyTrack(item ? { item } : null);
         setMyIsPlaying(playing);
 
-        // Update Spotify-active-device flag (any device with is_active=true means Spotify is open)
+        // Update Spotify-active-device flag — Spotify being "open" means at least
+        // one device is registered/available, even if not currently playing.
         try {
           const dev: any = await getDevices(auth);
           const list = dev?.devices || [];
-          const anyActive = list.some((d: any) => d.is_active) || playing;
-          setHasSpotify(anyActive);
+          setHasSpotify(list.length > 0 || playing);
         } catch {}
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(
