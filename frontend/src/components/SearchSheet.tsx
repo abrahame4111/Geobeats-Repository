@@ -14,7 +14,7 @@ import {
   Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { addToQueue, searchTracks, StoredAuth } from "../api";
+import { addToQueue, searchTracks, setRepeat, StoredAuth } from "../api";
 
 type Track = {
   uri: string;
@@ -107,6 +107,9 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
     if (!auth) return;
     setQueuedIds((p) => ({ ...p, [track.id]: "loading" }));
     try {
+      // Disable repeat first so playback doesn't loop the same track forever.
+      // Best-effort — may fail for non-Premium or no-active-device, ignore.
+      try { await setRepeat(auth, "off"); } catch {}
       // Always queue on user's own Spotify (so guest hears it on their device too)
       await addToQueue(auth, track.uri);
       // If user is a guest in a session, also forward to host so the host queues it on their Spotify
