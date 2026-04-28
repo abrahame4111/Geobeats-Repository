@@ -147,18 +147,24 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
         >
           <View style={styles.handle} />
           <View style={styles.header}>
-            <Text style={styles.title}>SEARCH</Text>
+            <View style={styles.headerSide}>
+              <Text style={styles.title}>SEARCH</Text>
+            </View>
             {isInSession ? (
-              <View style={styles.hostBadge}>
-                <Ionicons name="headset" size={11} color="#D4FF00" />
-                <Text style={styles.hostBadgeText} numberOfLines={1}>
-                  Queues to {hostName || "host"}
-                </Text>
+              <View pointerEvents="none" style={styles.hostBadgeWrap}>
+                <View style={styles.hostBadge}>
+                  <Ionicons name="headset" size={11} color="#D4FF00" />
+                  <Text style={styles.hostBadgeText} numberOfLines={1}>
+                    Queues to {hostName || "host"}
+                  </Text>
+                </View>
               </View>
             ) : null}
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
-              <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
-            </TouchableOpacity>
+            <View style={[styles.headerSide, { alignItems: "flex-end" }]}>
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={8}>
+                <Ionicons name="close" size={22} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            </View>
           </View>
           <View style={styles.searchRow}>
             <Ionicons name="search" size={16} color="rgba(255,255,255,0.55)" />
@@ -266,9 +272,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 12,
-    gap: 10,
+    position: "relative",
+  },
+  headerSide: {
+    flex: 1,
+    justifyContent: "center",
   },
   title: { color: "#fff", fontSize: 16, fontWeight: "900", letterSpacing: 1.2 },
+  hostBadgeWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   hostBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -279,7 +298,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(212,255,0,0.35)",
-    flexShrink: 1,
+    maxWidth: "60%",
   },
   hostBadgeText: { color: "#D4FF00", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   closeBtn: { padding: 4 },
