@@ -24,6 +24,7 @@ import {
   clearAuth,
   getActiveUsers,
   getCurrentlyPlaying,
+  getDevices,
   loadAuth,
   playerAction,
   setRepeat,
@@ -60,6 +61,7 @@ export default function MapScreen() {
   const [listenersOpen, setListenersOpen] = useState(false);
   const mapRef = useRef<SoundMapHandle>(null);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
+  const [hasSpotify, setHasSpotify] = useState(true); // optimistic — assume open until proven otherwise
 
   // ---- Auto-pause when queue runs out (Spotify Autoplay workaround) ----
   // We track URIs the user explicitly queued via this app. When the currently
@@ -397,6 +399,14 @@ export default function MapScreen() {
 
         setMyTrack(item ? { item } : null);
         setMyIsPlaying(playing);
+
+        // Update Spotify-active-device flag (any device with is_active=true means Spotify is open)
+        try {
+          const dev: any = await getDevices(auth);
+          const list = dev?.devices || [];
+          const anyActive = list.some((d: any) => d.is_active) || playing;
+          setHasSpotify(anyActive);
+        } catch {}
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(
             JSON.stringify({
@@ -635,6 +645,7 @@ export default function MapScreen() {
         isPlaying={myIsPlaying}
         syncStatus={syncStatus}
         inSession={!!hostId && hostId !== auth.user_id}
+        hasSpotify={hasSpotify}
         onPlayPause={handlePlayPause}
         onNext={handleNext}
         onPrev={handlePrev}

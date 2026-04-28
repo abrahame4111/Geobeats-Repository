@@ -408,6 +408,15 @@ async def spotify_get_queue(access_token: str):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@api_router.get("/spotify/devices")
+async def spotify_devices(access_token: str):
+    """Returns list of available Spotify Connect devices for this user."""
+    try:
+        return _sp(access_token).devices()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 class RepeatRequest(BaseModel):
     access_token: str
     state: str  # 'off' | 'track' | 'context'

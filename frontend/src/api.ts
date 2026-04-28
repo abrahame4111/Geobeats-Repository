@@ -146,6 +146,11 @@ export async function getQueue(auth: StoredAuth): Promise<any> {
   return api(`/api/spotify/queue?access_token=${encodeURIComponent(t)}`);
 }
 
+export async function getDevices(auth: StoredAuth): Promise<any> {
+  const t = await ensureFreshToken(auth);
+  return api(`/api/spotify/devices?access_token=${encodeURIComponent(t)}`);
+}
+
 export async function setRepeat(auth: StoredAuth, state: "off" | "track" | "context") {
   const t = await ensureFreshToken(auth);
   return api(`/api/spotify/repeat`, {

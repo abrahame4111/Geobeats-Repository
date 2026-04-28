@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image, Linking } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 type Props = {
@@ -9,6 +9,7 @@ type Props = {
   isPlaying?: boolean;
   syncStatus?: "idle" | "syncing" | "synced" | "hosting";
   inSession?: boolean;
+  hasSpotify?: boolean;
   onPlayPause?: () => void;
   onNext?: () => void;
   onPrev?: () => void;
@@ -33,6 +34,7 @@ export default function PlayerBottomSheet({
   isPlaying,
   syncStatus = "idle",
   inSession,
+  hasSpotify,
   onPlayPause,
   onNext,
   onPrev,
@@ -81,15 +83,26 @@ export default function PlayerBottomSheet({
                 {t.artists}
               </Text>
             </>
-          ) : (
+          ) : hasSpotify ? (
             <>
               <Text style={styles.title} numberOfLines={1}>
                 Not playing currently
               </Text>
               <Text style={styles.artist} numberOfLines={1}>
-                Open Spotify & play a track to go live
+                Press play in Spotify to go live
               </Text>
             </>
+          ) : (
+            <TouchableOpacity
+              onPress={() => Linking.openURL("spotify://").catch(() => Linking.openURL("https://open.spotify.com"))}
+              activeOpacity={0.85}
+              testID="open-spotify-btn"
+              style={styles.openSpotifyBtn}
+              hitSlop={6}
+            >
+              <Ionicons name="musical-notes" size={16} color="#05050A" />
+              <Text style={styles.openSpotifyText}>OPEN SPOTIFY</Text>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -170,6 +183,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.06)",
+  },
+  openSpotifyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#1ED760",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    alignSelf: "flex-start",
+  },
+  openSpotifyText: {
+    color: "#05050A",
+    fontWeight: "900",
+    fontSize: 12,
+    letterSpacing: 1,
   },
   meta: { flex: 1, gap: 2 },
   title: { color: "#fff", fontSize: 15, fontWeight: "700" },
