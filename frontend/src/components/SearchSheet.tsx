@@ -33,9 +33,11 @@ type Props = {
   onClose: () => void;
   // Forwards a track URI to the host's session queue (host's frontend handles it)
   onForwardToHost?: (trackUri: string, trackName: string) => void;
+  // Notify parent that a URI was successfully queued (for autoplay-blocking)
+  onQueued?: (trackUri: string) => void;
 };
 
-export default function SearchSheet({ visible, auth, isInSession, hostName, onClose, onForwardToHost }: Props) {
+export default function SearchSheet({ visible, auth, isInSession, hostName, onClose, onForwardToHost, onQueued }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -112,6 +114,8 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
       try { await setRepeat(auth, "off"); } catch {}
       // Always queue on user's own Spotify (so guest hears it on their device too)
       await addToQueue(auth, track.uri);
+      // Notify parent so it can mark this URI as "approved" for autoplay-blocking
+      onQueued?.(track.uri);
       // If user is a guest in a session, also forward to host so the host queues it on their Spotify
       if (isInSession && onForwardToHost) {
         onForwardToHost(track.uri, track.name);

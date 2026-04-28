@@ -61,6 +61,20 @@ export default function MapScreen() {
   const mapRef = useRef<SoundMapHandle>(null);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
 
+  // ---- Auto-pause when queue runs out (Spotify Autoplay workaround) ----
+  // We track URIs the user explicitly queued via this app. When the currently
+  // playing track changes from an "approved" URI to one that is NOT approved,
+  // we know Spotify Autoplay just kicked in — pause playback automatically.
+  const approvedUrisRef = useRef<Set<string>>(new Set());
+  const autoStopArmedRef = useRef(false);
+  const lastUriRef = useRef<string | null>(null);
+
+  const approveUri = (uri?: string) => {
+    if (!uri) return;
+    approvedUrisRef.current.add(uri);
+    autoStopArmedRef.current = true;
+  };
+
   const sendReaction = (targetUserId: string, emoji: string) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -221,6 +235,8 @@ export default function MapScreen() {
               // Disable repeat so playback doesn't loop the same track forever
               try { await setRepeat(auth, "off"); } catch {}
               await addToQueue(auth, data.track_uri);
+              // Mark this URI as approved + arm autoplay-blocking auto-pause
+              approveUri(data.track_uri);
               showToast("QUEUED", `${data.from_display_name || "Guest"} added "${data.track_name || "a track"}"`, "live");
             } catch (e) {
               console.warn("[queue] host add failed", e);
@@ -354,6 +370,31 @@ export default function MapScreen() {
         const playing = !!cp?.is_playing;
         const item = cp?.item || null;
         const ws = wsRef.current;
+
+        // ----- Autoplay-blocking: detect track URI change and pause if the
+        // new track wasn't queued via this app (Spotify Autoplay kicked in).
+        const newUri: string | null = item?.uri || null;
+        if (newUri && newUri !== lastUriRef.current) {
+          const prev = lastUriRef.current;
+          if (
+            autoStopArmedRef.current &&
+            prev &&
+            approvedUrisRef.current.has(prev) &&
+            !approvedUrisRef.current.has(newUri)
+          ) {
+            // Queue-end → autoplay began. Pause to honour the user's intent.
+            try {
+              await playerAction("pause", auth, {});
+              setMyIsPlaying(false);
+              showToast("PLAYBACK ENDED", "Queue finished — autoplay blocked", "live");
+            } catch (e) {
+              console.warn("[autostop] pause failed", e);
+            }
+            autoStopArmedRef.current = false;
+          }
+          lastUriRef.current = newUri;
+        }
+
         setMyTrack(item ? { item } : null);
         setMyIsPlaying(playing);
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -619,6 +660,7 @@ export default function MapScreen() {
         isInSession={!!hostId && hostId !== auth.user_id}
         hostName={hostId ? usersMap[hostId]?.display_name : null}
         onClose={() => setSearchOpen(false)}
+        onQueued={(uri) => approveUri(uri)}
         onForwardToHost={(trackUri, trackName) => {
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {
