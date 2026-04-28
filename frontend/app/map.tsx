@@ -51,6 +51,7 @@ export default function MapScreen() {
   const wsRef = useRef<WebSocket | null>(null);
   const locIntervalRef = useRef<any>(null);
   const trackIntervalRef = useRef<any>(null);
+  const pullRef = useRef<(() => Promise<void>) | null>(null);
   const syncIntervalRef = useRef<any>(null);
   const pendingSyncRef = useRef<any>(null);
   const [broadcastOn, setBroadcastOn] = useState(true);
@@ -440,7 +441,6 @@ export default function MapScreen() {
   }, [auth?.user_id, syncStatus]);
 
   // ---- Re-poll on app foreground (so OPEN SPOTIFY state refreshes when user returns) ----
-  const pullRef = useRef<(() => Promise<void>) | null>(null);
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
