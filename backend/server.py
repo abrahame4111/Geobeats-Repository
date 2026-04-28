@@ -397,6 +397,17 @@ async def spotify_queue(body: QueueRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@api_router.get("/spotify/queue")
+async def spotify_get_queue(access_token: str):
+    """Returns currently_playing + the upcoming queue."""
+    try:
+        sp = _sp(access_token)
+        # spotipy doesn't expose this directly in 2.26; call the endpoint manually
+        return sp._get("me/player/queue")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @api_router.get("/spotify/search")
 async def spotify_search(q: str, access_token: str):
     try:

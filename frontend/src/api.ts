@@ -141,4 +141,9 @@ export async function addToQueue(auth: StoredAuth, trackUri: string, deviceId?: 
   });
 }
 
+export async function getQueue(auth: StoredAuth): Promise<any> {
+  const t = await ensureFreshToken(auth);
+  return api(`/api/spotify/queue?access_token=${encodeURIComponent(t)}`);
+}
+
 export { BACKEND_URL };

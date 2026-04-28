@@ -8,10 +8,12 @@ type Props = {
   track?: any;
   isPlaying?: boolean;
   syncStatus?: "idle" | "syncing" | "synced" | "hosting";
+  inSession?: boolean;
   onPlayPause?: () => void;
   onNext?: () => void;
   onPrev?: () => void;
   onLogout?: () => void;
+  onOpenListeners?: () => void;
 };
 
 function extractTrack(ct: any) {
@@ -30,10 +32,12 @@ export default function PlayerBottomSheet({
   track,
   isPlaying,
   syncStatus = "idle",
+  inSession,
   onPlayPause,
   onNext,
   onPrev,
   onLogout,
+  onOpenListeners,
 }: Props) {
   const t = extractTrack(track);
 
@@ -84,20 +88,34 @@ export default function PlayerBottomSheet({
         </View>
 
         <View style={styles.controls}>
-          <TouchableOpacity onPress={onPrev} testID="player-prev" style={styles.ctrlBtn} hitSlop={8}>
-            <Ionicons name="play-skip-back" size={20} color="#fff" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onPlayPause}
-            testID="player-play-pause"
-            style={[styles.ctrlBtn, styles.ctrlPrimary]}
-            hitSlop={8}
-          >
-            <Ionicons name={isPlaying ? "pause" : "play"} size={20} color="#000" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onNext} testID="player-next" style={styles.ctrlBtn} hitSlop={8}>
-            <Ionicons name="play-skip-forward" size={20} color="#fff" />
-          </TouchableOpacity>
+          {inSession ? (
+            <TouchableOpacity
+              onPress={onOpenListeners}
+              testID="player-listeners"
+              style={[styles.ctrlBtn, styles.ctrlPrimary, styles.ctrlGroup]}
+              hitSlop={8}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="people" size={22} color="#000" />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity onPress={onPrev} testID="player-prev" style={styles.ctrlBtn} hitSlop={8}>
+                <Ionicons name="play-skip-back" size={20} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onPlayPause}
+                testID="player-play-pause"
+                style={[styles.ctrlBtn, styles.ctrlPrimary]}
+                hitSlop={8}
+              >
+                <Ionicons name={isPlaying ? "pause" : "play"} size={20} color="#000" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onNext} testID="player-next" style={styles.ctrlBtn} hitSlop={8}>
+                <Ionicons name="play-skip-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
     </View>
@@ -152,6 +170,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   ctrlPrimary: { backgroundColor: "#D4FF00" },
+  ctrlGroup: { width: 48, height: 48, borderRadius: 24 },
   logoutBtn: {
     alignSelf: "flex-start",
     flexDirection: "row",

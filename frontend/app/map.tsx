@@ -16,6 +16,7 @@ import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
 import SearchSheet from "../src/components/SearchSheet";
 import FloatingReactions, { FloatingReaction } from "../src/components/FloatingReactions";
+import ListenersSheet from "../src/components/ListenersSheet";
 import {
   BACKEND_URL,
   StoredAuth,
@@ -55,6 +56,7 @@ export default function MapScreen() {
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimerRef = useRef<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [listenersOpen, setListenersOpen] = useState(false);
   const mapRef = useRef<SoundMapHandle>(null);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
 
@@ -588,9 +590,11 @@ export default function MapScreen() {
         track={myTrack}
         isPlaying={myIsPlaying}
         syncStatus={syncStatus}
+        inSession={!!hostId && hostId !== auth.user_id}
         onPlayPause={handlePlayPause}
         onNext={handleNext}
         onPrev={handlePrev}
+        onOpenListeners={() => setListenersOpen(true)}
       />
 
       {/* Locate-me FAB */}
@@ -623,6 +627,34 @@ export default function MapScreen() {
       />
 
       <FloatingReactions reactions={floatingReactions} onDone={removeReaction} />
+
+      <ListenersSheet
+        visible={listenersOpen}
+        auth={auth}
+        listeners={markers as any}
+        hostId={hostId}
+        selfId={auth.user_id}
+        onClose={() => setListenersOpen(false)}
+        onListenAlong={(uid) => {
+          const ws = wsRef.current;
+          if (!ws || ws.readyState !== WebSocket.OPEN) return;
+          // Switch session: leave first if currently in one (different host), then join
+          if (hostId && hostId !== uid) {
+            ws.send(JSON.stringify({ type: "session:leave" }));
+          }
+          ws.send(JSON.stringify({ type: "session:join", host_id: uid }));
+          setListenersOpen(false);
+        }}
+        onLeaveSession={() => {
+          const ws = wsRef.current;
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "session:leave" }));
+          }
+          setHostId(null);
+          setSyncStatus("idle");
+          setListenersOpen(false);
+        }}
+      />
     </View>
   );
 }
