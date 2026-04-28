@@ -63,10 +63,10 @@ export default function PlayerBottomSheet({
       <View style={styles.row}>
         <Image
           source={{ uri: t?.art || profileImage || "https://placehold.co/100x100/121218/D4FF00?text=M" }}
-          style={styles.art}
+          style={[styles.art, !isPlaying && styles.artDim]}
         />
         <View style={styles.meta}>
-          {t ? (
+          {t && isPlaying ? (
             <>
               <Text style={styles.title} numberOfLines={1}>
                 {t.name}
@@ -78,7 +78,7 @@ export default function PlayerBottomSheet({
           ) : (
             <>
               <Text style={styles.title} numberOfLines={1}>
-                {displayName}
+                Not playing currently
               </Text>
               <Text style={styles.artist} numberOfLines={1}>
                 Open Spotify & play a track to go live
@@ -157,6 +157,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#12121A",
   },
+  artDim: { opacity: 0.45 },
   meta: { flex: 1, gap: 2 },
   title: { color: "#fff", fontSize: 15, fontWeight: "700" },
   artist: { color: "rgba(255,255,255,0.55)", fontSize: 12 },
