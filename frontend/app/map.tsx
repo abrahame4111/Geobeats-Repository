@@ -575,9 +575,9 @@ export default function MapScreen() {
         style={[styles.locateFab, !myLocation && styles.locateFabDisabled]}
         activeOpacity={0.85}
         testID="locate-me"
-        hitSlop={6}
+        hitSlop={8}
       >
-        <Ionicons name="locate" size={22} color={myLocation ? "#05050A" : "rgba(5,5,10,0.4)"} />
+        <Ionicons name="locate" size={19} color={myLocation ? "#D4FF00" : "rgba(212,255,0,0.35)"} />
       </TouchableOpacity>
       <SearchSheet
         visible={searchOpen}
@@ -647,22 +647,19 @@ const styles = StyleSheet.create({
   },
   locateFab: {
     position: "absolute",
-    right: 18,
-    bottom: 200,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#D4FF00",
+    right: 16,
+    bottom: 150,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(10,10,18,0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(212,255,0,0.4)",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 6,
-    shadowColor: "#D4FF00",
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
   },
   locateFabDisabled: {
-    backgroundColor: "rgba(212,255,0,0.35)",
+    borderColor: "rgba(212,255,0,0.15)",
   },
   ghostBtnOff: {
     borderColor: "rgba(255,255,255,0.18)",
