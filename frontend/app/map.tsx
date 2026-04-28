@@ -686,6 +686,17 @@ export default function MapScreen() {
         hostName={hostId ? usersMap[hostId]?.display_name : null}
         onClose={() => setSearchOpen(false)}
         onQueued={(uri) => approveUri(uri)}
+        onPlayedNow={(track) => {
+          // Optimistic update so the bottom player sheet swaps to the new
+          // track the moment the user taps a row, in sync with playback start.
+          setMyTrack({ item: track });
+          setMyIsPlaying(true);
+          setHasSpotify(true);
+          approveUri(track.uri);
+          // Trigger a confirming poll ~700ms later so we replace optimistic
+          // state with authoritative Spotify state (album art etc.).
+          setTimeout(() => pullRef.current?.(), 700);
+        }}
         onForwardToHost={(trackUri, trackName) => {
           const ws = wsRef.current;
           if (ws && ws.readyState === WebSocket.OPEN) {

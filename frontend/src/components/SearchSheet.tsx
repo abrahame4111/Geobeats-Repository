@@ -35,9 +35,11 @@ type Props = {
   onForwardToHost?: (trackUri: string, trackName: string) => void;
   // Notify parent that a URI was successfully queued (for autoplay-blocking)
   onQueued?: (trackUri: string) => void;
+  // Called immediately after a "play now" succeeds so parent can sync the player UI
+  onPlayedNow?: (track: Track) => void;
 };
 
-export default function SearchSheet({ visible, auth, isInSession, hostName, onClose, onForwardToHost, onQueued }: Props) {
+export default function SearchSheet({ visible, auth, isInSession, hostName, onClose, onForwardToHost, onQueued, onPlayedNow }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -208,6 +210,9 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
               const handlePlayNow = async () => {
                 if (!auth) return;
                 setQueuedIds((p) => ({ ...p, [`play-${item.id}`]: "loading" }));
+                // Fire optimistic UI update immediately so the player bottom
+                // sheet reflects the song instantly without waiting for the poll.
+                onPlayedNow?.(item);
                 try {
                   try { await setRepeat(auth, "off"); } catch {}
                   await playNow(auth, item.uri);
