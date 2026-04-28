@@ -400,7 +400,9 @@ async def spotify_queue(body: QueueRequest):
 @api_router.get("/spotify/search")
 async def spotify_search(q: str, access_token: str):
     try:
-        return _sp(access_token).search(q, limit=15, type="track")
+        # NOTE: Spotify Feb-2026 dev-mode apps cap catalog endpoint limit at 10.
+        # Larger values return a misleading "Invalid limit" 400. Stay <= 10.
+        return _sp(access_token).search(q, limit=10, type="track")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
