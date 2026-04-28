@@ -117,7 +117,7 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
 const styles = StyleSheet.create({
   card: {
     position: "absolute",
-    bottom: 110,
+    bottom: 140,
     left: 16,
     right: 16,
     backgroundColor: "rgba(10,10,18,0.92)",
