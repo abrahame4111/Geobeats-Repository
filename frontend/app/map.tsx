@@ -15,6 +15,7 @@ import SoundMapView, { MapMarker, SoundMapHandle } from "../src/components/Sound
 import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
 import SearchSheet from "../src/components/SearchSheet";
+import FloatingReactions, { FloatingReaction } from "../src/components/FloatingReactions";
 import {
   BACKEND_URL,
   StoredAuth,
@@ -55,6 +56,21 @@ export default function MapScreen() {
   const toastTimerRef = useRef<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const mapRef = useRef<SoundMapHandle>(null);
+  const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
+
+  const sendReaction = (targetUserId: string, emoji: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "reaction:send", target_user_id: targetUserId, emoji }));
+    // Also show locally so the sender sees their own reaction float up
+    setFloatingReactions((p) => [
+      ...p,
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, emoji, fromName: "You" },
+    ]);
+  };
+
+  const removeReaction = (id: string) =>
+    setFloatingReactions((p) => p.filter((r) => r.id !== id));
 
   // ---- Init auth ----
   useEffect(() => {
@@ -207,6 +223,15 @@ export default function MapScreen() {
             }
           })();
         }
+      } else if (data.type === "reaction:incoming") {
+        setFloatingReactions((p) => [
+          ...p,
+          {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            emoji: data.emoji,
+            fromName: data.from_display_name || "Someone",
+          },
+        ]);
       }
     } catch (e) {
       console.warn("ws parse err", e);
@@ -550,8 +575,10 @@ export default function MapScreen() {
           user={selectedUser as any}
           onClose={() => setSelectedUserId(null)}
           onListenAlong={handleListenAlong}
+          onReact={(emoji) => sendReaction(selectedUser.user_id, emoji)}
           busy={listenLoading}
           isActiveSession={hostId === selectedUser.user_id}
+          isSelf={selectedUser.user_id === auth.user_id}
         />
       )}
 
@@ -594,6 +621,8 @@ export default function MapScreen() {
           }
         }}
       />
+
+      <FloatingReactions reactions={floatingReactions} onDone={removeReaction} />
     </View>
   );
 }

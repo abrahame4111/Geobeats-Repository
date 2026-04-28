@@ -15,9 +15,13 @@ type Props = {
   user: UserCardData;
   onClose: () => void;
   onListenAlong: () => void;
+  onReact?: (emoji: string) => void;
   busy?: boolean;
   isActiveSession?: boolean;
+  isSelf?: boolean;
 };
+
+const REACTIONS = ["🔥", "❤️", "💀"] as const;
 
 function extractTrack(ct: any) {
   if (!ct) return null;
@@ -28,7 +32,7 @@ function extractTrack(ct: any) {
   return { name, artists, art };
 }
 
-export default function ListenAlongCard({ user, onClose, onListenAlong, busy, isActiveSession }: Props) {
+export default function ListenAlongCard({ user, onClose, onListenAlong, onReact, busy, isActiveSession, isSelf }: Props) {
   const t = extractTrack(user.current_track);
   return (
     <View style={styles.card} testID="listen-along-card">
@@ -88,6 +92,24 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, busy, is
           </>
         )}
       </TouchableOpacity>
+
+      {/* Reactions row — hidden when viewing own card */}
+      {!isSelf && onReact ? (
+        <View style={styles.reactionRow} testID="reaction-row">
+          {REACTIONS.map((e) => (
+            <TouchableOpacity
+              key={e}
+              style={styles.reactionBtn}
+              onPress={() => onReact(e)}
+              activeOpacity={0.65}
+              testID={`react-${e}`}
+              hitSlop={6}
+            >
+              <Text style={styles.reactionEmoji}>{e}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -148,4 +170,22 @@ const styles = StyleSheet.create({
   ctaActive: { backgroundColor: "#FF4500" },
   ctaDisabled: { opacity: 0.4 },
   ctaText: { color: "#000", fontWeight: "900", fontSize: 14, letterSpacing: 1 },
+  reactionRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingTop: 4,
+    gap: 12,
+  },
+  reactionBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reactionEmoji: { fontSize: 26 },
 });

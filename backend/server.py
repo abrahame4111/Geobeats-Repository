@@ -741,8 +741,20 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
                         "timestamp": time.time(),
                     })
 
+            elif msg_type == "reaction:send":
+                target_id = data.get("target_user_id")
+                emoji = data.get("emoji")
+                if target_id and emoji:
+                    sender = state.users.get(user_id)
+                    await send_to(target_id, {
+                        "type": "reaction:incoming",
+                        "emoji": emoji,
+                        "from_user_id": user_id,
+                        "from_display_name": sender.display_name if sender else "Someone",
+                        "from_profile_image": sender.profile_image if sender else None,
+                    })
+
             elif msg_type == "session:queue_add":
-                # Guest forwards a track URI to be queued on the host's Spotify
                 track_uri = data.get("track_uri")
                 track_name = data.get("track_name") or ""
                 host_id = state.guest_to_host.get(user_id)
