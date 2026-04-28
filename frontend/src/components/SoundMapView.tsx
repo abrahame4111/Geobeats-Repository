@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useImperativeHandle, useMemo, useRef, useState, forwardRef } from "react";
 import { Platform, StyleSheet, View, Text, ActivityIndicator } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
 
@@ -12,6 +12,10 @@ export type MapMarker = {
   is_playing?: boolean;
   host_session?: boolean;
   isSelf?: boolean;
+};
+
+export type SoundMapHandle = {
+  centerOn: (lat: number, lng: number, zoom?: number) => void;
 };
 
 type Props = {
@@ -235,7 +239,7 @@ function buildHtml(apiKey: string): string {
 </html>`;
 }
 
-export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPress }: Props) {
+function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
     return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}`;
@@ -255,6 +259,12 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
       webViewRef.current?.injectJavaScript(`window.__handle && window.__handle(${json}); true;`);
     }
   };
+
+  useImperativeHandle(ref, () => ({
+    centerOn: (lat: number, lng: number, zoom?: number) => {
+      postToMap({ type: "center", lat, lng, zoom: zoom ?? 15 });
+    },
+  }));
 
   useEffect(() => {
     if (!readyRef.current) return;
@@ -342,6 +352,9 @@ export default function SoundMapView({ apiKey, markers, myLocation, onMarkerPres
     </View>
   );
 }
+
+const SoundMapView = forwardRef<SoundMapHandle, Props>(SoundMapViewInner);
+export default SoundMapView;
 
 function ErrorOverlay({ message }: { message: string }) {
   return (

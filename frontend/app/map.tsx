@@ -11,7 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
-import SoundMapView, { MapMarker } from "../src/components/SoundMapView";
+import SoundMapView, { MapMarker, SoundMapHandle } from "../src/components/SoundMapView";
 import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
 import SearchSheet from "../src/components/SearchSheet";
@@ -54,6 +54,7 @@ export default function MapScreen() {
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimerRef = useRef<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const mapRef = useRef<SoundMapHandle>(null);
 
   // ---- Init auth ----
   useEffect(() => {
@@ -463,6 +464,7 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <SoundMapView
+        ref={mapRef}
         apiKey={GOOGLE_MAPS_KEY}
         markers={mapMarkers}
         myLocation={myLocation}
@@ -563,6 +565,20 @@ export default function MapScreen() {
         onNext={handleNext}
         onPrev={handlePrev}
       />
+
+      {/* Locate-me FAB */}
+      <TouchableOpacity
+        onPress={() => {
+          if (myLocation) mapRef.current?.centerOn(myLocation.lat, myLocation.lng, 15);
+        }}
+        disabled={!myLocation}
+        style={[styles.locateFab, !myLocation && styles.locateFabDisabled]}
+        activeOpacity={0.85}
+        testID="locate-me"
+        hitSlop={6}
+      >
+        <Ionicons name="locate" size={22} color={myLocation ? "#05050A" : "rgba(5,5,10,0.4)"} />
+      </TouchableOpacity>
       <SearchSheet
         visible={searchOpen}
         auth={auth}
@@ -628,6 +644,25 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  locateFab: {
+    position: "absolute",
+    right: 18,
+    bottom: 200,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#D4FF00",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 6,
+    shadowColor: "#D4FF00",
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  locateFabDisabled: {
+    backgroundColor: "rgba(212,255,0,0.35)",
   },
   ghostBtnOff: {
     borderColor: "rgba(255,255,255,0.18)",

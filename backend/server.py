@@ -426,6 +426,9 @@ async def map_html(key: str):
   #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; }}
   #status .err {{ color:#FF4500; max-width: 80vw; word-break: break-word; }}
   .bubble {{ position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; }}
+  .cluster {{ position: relative; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer; }}
+  .cluster-circle {{ width: 52px; height: 52px; border-radius: 50%; background: rgba(212,255,0,0.92); color:#05050A; font: 800 17px -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 0 14px rgba(212,255,0,0.5), inset 0 0 0 2px rgba(255,255,255,0.18); }}
+  .cluster-circle.lg {{ width: 62px; height: 62px; font-size: 19px; }}
   .avatar-wrap {{ width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #D4FF00, #BEE600); box-sizing: border-box; }}
   .avatar-wrap.self {{ background: linear-gradient(135deg, #FF4500, #FF8A00); }}
   .avatar-wrap.hosting {{ background: linear-gradient(135deg, #D4FF00, #00FFE0); }}
@@ -441,6 +444,9 @@ async def map_html(key: str):
 <div id="status">Initializing…</div>
 <script>
   let map; let markers = {{}}; let meId = null;
+  let clusterOverlays = [];
+  const CLUSTER_PX = 80; // pixel proximity for clustering
+  const CLUSTER_DISABLE_ZOOM = 13; // at >= this zoom, never cluster
   const statusEl = document.getElementById('status');
   function setStatus(t, isError){{ if(!statusEl) return; statusEl.style.display='flex'; statusEl.innerHTML = isError ? '<div class="err">'+t+'</div>' : t; }}
   function post(msg){{
@@ -483,8 +489,61 @@ async def map_html(key: str):
       backgroundColor: '#05050A',
       styles: DARK_STYLE,
     }});
+    map.addListener('idle', recomputeClusters);
     post({{ type: 'map:ready' }});
   }};
+  function recomputeClusters(){{
+    if (!map) return;
+    const proj = map.getProjection();
+    if (!proj) return;
+    // Tear down previous cluster overlays
+    clusterOverlays.forEach(c => c.setMap(null));
+    clusterOverlays = [];
+    const bubbles = Object.values(markers);
+    const z = map.getZoom();
+    if (z >= CLUSTER_DISABLE_ZOOM || bubbles.length < 2) {{
+      bubbles.forEach(b => b.setMap(map));
+      return;
+    }}
+    const scale = Math.pow(2, z);
+    const points = bubbles.map(b => {{
+      const w = proj.fromLatLngToPoint(b.position);
+      return {{ b: b, x: w.x * scale, y: w.y * scale, used: false }};
+    }});
+    // Hide all individual bubbles; we'll re-add singletons below
+    bubbles.forEach(b => b.setMap(null));
+    for (let i = 0; i < points.length; i++) {{
+      if (points[i].used) continue;
+      const grp = [points[i]];
+      points[i].used = true;
+      for (let j = i + 1; j < points.length; j++) {{
+        if (points[j].used) continue;
+        const dx = points[i].x - points[j].x;
+        const dy = points[i].y - points[j].y;
+        if (Math.sqrt(dx*dx + dy*dy) < CLUSTER_PX) {{
+          grp.push(points[j]);
+          points[j].used = true;
+        }}
+      }}
+      if (grp.length === 1) {{
+        grp[0].b.setMap(map);
+      }} else {{
+        let lat = 0, lng = 0;
+        grp.forEach(p => {{ lat += p.b.position.lat(); lng += p.b.position.lng(); }});
+        lat /= grp.length; lng /= grp.length;
+        const div = document.createElement('div');
+        div.className = 'cluster';
+        const sz = grp.length >= 5 ? 'lg' : '';
+        div.innerHTML = '<div class="cluster-circle '+sz+'">'+grp.length+'</div>';
+        div.addEventListener('click', () => {{
+          map.panTo({{ lat: lat, lng: lng }});
+          map.setZoom(Math.min((map.getZoom() || 12) + 2, 18));
+        }});
+        const cm = new AdvancedBubble(new google.maps.LatLng(lat, lng), map, div);
+        clusterOverlays.push(cm);
+      }}
+    }}
+  }}
   function upsertMarker(u) {{
     if (!u.lat || !u.lng) return;
     const existing = markers[u.user_id];
@@ -519,7 +578,13 @@ async def map_html(key: str):
       const keep = new Set();
       (data.markers || []).forEach(m => {{ upsertMarker(m); keep.add(m.user_id); }});
       Object.keys(markers).forEach(id => {{ if (!keep.has(id)) removeMarker(id); }});
-    }} else if (data.type === 'center') {{ if (map) map.panTo({{ lat: data.lat, lng: data.lng }}); }}
+      recomputeClusters();
+    }} else if (data.type === 'center') {{
+      if (map) {{
+        map.panTo({{ lat: data.lat, lng: data.lng }});
+        if (typeof data.zoom === 'number') map.setZoom(data.zoom);
+      }}
+    }}
   }}
   window.__handle = handle;
   window.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
