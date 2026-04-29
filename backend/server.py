@@ -1250,10 +1250,12 @@ async def mapbox_html(token: str):
   window.__handle = handle;
   document.addEventListener('message', e => handle(e.data));
   window.addEventListener('message', e => handle(e.data));
-  // Init globe
+  // Init globe — base style is dark-v11; we recolor layers to GeoBeats theme
+  // on style.load below for a fully custom NFS-neon look without needing
+  // Mapbox Studio setup.
   map = new mapboxgl.Map({{
     container: 'map',
-    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    style: 'mapbox://styles/mapbox/dark-v11',
     center: [20, 20],
     zoom: 1.4,
     projection: 'globe',
@@ -1262,8 +1264,145 @@ async def mapbox_html(token: str):
     attributionControl: false,
     antialias: true,
   }});
+  // GeoBeats neon palette (mirrors the NFS aesthetic from the rest of the app)
+  const PALETTE = {{
+    bg:           '#05010f', // outer space / void behind the globe
+    land:         '#1a0a2e', // continent base — visible at all zooms
+    landAccent:   '#231038', // urban/man-made tint
+    park:         '#0c1f12', // dim green-purple parks
+    water:        '#02060f', // deep ocean — near black with cyan undertone
+    waterDeep:    '#03081a', // intracoastal water
+    road:         '#1a0e2c', // local streets
+    roadCase:     '#000000', // road outlines
+    roadArterial: '#321648', // bigger streets
+    roadStroke:   '#7a1ec2', // glow stroke for arterials
+    highway:      '#FF00AA', // magenta highway body
+    highwayCase:  '#00E5FF', // cyan highway glow
+    interstate:   '#FF1493', // pink interstate
+    interstateCase: '#00FFE5',
+    label:        '#00E5FF', // city / general labels (cyan)
+    labelCountry: '#FF66E0', // country labels (hot pink)
+    labelStroke:  '#000000',
+    labelDim:     '#B026FF', // smaller / neighborhood labels
+    border:       '#FF00AA',
+    borderCountry:'#FF1493',
+    building:     '#180a25', // extruded building base
+    buildingTop:  '#2a1145', // building top accent (taller = lighter)
+  }};
+  function paintGeoBeats(){{
+    if (!map || !map.getStyle()) return;
+    const layers = map.getStyle().layers || [];
+    const set = (id, prop, val) => {{ try {{ if (map.getLayer(id)) map.setPaintProperty(id, prop, val); }} catch(e) {{}} }};
+    const setLayout = (id, prop, val) => {{ try {{ if (map.getLayer(id)) map.setLayoutProperty(id, prop, val); }} catch(e) {{}} }};
+    // Background / land base
+    set('background', 'background-color', PALETTE.bg);
+    set('land', 'background-color', PALETTE.land);
+    // Iterate through every layer and apply rules by id pattern + type
+    layers.forEach(L => {{
+      const id = L.id, type = L.type;
+      // ----- WATER -----
+      if (id.includes('water') && type === 'fill') {{
+        set(id, 'fill-color', PALETTE.water);
+      }}
+      if (id === 'waterway' || id.includes('waterway')) {{
+        set(id, 'line-color', PALETTE.waterDeep);
+      }}
+      // ----- LANDCOVER / LAND -----
+      if (type === 'fill' && (id.includes('land') || id.includes('landcover'))) {{
+        if (id.includes('park') || id.includes('grass') || id.includes('wood') || id.includes('crop')) {{
+          set(id, 'fill-color', PALETTE.park);
+        }} else if (id.includes('sand') || id.includes('rock') || id.includes('snow')) {{
+          set(id, 'fill-color', PALETTE.landAccent);
+        }} else {{
+          set(id, 'fill-color', PALETTE.land);
+        }}
+      }}
+      if (id.includes('park') && type === 'fill') {{
+        set(id, 'fill-color', PALETTE.park);
+      }}
+      // ----- ROADS (lowest -> highest priority) -----
+      // Local / minor streets
+      if ((id.includes('road-street') || id.includes('road-minor') || id.includes('road-path') || id.includes('road-pedestrian')) && type === 'line') {{
+        set(id, 'line-color', PALETTE.road);
+      }}
+      // Arterial / secondary / tertiary
+      if ((id.includes('road-secondary') || id.includes('road-tertiary') || id.includes('road-primary')) && type === 'line') {{
+        if (id.endsWith('-case')) {{
+          set(id, 'line-color', PALETTE.roadStroke);
+        }} else {{
+          set(id, 'line-color', PALETTE.roadArterial);
+        }}
+      }}
+      // Trunk / motorway case = cyan glow rim
+      if ((id.includes('road-trunk') || id.includes('road-motorway')) && type === 'line') {{
+        if (id.endsWith('-case')) {{
+          set(id, 'line-color', PALETTE.highwayCase);
+        }} else if (id.includes('motorway')) {{
+          set(id, 'line-color', PALETTE.highway);
+        }} else {{
+          set(id, 'line-color', PALETTE.interstate);
+        }}
+      }}
+      // Bridges / tunnels reuse same patterns (already covered above)
+      // ----- BUILDINGS -----
+      if (id === 'building' && type === 'fill') {{
+        set(id, 'fill-color', PALETTE.building);
+        set(id, 'fill-outline-color', PALETTE.roadStroke);
+      }}
+      if (id === 'building-extrusion' && type === 'fill-extrusion') {{
+        set(id, 'fill-extrusion-color', PALETTE.building);
+        // Taller buildings glow purple at the top via interpolation on height
+        set(id, 'fill-extrusion-opacity', 0.85);
+      }}
+      // ----- BORDERS -----
+      if (id.includes('admin-0') && type === 'line') {{
+        set(id, 'line-color', PALETTE.borderCountry);
+        set(id, 'line-width', ['interpolate', ['linear'], ['zoom'], 1, 0.6, 6, 1.4]);
+      }}
+      if (id.includes('admin-1') && type === 'line') {{
+        set(id, 'line-color', PALETTE.border);
+      }}
+      // ----- LABELS -----
+      if (type === 'symbol') {{
+        if (id.includes('country')) {{
+          set(id, 'text-color', PALETTE.labelCountry);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+          set(id, 'text-halo-width', 2);
+        }} else if (id.includes('settlement') || id.includes('place') || id.includes('state') || id.includes('continent')) {{
+          set(id, 'text-color', PALETTE.label);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+          set(id, 'text-halo-width', 2);
+        }} else if (id.includes('road')) {{
+          set(id, 'text-color', PALETTE.labelCountry);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+        }} else if (id.includes('poi') || id.includes('transit') || id.includes('airport')) {{
+          // Hide POI labels for cleaner Snap-style look
+          setLayout(id, 'visibility', 'none');
+        }} else {{
+          set(id, 'text-color', PALETTE.labelDim);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+        }}
+      }}
+      // Hide POI dots / icons
+      if (type === 'circle' && id.includes('poi')) {{
+        setLayout(id, 'visibility', 'none');
+      }}
+    }});
+    // Extra: ensure building-extrusion has subtle glow gradient by height
+    try {{
+      if (map.getLayer('building-extrusion')) {{
+        map.setPaintProperty('building-extrusion', 'fill-extrusion-color', [
+          'interpolate', ['linear'], ['get', 'height'],
+          0, PALETTE.building,
+          50, PALETTE.building,
+          150, '#2a1145',
+          300, '#3a1660'
+        ]);
+      }}
+    }} catch(e) {{}}
+  }}
   map.on('style.load', () => {{
-    // Snapchat-style atmospheric fog + stars in space
+    // Atmospheric fog (Snapchat-style cyan halo + space backdrop)
     map.setFog({{
       color: 'rgb(186, 210, 235)',
       'high-color': 'rgb(36, 92, 223)',
@@ -1271,6 +1410,8 @@ async def mapbox_html(token: str):
       'space-color': 'rgb(8, 4, 18)',
       'star-intensity': 0.85
     }});
+    // Apply our GeoBeats neon palette
+    paintGeoBeats();
     document.getElementById('status').style.display = 'none';
     post({{ type: 'map:ready' }});
   }});
