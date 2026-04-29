@@ -877,6 +877,149 @@ async def asciitext_html():
     return Response(content=ASCIITEXT_HTML, media_type="text/html")
 
 
+STARBORDER_HTML = """<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<title>StarBorder</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
+  .star-border-container {
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    border-radius:999px;
+    overflow:hidden;
+    width:100%;
+    height:100%;
+    border:none;
+    background:transparent;
+    cursor:pointer;
+    -webkit-tap-highlight-color: transparent;
+    padding:0;
+  }
+  .border-gradient-bottom {
+    position:absolute;
+    width:300%;
+    height:50%;
+    opacity:0.7;
+    bottom:-12px;
+    right:-250%;
+    border-radius:50%;
+    animation: star-movement-bottom linear infinite alternate;
+    z-index:0;
+    pointer-events:none;
+  }
+  .border-gradient-top {
+    position:absolute;
+    opacity:0.7;
+    width:300%;
+    height:50%;
+    top:-12px;
+    left:-250%;
+    border-radius:50%;
+    animation: star-movement-top linear infinite alternate;
+    z-index:0;
+    pointer-events:none;
+  }
+  .inner-content {
+    position:relative;
+    border:1px solid #222;
+    background:#000;
+    color:#fff;
+    font-size:15px;
+    font-weight:900;
+    letter-spacing:1.5px;
+    text-align:center;
+    padding:18px 26px;
+    border-radius:999px;
+    z-index:1;
+    user-select:none;
+    width:calc(100% - 6px);
+    height:calc(100% - 6px);
+    margin:3px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition: transform 0.12s ease;
+  }
+  .star-border-container:active .inner-content { transform: scale(0.98); }
+  .star-border-container.is-busy { cursor: default; }
+  .star-border-container.is-busy .inner-content { color: rgba(255,255,255,0.6); }
+  @keyframes star-movement-bottom {
+    0% { transform: translate(0%, 0%); opacity:1; }
+    100% { transform: translate(-100%, 0%); opacity:0; }
+  }
+  @keyframes star-movement-top {
+    0% { transform: translate(0%, 0%); opacity:1; }
+    100% { transform: translate(100%, 0%); opacity:0; }
+  }
+  .dot { width:6px; height:6px; border-radius:50%; background:#fff; margin:0 3px; opacity:0.4;
+    animation: dot-pulse 1.2s ease-in-out infinite; }
+  .dot:nth-child(2){ animation-delay:0.15s; }
+  .dot:nth-child(3){ animation-delay:0.3s; }
+  @keyframes dot-pulse {
+    0%,80%,100% { opacity:0.3; transform:scale(0.85); }
+    40% { opacity:1; transform:scale(1); }
+  }
+</style>
+</head>
+<body>
+<button class="star-border-container" id="btn" type="button">
+  <div class="border-gradient-bottom" id="bg-bot"></div>
+  <div class="border-gradient-top" id="bg-top"></div>
+  <div class="inner-content" id="label">CONNECT</div>
+</button>
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const color = params.get('color') || '#D4FF00';
+  const speed = params.get('speed') || '5s';
+  const label = params.get('label') || 'CONNECT WITH SPOTIFY';
+  const busy = params.get('busy') === '1';
+  const top = document.getElementById('bg-top');
+  const bot = document.getElementById('bg-bot');
+  const btn = document.getElementById('btn');
+  const lab = document.getElementById('label');
+  const grad = `radial-gradient(circle, ${color}, transparent 10%)`;
+  top.style.background = grad;
+  bot.style.background = grad;
+  top.style.animationDuration = speed;
+  bot.style.animationDuration = speed;
+  if (busy) {
+    btn.classList.add('is-busy');
+    lab.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+  } else {
+    lab.textContent = label;
+  }
+  function fire(){
+    if (busy) return;
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage('star_press');
+    } else if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage({ __starborder_press: true }, '*'); } catch(e) {}
+    }
+  }
+  // Use both click and touchend so iOS/Android WebViews fire reliably without
+  // 300ms tap delay. Prevent the synthesized click after touchend.
+  let touched = false;
+  btn.addEventListener('touchend', (e)=>{ touched = true; e.preventDefault(); fire(); }, { passive:false });
+  btn.addEventListener('click', ()=>{ if (touched) { touched = false; return; } fire(); });
+})();
+</script>
+</body></html>
+"""
+
+
+@api_router.get("/starborder.html")
+async def starborder_html():
+    return Response(content=STARBORDER_HTML, media_type="text/html")
+
+
 @api_router.post("/spotify/queue")
 async def spotify_queue(body: QueueRequest):
     try:

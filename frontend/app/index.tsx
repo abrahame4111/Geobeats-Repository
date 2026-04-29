@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ActivityIndicator,
   Platform,
 } from "react-native";
@@ -15,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { getLoginUrl, loadAuth, saveAuth, StoredAuth } from "../src/api";
 import PixelBlastBackground from "../src/components/PixelBlastBackground";
 import ASCIIText from "../src/components/ASCIIText";
+import StarBorder from "../src/components/StarBorder";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -188,22 +188,15 @@ export default function Login() {
       </View>
 
       <View style={styles.ctaWrap}>
-        <TouchableOpacity
-          style={[styles.cta, busy && styles.ctaDisabled]}
+        <StarBorder
+          label="CONNECT WITH SPOTIFY"
+          color="#D4FF00"
+          speed="5s"
+          busy={busy}
           onPress={handleLogin}
-          disabled={busy}
+          height={64}
           testID="login-spotify-button"
-          activeOpacity={0.85}
-        >
-          {busy ? (
-            <ActivityIndicator color="#000" />
-          ) : (
-            <>
-              <Ionicons name="logo-bitbucket" size={22} color="#000" />
-              <Text style={styles.ctaText}>CONNECT WITH SPOTIFY</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        />
         {err && (
           <Text style={styles.err} testID="login-error">
             {err}
@@ -275,26 +268,6 @@ const styles = StyleSheet.create({
   },
   featureText: { color: "#fff", fontSize: 15, fontWeight: "500", flex: 1 },
   ctaWrap: { gap: 14 },
-  cta: {
-    backgroundColor: "#D4FF00",
-    borderRadius: 999,
-    paddingVertical: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    shadowColor: "#D4FF00",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 0 },
-  },
-  ctaDisabled: { opacity: 0.6 },
-  ctaText: {
-    color: "#000",
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 1,
-  },
   err: { color: "#FF4500", textAlign: "center", fontSize: 13 },
   fineprint: {
     color: "rgba(255,255,255,0.4)",

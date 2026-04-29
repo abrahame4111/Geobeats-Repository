@@ -119,6 +119,9 @@ frontend:
         -working: "NA"
         -agent: "main"
         -comment: "Reworked: RN side now passes measured viewport (useWindowDimensions + onLayout) into the WebView via injectedJavaScriptBeforeContentLoaded as window.__RN_VIEWPORT. HTML's setSize() reads __RN_VIEWPORT first; CSS swapped from position:fixed/100vw/100vh to position:absolute/100% with explicit canvas pixel sizing. WebView is keyed on size to remount on rotation. Web preview verified visually. Awaiting user verification on Expo Go mobile."
+        -working: "NA"
+        -agent: "main"
+        -comment: "Tuned PixelBlast props (pixelSize 6→4, density 1.2→1.6, edgeFade 0.25→0, etc.) for richer edge-to-edge fill. Replaced lime CTA button with StarBorder component (new /api/starborder.html endpoint + StarBorder.tsx WebView wrapper). Bitbucket icon removed, plain text 'CONNECT WITH SPOTIFY' kept. onPress bridged via window.ReactNativeWebView.postMessage('star_press')."
 
 metadata:
   created_by: "main_agent"
