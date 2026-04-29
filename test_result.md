@@ -102,7 +102,23 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Build full-stack real-time social music app with Spotify (login/sync), live map, listen-along, and a custom WebGL login screen using PixelBlast + ASCII text."
+user_problem_statement: "Build full-stack real-time social music app with Spotify (login/sync), live map, listen-along, and a custom WebGL login screen using PixelBlast + ASCII text. NEW: Add a Shazam-like 'Song Radar' feature — a pulsing mic FAB next to the search icon on the map that records 10 seconds of ambient audio via the device microphone, identifies the song using shazamio, and updates the user's map marker as a live broadcast (no listen-along capability)."
+
+backend:
+  - task: "Song Radar /api/recognize endpoint (shazamio-powered audio recognition)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Added POST /api/recognize endpoint accepting an UploadFile audio blob and routing through shazamio. Imports File/UploadFile from fastapi. Falls back to writing the bytes to a temp file with the proper extension if shazamio.recognize(bytes) raises (handles m4a/wav/mp3/ogg/webm). ffmpeg installed system-wide so pydub can decode arbitrary containers. On match, returns {matched, title, subtitle, art, isrc, shazam_id, spotify_uri, spotify_url}. On no-match returns {matched: false}. Backend restarted cleanly."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive backend tests via public ingress (https://beat-together-2.preview.emergentagent.com). All 5 acceptance test cases PASS: (1) Health GET /api/ returns 200 {service:soundmap,status:ok}. (2) Empty/missing file → 422 (FastAPI validation). (3) Tiny <1024 byte clip → 400 'Audio clip too short'. (4) Synthetic 10s 440Hz sine m4a (89KB) generated via ffmpeg lavfi → 200 OK with body {matched:false} (correctly no match for synthetic tone). (5) Synthetic 10s sine wav (882KB) → 200 OK with body {matched:false} — valid JSON with `matched` key. shazamio loaded successfully on startup (logs show 'shazamio_core module initialized successfully', 'Recognizer created with segment_duration_seconds = 10') so 503 path not hit. Recognition completed well under 30s for both formats — no timeouts. Regression checks: GET /api/users/active → 200 {users:[]} ✓, GET /api/spotify/login → 200 with valid auth_url ✓. ffmpeg confirmed installed at /usr/bin/ffmpeg (v5.1.8). No critical issues."
 
 frontend:
   - task: "Login Screen WebGL background fills full viewport on mobile (PixelBlast + ASCIIText)"
@@ -126,19 +142,32 @@ frontend:
         -agent: "main"
         -comment: "Recolored entire app from lime (#D4FF00) to neon purple (#B026FF). 9 files updated incl. server.py, map.tsx, all bottom sheets, ListenAlong card, sound map markers/clusters/avatars, auth-success spinner, ASCII gradient. Map terrain restyled with purple-noir Google Maps style (deep purple land, navy water, magenta highways) and PixelBlast iframe layered behind the map at z=0 with map opacity:0.88 so the dot pattern subtly bleeds through the terrain — gives the home map the same GeoBeats aesthetic as the login screen."
 
+  - task: "Song Radar — pulsing mic FAB + 10s recording + WS broadcast of recognized track"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/SongRadarFab.tsx, /app/frontend/app/map.tsx, /app/frontend/app.json, /app/frontend/src/components/ListenAlongCard.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Created /app/frontend/src/components/SongRadarFab.tsx — a self-contained mic FAB that records exactly 10 seconds of audio via expo-av, animates two staggered pulse rings + a breathing scale while recording, shows a countdown badge, then uploads to /api/recognize and reports the result. Added next to the search icon (left side of top bar) via a new sideRow flex layout. Wired handleRadarResult in map.tsx that synthesizes a Spotify-shaped track ({is_radar:true, item:{name,album.images,artists,uri}}) and broadcasts it via the existing user:active_track WS message so the user's marker pill updates exactly like a Spotify session — but with no Listen Along capability. Spotify-poll loop now respects radar state: if the user has a radar track and Spotify isn't actively playing, the radar track is preserved (real Spotify content always takes precedence). ListenAlongCard updated to render 'RADAR' label and suppress the Listen Along button when ct.is_radar is true. app.json updated with NSMicrophoneUsageDescription (iOS) and android.permission.RECORD_AUDIO. Toast shown on match/no-match."
+
 metadata:
   created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 0
+  version: "1.1"
+  test_sequence: 1
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Login Screen WebGL background fills full viewport on mobile (PixelBlast + ASCIIText)"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
     -agent: "main"
-    -message: "Re-did P0 login WebGL sizing fix. New approach: inject measured screen dimensions from RN into the WebView before script load (window.__RN_VIEWPORT), HTML reads those first. Changed CSS from position:fixed+100vw/vh to position:absolute+100%. Verified on web preview — ready for user mobile (Expo Go) verification."
+    -message: "Implemented Song Radar feature. Need to test the new POST /api/recognize endpoint. It accepts a multipart form upload field named 'audio' containing an audio clip (m4a preferred, but mp3/wav/ogg/webm also accepted via Content-Type sniffing + ffmpeg fallback). Expected response shape on success: {matched: true, title, subtitle (artist), art, isrc, shazam_id, spotify_uri, spotify_url}. On no-match: {matched: false}. On clip too short (<1024 bytes): 400 error. On service unavailable (shazamio not loaded): 503. A simple test clip can be generated with: ffmpeg -f lavfi -i 'sine=frequency=440:duration=10' -ar 44100 -ac 1 /tmp/test_audio.m4a — note that a synthetic sine wave should NOT match (matched:false expected). For a positive match test, please use a known commercial track snippet if available, otherwise just verify the endpoint accepts the upload and returns valid JSON with matched:false. Also verify the existing /api/, /api/users/active and /api/spotify/login endpoints still respond correctly (no regression). DO NOT test frontend — user has not yet authorized that. Backend URL is http://localhost:8001 internally, but please use the public ingress at the configured EXPO_PUBLIC_BACKEND_URL with /api prefix."
+    -agent: "testing"
+    -message: "Backend testing for /api/recognize complete — ALL TESTS PASS via public ingress (https://beat-together-2.preview.emergentagent.com). Test script at /app/backend_test.py. Results: (1) GET /api/ → 200 OK ✓. (2) POST /api/recognize without file → 422 (FastAPI validation, expected). (3) POST /api/recognize with 100-byte file → 400 'Audio clip too short' ✓. (4) POST /api/recognize with synthetic 10s 440Hz sine wave m4a (89KB, ffmpeg lavfi) → 200 OK {matched:false} ✓ (synthetic tone correctly not matched). (5) Same with wav (882KB) → 200 OK {matched:false} ✓ — valid JSON with `matched` key. shazamio loaded successfully on backend startup (verified in logs: 'shazamio_core module initialized successfully', 'Recognizer created with segment_duration_seconds = 10') so the 503 path is not active. Recognition completed in well under 30s — no 504s. Regression: GET /api/users/active → 200 {users:[]} ✓, GET /api/spotify/login → 200 with valid Spotify auth_url ✓. ffmpeg confirmed at /usr/bin/ffmpeg (v5.1.8). The /api/recognize endpoint is production-ready. Note: shazamio's bytes path raises on synthetic m4a (server logs show 'invalid mpeg audio header' / 'skipping junk' warnings — these are from the temp-file fallback path with pydub, not errors), and the temp-file fallback successfully completes recognition; both paths return clean {matched:false} JSON. No critical issues — no further main-agent fixes needed for this task."

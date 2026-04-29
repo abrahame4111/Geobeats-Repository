@@ -17,6 +17,7 @@ import SoundMapView, { MapMarker, SoundMapHandle } from "../src/components/Sound
 import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
 import SearchSheet from "../src/components/SearchSheet";
+import SongRadarFab, { RadarResult } from "../src/components/SongRadarFab";
 import FloatingReactions, { FloatingReaction } from "../src/components/FloatingReactions";
 import ListenersSheet from "../src/components/ListenersSheet";
 import {
@@ -385,6 +386,10 @@ export default function MapScreen() {
   };
 
   // ---- Poll my own currently-playing & broadcast ----
+  // Radar takes precedence when Spotify is silent — we use a ref so the
+  // polling closure can read the latest state without re-subscribing.
+  const myTrackRef = useRef<any>(null);
+  useEffect(() => { myTrackRef.current = myTrack; }, [myTrack]);
   useEffect(() => {
     if (!auth) return;
     const pull = async () => {
@@ -420,6 +425,31 @@ export default function MapScreen() {
             autoStopArmedRef.current = false;
           }
           lastUriRef.current = newUri;
+        }
+
+        // If we're broadcasting a radar match (mic-recognized song) and
+        // Spotify isn't actually playing anything right now, preserve the
+        // radar track. Real Spotify content (`item` truthy) takes precedence.
+        const inRadar = !!myTrackRef.current?.is_radar;
+        if (inRadar && !item) {
+          // Don't overwrite. Re-broadcast existing radar track to keep peers in sync.
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: "user:active_track",
+                track: myTrackRef.current,
+                is_playing: true,
+                position_ms: 0,
+              })
+            );
+          }
+          // Still update Spotify-active-device flag.
+          try {
+            const dev: any = await getDevices(auth);
+            const list = dev?.devices || [];
+            setHasSpotify(list.length > 0);
+          } catch {}
+          return;
         }
 
         setMyTrack(item ? { item } : null);
@@ -606,6 +636,60 @@ export default function MapScreen() {
     router.replace("/");
   };
 
+  // ---- Song Radar (Shazam-style mic recognition) ----
+  // When recognition succeeds, we synthesize a Spotify-shaped track object so
+  // existing rendering paths (marker pill, ListenAlongCard, peer broadcast)
+  // light up identically. We tag it with `is_radar: true` so the
+  // ListenAlongCard can suppress the "Listen Along" CTA — radar broadcasts
+  // are observation-only (no synced playback).
+  const handleRadarResult = (r: RadarResult) => {
+    if (!r || !r.matched) {
+      setToast({
+        title: "NO MATCH",
+        subtitle: r && (r as any).error
+          ? "Try again with clearer audio"
+          : "Couldn't identify the song around you",
+        tone: "ghost",
+      });
+      setTimeout(() => setToast(null), 2000);
+      return;
+    }
+    const title = r.title || "Unknown";
+    const artist = r.subtitle || "";
+    const art = r.art || "";
+    const radarTrack = {
+      is_radar: true,
+      item: {
+        // Use just the song title in the marker pill — artist appears in card.
+        name: title,
+        uri: r.spotify_uri || (r.shazam_id ? `shazam:${r.shazam_id}` : "shazam:radar"),
+        external_urls: r.spotify_url ? { spotify: r.spotify_url } : undefined,
+        album: { images: art ? [{ url: art }] : [] },
+        artists: artist ? [{ name: artist }] : [],
+      },
+    } as any;
+    setMyTrack(radarTrack);
+    setMyIsPlaying(true);
+    setHasSpotify(true); // keep the player UI lit
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "user:active_track",
+          track: radarTrack,
+          is_playing: true,
+          position_ms: 0,
+        })
+      );
+    }
+    setToast({
+      title: "RADAR MATCH",
+      subtitle: artist ? `${title} — ${artist}` : title,
+      tone: "live",
+    });
+    setTimeout(() => setToast(null), 2400);
+  };
+
   if (loading || !auth) {
     return (
       <View style={styles.loadingWrap}>
@@ -629,15 +713,18 @@ export default function MapScreen() {
       <View style={styles.topBar} pointerEvents="box-none">
         <View style={styles.topBarInner}>
           <View style={styles.sideSpacer}>
-            <TouchableOpacity
-              onPress={() => setSearchOpen(true)}
-              style={styles.ghostBtn}
-              testID="search-toggle"
-              activeOpacity={0.8}
-              hitSlop={8}
-            >
-              <Ionicons name="search" size={19} color="#B026FF" />
-            </TouchableOpacity>
+            <View style={styles.sideRow}>
+              <TouchableOpacity
+                onPress={() => setSearchOpen(true)}
+                style={styles.ghostBtn}
+                testID="search-toggle"
+                activeOpacity={0.8}
+                hitSlop={8}
+              >
+                <Ionicons name="search" size={19} color="#B026FF" />
+              </TouchableOpacity>
+              <SongRadarFab onResult={handleRadarResult} />
+            </View>
           </View>
           <View style={styles.liveCount} testID="live-count">
             <View style={[styles.liveDot, (!broadcastOn || !wsConnected) && styles.liveDotMuted]} />
@@ -873,6 +960,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  sideRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   locateFab: {
     position: "absolute",

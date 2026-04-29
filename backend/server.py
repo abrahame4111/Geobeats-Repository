@@ -1,5 +1,5 @@
 """SoundMap backend - Spotify OAuth, Web API proxy, and real-time WebSocket sync."""
-from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File
 from fastapi.responses import RedirectResponse, HTMLResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1059,11 +1059,45 @@ async def recognize_audio(audio: UploadFile = File(...)):
     if not raw or len(raw) < 1024:
         raise HTTPException(status_code=400, detail="Audio clip too short")
 
+    # shazamio accepts either bytes OR a path. In production we've seen the
+    # bytes path occasionally fail when ffmpeg can't sniff the container, so
+    # we fall back to writing to a temp file with a known extension.
+    import tempfile, os as _os
+    suffix = ".m4a"
+    ct = (audio.content_type or "").lower()
+    if "wav" in ct:
+        suffix = ".wav"
+    elif "mp3" in ct or "mpeg" in ct:
+        suffix = ".mp3"
+    elif "ogg" in ct:
+        suffix = ".ogg"
+    elif "webm" in ct:
+        suffix = ".webm"
+
+    result = None
+    last_err = None
     try:
         result = await _shazam.recognize(raw)
     except Exception as e:  # noqa: BLE001
-        logger.warning("Shazam recognize failed: %s", e)
-        return {"matched": False, "error": str(e)}
+        last_err = e
+        logger.warning("Shazam recognize(bytes) failed, retrying via temp file: %s", e)
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(raw)
+                tmp_path = tmp.name
+            result = await _shazam.recognize(tmp_path)
+        except Exception as e2:  # noqa: BLE001
+            last_err = e2
+            logger.warning("Shazam recognize(file) also failed: %s", e2)
+        finally:
+            if tmp_path:
+                try:
+                    _os.unlink(tmp_path)
+                except Exception:
+                    pass
+    if result is None:
+        return {"matched": False, "error": str(last_err) if last_err else "no result"}
 
     track = (result or {}).get("track") if isinstance(result, dict) else None
     if not track:

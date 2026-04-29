@@ -29,8 +29,9 @@ function extractTrack(ct: any) {
   const name = item?.name || "";
   const artists = (item?.artists || []).map((a: any) => a.name).join(", ");
   const art = item?.album?.images?.[0]?.url || "";
+  const isRadar = !!ct.is_radar;
   if (!name) return null;
-  return { name, artists, art };
+  return { name, artists, art, isRadar };
 }
 
 /**
@@ -95,8 +96,10 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
 
   const t = displayed;
   const isPlaying = !!user.is_playing && !!t;
+  const isRadar = !!t?.isRadar;
   const showTrack = isPlaying;
-  const showButton = isPlaying && !isActiveSession && !isSelf;
+  // Radar broadcasts have no synced playback — suppress the Listen Along CTA.
+  const showButton = isPlaying && !isActiveSession && !isSelf && !isRadar;
   const showReactions = isPlaying && !isSelf && !!onReact;
 
   return (
@@ -113,7 +116,7 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
           <View style={styles.liveRow}>
             <View style={[styles.dot, !isPlaying && styles.dotMuted]} />
             <Text style={styles.liveLabel}>
-              {isPlaying ? (isActiveSession ? "LISTENING ALONG" : "NOW PLAYING") : "PAUSED"}
+              {isPlaying ? (isActiveSession ? "LISTENING ALONG" : isRadar ? "RADAR" : "NOW PLAYING") : "PAUSED"}
             </Text>
           </View>
         </View>
