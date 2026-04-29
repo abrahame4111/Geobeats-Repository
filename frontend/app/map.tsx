@@ -702,7 +702,20 @@ export default function MapScreen() {
       {selectedUser && (
         <ListenAlongCard
           user={selectedUser as any}
-          onClose={() => setSelectedUserId(null)}
+          onClose={() => {
+            // If the user is currently in a listen-along session and closes
+            // the card via the X (which becomes an "exit" icon), also leave
+            // the session so we don't keep syncing in the background.
+            if (hostId && hostId === selectedUser.user_id) {
+              const ws = wsRef.current;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send(JSON.stringify({ type: "session:leave" })); } catch {}
+              }
+              setHostId(null);
+              setSyncStatus("idle");
+            }
+            setSelectedUserId(null);
+          }}
           onListenAlong={handleListenAlong}
           onReact={(emoji) => sendReaction(selectedUser.user_id, emoji)}
           busy={listenLoading}
