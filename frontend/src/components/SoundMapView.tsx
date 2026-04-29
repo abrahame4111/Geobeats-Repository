@@ -242,10 +242,16 @@ function buildHtml(apiKey: string): string {
 function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
-    // Cache-buster ensures the WebView fetches a fresh /api/map.html every
+    const mbxToken = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "";
+    // Cache-buster ensures the WebView fetches a fresh /api/mapbox.html every
     // mount — important for picking up backend HTML/style changes during
     // active development without needing to clear app data.
     const cacheBust = `&_v=${Date.now()}`;
+    // Use Mapbox globe view (Snapchat-style) when a token is configured,
+    // fall back to the legacy Google Maps page if not.
+    if (mbxToken) {
+      return `${base}/api/mapbox.html?token=${encodeURIComponent(mbxToken)}${cacheBust}`;
+    }
     return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}${cacheBust}`;
   }, [apiKey]);
   const iframeRef = useRef<any>(null);

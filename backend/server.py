@@ -1099,6 +1099,178 @@ async def root():
     return {"service": "soundmap", "status": "ok"}
 
 
+@api_router.get("/mapbox.html")
+async def mapbox_html(token: str):
+    """Mapbox GL JS globe view — Snapchat-style 3D Earth with atmosphere,
+    stars, and satellite terrain. The marker/message protocol matches
+    /api/map.html so the SoundMapView WebView swap is drop-in."""
+    html = f"""<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<style>
+  html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#000; overflow: hidden; }}
+  #status {{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; pointer-events:none; z-index:5; }}
+  .bubble {{
+    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+    pointer-events: auto;
+    cursor: pointer;
+    transform-origin: 50% 100%;
+  }}
+  .avatar-wrap {{
+    width: 56px; height: 56px; border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, #B026FF, #7E1FB8);
+    box-shadow: 0 6px 20px rgba(176,38,255,0.45), 0 0 0 1px rgba(255,255,255,0.08);
+  }}
+  .avatar-wrap img {{
+    width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
+    background: #1a0a24;
+  }}
+  .pill {{
+    margin-top: 4px;
+    background: rgba(0,0,0,0.78);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: -apple-system, sans-serif;
+    max-width: 160px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border: 1px solid rgba(176,38,255,0.6);
+    display: flex; align-items: center; gap: 6px;
+  }}
+  .pill .dot {{ width: 6px; height: 6px; border-radius: 50%; background:#B026FF; box-shadow: 0 0 6px #B026FF; flex-shrink: 0; }}
+  .self .avatar-wrap {{ background: linear-gradient(135deg, #00E5FF, #B026FF); box-shadow: 0 6px 24px rgba(0,229,255,0.55); }}
+  .host .avatar-wrap {{ background: linear-gradient(135deg, #FF1493, #B026FF); box-shadow: 0 6px 24px rgba(255,20,147,0.6); }}
+  /* Hide Mapbox attribution for cleaner UI (still link in console per Mapbox ToS for free tier) */
+  .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-bottom-left {{ display: none !important; }}
+</style>
+</head><body>
+<div id="map"></div>
+<div id="status">Initializing globe…</div>
+<script>
+(function(){{
+  mapboxgl.accessToken = {token!r};
+  const meIdRef = {{ id: null }};
+  const markers = {{}};
+  let map;
+  let userInteracting = false;
+  let spinEnabled = true;
+  function post(msg){{
+    try {{
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {{
+        window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+      }} else if (window.parent && window.parent !== window) {{
+        window.parent.postMessage(msg, '*');
+      }}
+    }} catch(e) {{}}
+  }}
+  function makeBubbleEl(u){{
+    const el = document.createElement('div');
+    el.className = 'bubble' + (u.isSelf ? ' self' : '') + (u.host_session ? ' host' : '');
+    const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
+    const track = u.current_track && u.current_track.name ? u.current_track.name : '';
+    el.innerHTML = '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
+                   (track ? '<div class="pill"><span class="dot"></span><span>'+track.replace(/[<>&]/g,'')+'</span></div>' : '');
+    el.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
+    return el;
+  }}
+  function upsertMarker(u){{
+    if (!u.lat || !u.lng) return;
+    if (u.user_id && meIdRef.id && u.user_id === meIdRef.id && !window.__flown) {{
+      window.__flown = true;
+      spinEnabled = false;
+      // Cinematic fly from globe to user location
+      map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
+    }}
+    const existing = markers[u.user_id];
+    if (existing) {{
+      existing.setLngLat([u.lng, u.lat]);
+      existing.getElement().replaceWith(makeBubbleEl(u));
+      // re-bind because replaceWith disconnects: easier to recreate
+      existing.remove();
+      delete markers[u.user_id];
+    }}
+    const el = makeBubbleEl(u);
+    const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom' }})
+      .setLngLat([u.lng, u.lat]).addTo(map);
+    markers[u.user_id] = m;
+  }}
+  function removeMarker(uid){{
+    const m = markers[uid];
+    if (m) {{ m.remove(); delete markers[uid]; }}
+  }}
+  // RN -> map message bridge
+  function handle(msg){{
+    if (typeof msg === 'string') {{ try {{ msg = JSON.parse(msg); }} catch(e) {{ return; }} }}
+    if (!msg || !msg.type) return;
+    if (msg.type === 'me:set') meIdRef.id = msg.user_id;
+    else if (msg.type === 'markers:bulk') {{ (msg.users||[]).forEach(upsertMarker); }}
+    else if (msg.type === 'marker:upsert') upsertMarker(msg.user);
+    else if (msg.type === 'marker:remove') removeMarker(msg.user_id);
+    else if (msg.type === 'center') {{ if (map) map.flyTo({{ center: [msg.lng, msg.lat], zoom: msg.zoom||14, pitch: 45, essential: true }}); }}
+  }}
+  window.__handle = handle;
+  document.addEventListener('message', e => handle(e.data));
+  window.addEventListener('message', e => handle(e.data));
+  // Init globe
+  map = new mapboxgl.Map({{
+    container: 'map',
+    style: 'mapbox://styles/mapbox/satellite-streets-v12',
+    center: [20, 20],
+    zoom: 1.4,
+    projection: 'globe',
+    pitch: 0,
+    bearing: 0,
+    attributionControl: false,
+    antialias: true,
+  }});
+  map.on('style.load', () => {{
+    // Snapchat-style atmospheric fog + stars in space
+    map.setFog({{
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(36, 92, 223)',
+      'horizon-blend': 0.05,
+      'space-color': 'rgb(8, 4, 18)',
+      'star-intensity': 0.85
+    }});
+    document.getElementById('status').style.display = 'none';
+    post({{ type: 'map:ready' }});
+  }});
+  map.on('error', (e) => {{
+    const s = document.getElementById('status');
+    s.textContent = 'Map error: ' + (e && e.error && e.error.message || 'unknown');
+    s.style.color = '#FF4500';
+  }});
+  // Slow auto-rotation when idle and zoomed out (Snapchat-style ambient spin)
+  function spinGlobe(){{
+    if (!spinEnabled || userInteracting) return;
+    const z = map.getZoom();
+    if (z > 3) return; // stop spinning when user zoomed in
+    const c = map.getCenter();
+    c.lng = ((c.lng + 540) % 360) - 180; // normalize
+    c.lng -= 6; // step
+    map.easeTo({{ center: c, duration: 1500, easing: t => t }});
+  }}
+  map.on('moveend', spinGlobe);
+  map.on('mousedown', () => {{ userInteracting = true; }});
+  map.on('touchstart', () => {{ userInteracting = true; }});
+  map.on('dragstart', () => {{ userInteracting = true; spinEnabled = false; }});
+  map.on('zoomstart', () => {{ userInteracting = true; }});
+  map.on('moveend', () => {{ userInteracting = false; }});
+  // Kick off first spin once loaded
+  map.once('load', () => setTimeout(spinGlobe, 800));
+}})();
+</script>
+</body></html>"""
+    return Response(content=html, media_type="text/html")
+
+
 @api_router.get("/map.html")
 async def map_html(key: str):
     """Serve the map HTML so the WebView gets a proper HTTPS origin
