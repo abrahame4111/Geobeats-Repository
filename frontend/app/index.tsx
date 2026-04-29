@@ -143,7 +143,7 @@ export default function Login() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.root}>
       <PixelBlastBackground
         variant="circle"
         pixelSize={6}
@@ -164,6 +164,7 @@ export default function Login() {
       />
       {/* Subtle vertical scrim so text stays legible over the pixel pattern */}
       <View style={styles.scrim} pointerEvents="none" />
+      <SafeAreaView style={styles.container}>
 
       <View style={styles.top} testID="login-hero">
         <ASCIIText
@@ -171,7 +172,7 @@ export default function Login() {
           asciiFontSize={8}
           textFontSize={200}
           textColor="#fdf9f3"
-          planeBaseHeight={8}
+          planeBaseHeight={4}
           enableWaves
           style={styles.brandAscii}
         />
@@ -212,7 +213,8 @@ export default function Login() {
           By continuing, you agree to share your public profile and currently-playing track with other users on the map.
         </Text>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -228,9 +230,13 @@ function Feature({ icon, text }: { icon: any; text: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: "#05050A",
+  },
+  container: {
+    flex: 1,
+    backgroundColor: "transparent",
     paddingHorizontal: 28,
     justifyContent: "space-between",
     paddingVertical: 32,
