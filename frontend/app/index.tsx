@@ -146,21 +146,21 @@ export default function Login() {
     <View style={styles.root}>
       <PixelBlastBackground
         variant="circle"
-        pixelSize={6}
+        pixelSize={4}
         color="#D4FF00"
-        patternScale={3}
-        patternDensity={1.2}
-        pixelSizeJitter={0.5}
+        patternScale={2.5}
+        patternDensity={1.6}
+        pixelSizeJitter={0.6}
         enableRipples
-        rippleSpeed={0.4}
-        rippleThickness={0.12}
-        rippleIntensityScale={1.5}
+        rippleSpeed={0.5}
+        rippleThickness={0.14}
+        rippleIntensityScale={2}
         liquid
-        liquidStrength={0.12}
-        liquidRadius={1.2}
-        liquidWobbleSpeed={5}
-        speed={0.6}
-        edgeFade={0.25}
+        liquidStrength={0.15}
+        liquidRadius={1.4}
+        liquidWobbleSpeed={5.5}
+        speed={0.55}
+        edgeFade={0}
       />
       {/* Subtle vertical scrim so text stays legible over the pixel pattern */}
       <View style={styles.scrim} pointerEvents="none" />
