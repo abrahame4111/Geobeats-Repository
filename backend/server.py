@@ -1033,6 +1033,65 @@ async def geobeats_style_json():
     return Response(content=style_path.read_text(), media_type="application/json")
 
 
+# ---------------------------------------------------------------------------
+# Song Radar (Shazam-style audio recognition)
+# Uses the unofficial `shazamio` library which talks to Shazam's real
+# recognition servers. No API key required.
+# ---------------------------------------------------------------------------
+try:
+    from shazamio import Shazam  # type: ignore
+    _shazam = Shazam()
+except Exception as _e:  # noqa: BLE001
+    _shazam = None
+    logger.warning("shazamio unavailable: %s", _e)
+
+
+@api_router.post("/recognize")
+async def recognize_audio(audio: UploadFile = File(...)):
+    """Accepts a short audio clip (m4a/aac/wav, ideally 4-6s) and returns the
+    recognized track. Frontend sends this from a continuous "radar" loop so
+    the user's marker pill reflects the song around them in real time, even
+    when nothing is playing on Spotify."""
+    if _shazam is None:
+        raise HTTPException(status_code=503, detail="Recognition service unavailable")
+
+    raw = await audio.read()
+    if not raw or len(raw) < 1024:
+        raise HTTPException(status_code=400, detail="Audio clip too short")
+
+    try:
+        result = await _shazam.recognize(raw)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Shazam recognize failed: %s", e)
+        return {"matched": False, "error": str(e)}
+
+    track = (result or {}).get("track") if isinstance(result, dict) else None
+    if not track:
+        return {"matched": False}
+
+    # Pull a Spotify URI out of the providers list when available.
+    spotify_uri = None
+    spotify_url = None
+    for hub in (track.get("hub", {}) or {}).get("providers", []) or []:
+        if (hub.get("type") or "").lower() == "spotify":
+            for action in hub.get("actions") or []:
+                if action.get("uri"):
+                    spotify_uri = action["uri"]
+                if action.get("name") == "hub:spotify:searchdeeplink" and action.get("uri"):
+                    spotify_url = action["uri"]
+    images = track.get("images") or {}
+    return {
+        "matched": True,
+        "title": track.get("title"),
+        "subtitle": track.get("subtitle"),  # usually the primary artist
+        "art": images.get("coverart") or images.get("background"),
+        "isrc": (track.get("isrc")),
+        "shazam_id": track.get("key"),
+        "spotify_uri": spotify_uri,
+        "spotify_url": spotify_url,
+    }
+
+
 @api_router.post("/spotify/queue")
 async def spotify_queue(body: QueueRequest):
     try:
