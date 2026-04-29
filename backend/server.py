@@ -1022,6 +1022,233 @@ async def starborder_html():
     return Response(content=STARBORDER_HTML, media_type="text/html")
 
 
+# ---------------------------------------------------------------------------
+# TiltedCard (React Bits port — vanilla JS, no React/framer-motion required).
+# Renders a 3D-perspective tilting card driven by mouse/touch position with
+# spring smoothing. Used as the centerpiece of the "Song Found" radar modal.
+# Query params:
+#   src   = image URL (album art)
+#   alt   = alt text
+#   cap   = small caption shown on tooltip following the cursor
+#   title = bigger overlay text pinned to bottom-left of the card
+#   amp   = rotateAmplitude (default 14)
+#   sc    = scaleOnHover (default 1.10)
+#   w/h   = container size in px (default 320)
+#   iw/ih = image size in px (default = w/h)
+# ---------------------------------------------------------------------------
+TILTEDCARD_HTML = r"""<!doctype html>
+<html><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>TiltedCard</title>
+<style>
+  html,body{margin:0;padding:0;background:transparent;height:100%;width:100%;
+    -webkit-tap-highlight-color:transparent;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Inter","Helvetica Neue",sans-serif;}
+  .stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  .figure{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    perspective:800px;-webkit-perspective:800px;will-change:transform;}
+  .inner{position:relative;transform-style:preserve-3d;-webkit-transform-style:preserve-3d;
+    transform:translateZ(0);will-change:transform;}
+  .img{position:absolute;top:0;left:0;border-radius:18px;object-fit:cover;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,0.65),0 0 0 1px rgba(176,38,255,0.35),
+      0 0 60px rgba(176,38,255,0.35);
+    will-change:transform;transform:translateZ(0);}
+  .overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;
+    transform:translateZ(30px);-webkit-transform:translateZ(30px);
+    pointer-events:none;display:flex;align-items:flex-end;}
+  .overlay-inner{padding:14px 16px;width:100%;
+    background:linear-gradient(to top,rgba(0,0,0,0.75) 0%,rgba(0,0,0,0.35) 55%,rgba(0,0,0,0) 100%);
+    border-bottom-left-radius:18px;border-bottom-right-radius:18px;}
+  .overlay-title{color:#fff;font-weight:900;font-size:18px;letter-spacing:0.3px;line-height:1.2;
+    text-shadow:0 1px 8px rgba(0,0,0,0.6);}
+  .caption{pointer-events:none;position:absolute;left:0;top:0;
+    background:#fff;color:#0A0A12;border-radius:6px;padding:4px 10px;
+    font-size:11px;font-weight:700;letter-spacing:0.4px;opacity:0;z-index:3;
+    box-shadow:0 6px 18px rgba(0,0,0,0.35);white-space:nowrap;}
+  /* Subtle border sheen */
+  .img::after{content:"";position:absolute;inset:0;border-radius:18px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);}
+</style></head>
+<body>
+<div class="stage" id="stage">
+  <figure class="figure" id="figure">
+    <div class="inner" id="inner">
+      <img class="img" id="img" alt="" />
+      <div class="overlay" id="overlay" style="display:none">
+        <div class="overlay-inner"><div class="overlay-title" id="overlayTitle"></div></div>
+      </div>
+    </div>
+    <div class="caption" id="caption"></div>
+  </figure>
+</div>
+<script>
+(function(){
+  // ---- Read query params ---------------------------------------------------
+  var P = new URLSearchParams(location.search);
+  var src   = P.get('src') || '';
+  var alt   = P.get('alt') || 'Album art';
+  var cap   = P.get('cap') || '';
+  var title = P.get('title') || '';
+  var amp   = parseFloat(P.get('amp') || '14');
+  var sc    = parseFloat(P.get('sc')  || '1.10');
+  var W     = parseInt(P.get('w')  || '320', 10);
+  var H     = parseInt(P.get('h')  || '320', 10);
+  var IW    = parseInt(P.get('iw') || String(W), 10);
+  var IH    = parseInt(P.get('ih') || String(H), 10);
+  var showCap = (P.get('showCap') || '1') !== '0';
+  var showOverlay = !!title;
+
+  // ---- DOM refs ------------------------------------------------------------
+  var fig = document.getElementById('figure');
+  var inner = document.getElementById('inner');
+  var img = document.getElementById('img');
+  var overlay = document.getElementById('overlay');
+  var overlayTitle = document.getElementById('overlayTitle');
+  var caption = document.getElementById('caption');
+
+  fig.style.width = W + 'px';
+  fig.style.height = H + 'px';
+  inner.style.width = IW + 'px';
+  inner.style.height = IH + 'px';
+  img.style.width = IW + 'px';
+  img.style.height = IH + 'px';
+  if (src) img.src = src;
+  img.alt = alt;
+  if (showOverlay){
+    overlay.style.display = 'flex';
+    overlay.style.width = IW + 'px';
+    overlay.style.height = IH + 'px';
+    overlayTitle.textContent = title;
+  }
+  if (showCap){
+    caption.textContent = cap || '';
+  } else {
+    caption.style.display = 'none';
+  }
+
+  // ---- Spring physics (port of framer-motion useSpring) --------------------
+  // Critically-damped-ish spring done with stiffness/damping/mass.
+  function makeSpring(initial, stiffness, damping, mass){
+    var pos = initial, vel = 0, target = initial;
+    return {
+      set: function(v){ target = v; },
+      tick: function(dt){
+        var fSpring = -stiffness * (pos - target);
+        var fDamp = -damping * vel;
+        var a = (fSpring + fDamp) / mass;
+        vel += a * dt;
+        pos += vel * dt;
+        return pos;
+      },
+      get: function(){ return pos; },
+      reset: function(v){ pos = v; vel = 0; target = v; }
+    };
+  }
+
+  // Match the React Bits springValues: stiffness 100, damping 30, mass 2
+  var rotX = makeSpring(0, 100, 30, 2);
+  var rotY = makeSpring(0, 100, 30, 2);
+  var scale = makeSpring(1, 100, 30, 2);
+  // Tooltip rotation gets a snappier feel: stiffness 350, damping 30, mass 1
+  var capRot = makeSpring(0, 350, 30, 1);
+  // Caption opacity (linear-ish, also use a spring for smoothness)
+  var opacity = makeSpring(0, 200, 26, 1);
+
+  var lastY = 0;
+  var px = 0, py = 0; // pointer pos relative to figure top-left
+
+  function onPointerMove(clientX, clientY){
+    var rect = fig.getBoundingClientRect();
+    var ox = clientX - rect.left - rect.width/2;
+    var oy = clientY - rect.top  - rect.height/2;
+    var rxv = (oy / (rect.height/2)) * -amp;
+    var ryv = (ox / (rect.width/2))  *  amp;
+    rotX.set(rxv);
+    rotY.set(ryv);
+    px = clientX - rect.left;
+    py = clientY - rect.top;
+    var velocityY = oy - lastY;
+    capRot.set(-velocityY * 0.6);
+    lastY = oy;
+  }
+  function onEnter(){ scale.set(sc); opacity.set(1); }
+  function onLeave(){ scale.set(1); opacity.set(0); rotX.set(0); rotY.set(0); capRot.set(0); }
+
+  // Mouse listeners (desktop)
+  fig.addEventListener('mouseenter', onEnter);
+  fig.addEventListener('mouseleave', onLeave);
+  fig.addEventListener('mousemove', function(e){ onPointerMove(e.clientX, e.clientY); });
+
+  // Touch listeners (mobile) — first finger drives tilt.
+  function onTouch(e){
+    if (!e.touches || !e.touches[0]) return;
+    var t = e.touches[0];
+    onPointerMove(t.clientX, t.clientY);
+  }
+  fig.addEventListener('touchstart', function(e){ onEnter(); onTouch(e); }, {passive:true});
+  fig.addEventListener('touchmove',  onTouch, {passive:true});
+  fig.addEventListener('touchend',   onLeave);
+  fig.addEventListener('touchcancel',onLeave);
+
+  // ---- Ambient idle wobble (mobile users won't always touch the card) -----
+  var t0 = performance.now();
+  function ambient(now){
+    var t = (now - t0) / 1000;
+    // very gentle ±2deg sway; gets overridden the moment the user touches.
+    if (Math.abs(rotX.get()) < 0.1 && Math.abs(rotY.get()) < 0.1 && scale.get() < 1.001){
+      rotX.set(Math.sin(t*0.6) * 2.0);
+      rotY.set(Math.cos(t*0.5) * 2.5);
+    }
+  }
+
+  // ---- Main RAF loop -------------------------------------------------------
+  var lastT = performance.now();
+  function loop(now){
+    var dt = Math.min(0.04, (now - lastT) / 1000);
+    lastT = now;
+    ambient(now);
+    var rx = rotX.tick(dt);
+    var ry = rotY.tick(dt);
+    var s  = scale.tick(dt);
+    var op = opacity.tick(dt);
+    var cr = capRot.tick(dt);
+    inner.style.transform =
+      'rotateX(' + rx.toFixed(3) + 'deg) rotateY(' + ry.toFixed(3) + 'deg) scale(' + s.toFixed(4) + ')';
+    if (showCap){
+      caption.style.opacity = String(Math.max(0, Math.min(1, op)));
+      caption.style.transform = 'translate(' + px + 'px,' + py + 'px) rotate(' + cr.toFixed(3) + 'deg)';
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ---- Listen for postMessage updates (so RN can swap art live) -----------
+  function handleMsg(d){
+    try {
+      if (typeof d === 'string') d = JSON.parse(d);
+    } catch(_) { return; }
+    if (!d || typeof d !== 'object') return;
+    if (d.src){ img.src = d.src; }
+    if (typeof d.title === 'string'){
+      overlayTitle.textContent = d.title;
+      overlay.style.display = d.title ? 'flex' : 'none';
+    }
+    if (typeof d.cap === 'string'){
+      caption.textContent = d.cap;
+    }
+  }
+  window.addEventListener('message', function(e){ handleMsg(e.data); });
+  document.addEventListener('message', function(e){ handleMsg(e.data); });
+})();
+</script>
+</body></html>
+"""
+
+
+@api_router.get("/tiltedcard.html")
+async def tiltedcard_html():
+    return Response(content=TILTEDCARD_HTML, media_type="text/html")
+
+
 @api_router.get("/geobeats-style.json")
 async def geobeats_style_json():
     """Serves the NFS Neon map style JSON for pasting into Google Cloud

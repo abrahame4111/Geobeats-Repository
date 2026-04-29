@@ -18,6 +18,7 @@ import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
 import SearchSheet from "../src/components/SearchSheet";
 import SongRadarFab, { RadarResult } from "../src/components/SongRadarFab";
+import SongFoundCard, { SongFoundData } from "../src/components/SongFoundCard";
 import FloatingReactions, { FloatingReaction } from "../src/components/FloatingReactions";
 import ListenersSheet from "../src/components/ListenersSheet";
 import {
@@ -84,6 +85,7 @@ export default function MapScreen() {
   const mapRef = useRef<SoundMapHandle>(null);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [hasSpotify, setHasSpotify] = useState(true); // optimistic — assume open until proven otherwise
+  const [songFound, setSongFound] = useState<SongFoundData | null>(null);
 
   // ---- Auto-pause when queue runs out (Spotify Autoplay workaround) ----
   // We track URIs the user explicitly queued via this app. When the currently
@@ -682,12 +684,14 @@ export default function MapScreen() {
         })
       );
     }
-    setToast({
-      title: "RADAR MATCH",
-      subtitle: artist ? `${title} — ${artist}` : title,
-      tone: "live",
+    // Pop the "Song Found" modal with the React Bits TiltedCard centerpiece.
+    setSongFound({
+      title,
+      artist,
+      art,
+      spotifyUrl: r.spotify_url || null,
+      spotifyUri: r.spotify_uri || null,
     });
-    setTimeout(() => setToast(null), 2400);
   };
 
   if (loading || !auth) {
@@ -909,6 +913,13 @@ export default function MapScreen() {
           setSyncStatus("idle");
           setListenersOpen(false);
         }}
+      />
+
+      {/* Song Radar — match-found modal with React Bits TiltedCard */}
+      <SongFoundCard
+        visible={!!songFound}
+        data={songFound}
+        onDismiss={() => setSongFound(null)}
       />
     </View>
   );
