@@ -146,7 +146,7 @@ export default function Login() {
     <View style={styles.root}>
       <PixelBlastBackground
         variant="circle"
-        pixelSize={4}
+        pixelSize={5}
         color="#D4FF00"
         patternScale={2.5}
         patternDensity={1.6}
