@@ -632,15 +632,24 @@ if(liquid){
 }
 
 function setSize(){
-  const w=container.clientWidth||window.innerWidth||1;
-  const h=container.clientHeight||window.innerHeight||1;
-  renderer.setSize(w,h,false);
+  // On mobile WebViews container.clientWidth/Height may report stale values
+  // before first layout settles. Always prefer the visual viewport size if
+  // available, falling back to window.innerWidth/innerHeight, then container.
+  const vw = (window.visualViewport && window.visualViewport.width) || window.innerWidth || container.clientWidth || 1;
+  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || container.clientHeight || 1;
+  renderer.setSize(vw, vh, false);
   uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
   uniforms.uPixelSize.value = pixelSize * renderer.getPixelRatio();
   if(composer) composer.setSize(renderer.domElement.width, renderer.domElement.height);
 }
 setSize();
+// Mobile WebViews often lay out after the script runs — re-measure twice to
+// catch the final size once the WebView has settled.
+setTimeout(setSize, 100);
+setTimeout(setSize, 600);
 window.addEventListener('resize', setSize);
+if(window.visualViewport) window.visualViewport.addEventListener('resize', setSize);
+new ResizeObserver(setSize).observe(container);
 
 let clickIx=0;
 function mapToPixels(e){

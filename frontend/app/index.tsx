@@ -172,7 +172,7 @@ export default function Login() {
           asciiFontSize={8}
           textFontSize={200}
           textColor="#fdf9f3"
-          planeBaseHeight={4}
+          planeBaseHeight={8}
           enableWaves
           style={styles.brandAscii}
         />
