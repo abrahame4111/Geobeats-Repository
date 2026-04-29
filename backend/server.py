@@ -682,6 +682,164 @@ async def pixelblast_html():
     return Response(content=PIXELBLAST_HTML, media_type="text/html")
 
 
+ASCIITEXT_HTML = """<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>ASCII Text</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden;}
+  #root{position:fixed;inset:0;width:100vw;height:100vh;}
+  #root canvas{position:absolute;left:0;top:0;width:100%;height:100%;
+    image-rendering:pixelated;image-rendering:crisp-edges;}
+  #root pre{margin:0;padding:0;line-height:1em;text-align:left;position:absolute;left:0;top:0;
+    user-select:none;
+    background-image:radial-gradient(circle, #D4FF00 0%, #b6e000 50%, #fdf9f3 100%);
+    background-attachment:fixed;
+    -webkit-text-fill-color:transparent;-webkit-background-clip:text;background-clip:text;
+    z-index:9;mix-blend-mode:difference;}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="root"></div>
+<script type="importmap">
+{ "imports": { "three": "https://esm.sh/three@0.166.0" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+const params = new URLSearchParams(location.search);
+const text = params.get('text') || 'GeoBeats';
+const asciiFontSize = parseFloat(params.get('asciiFontSize') || '8');
+const textFontSize = parseFloat(params.get('textFontSize') || '200');
+const textColor = params.get('textColor') || '#fdf9f3';
+const planeBaseHeight = parseFloat(params.get('planeBaseHeight') || '8');
+const enableWaves = (params.get('enableWaves') ?? '1') !== '0';
+
+Math.map = function(n, a, b, c, d){ return ((n-a)/(b-a))*(d-c)+c; };
+const PX_RATIO = window.devicePixelRatio || 1;
+
+const vertexShader = `varying vec2 vUv; uniform float uTime; uniform float uEnableWaves;
+void main(){ vUv=uv; float t=uTime*5.; float wf=uEnableWaves; vec3 p=position;
+p.x+=sin(t+position.y)*0.5*wf; p.y+=cos(t+position.z)*0.15*wf; p.z+=sin(t+position.x)*wf;
+gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0); }`;
+const fragmentShader = `varying vec2 vUv; uniform float uTime; uniform sampler2D uTexture;
+void main(){ float t=uTime; vec2 pos=vUv;
+float r=texture2D(uTexture, pos+cos(t*2.-t+pos.x)*.01).r;
+float g=texture2D(uTexture, pos+tan(t*.5+pos.x-t)*.01).g;
+float b=texture2D(uTexture, pos-cos(t*2.+t+pos.y)*.01).b;
+float a=texture2D(uTexture, pos).a;
+gl_FragColor = vec4(r,g,b,a); }`;
+
+class AsciiFilter {
+  constructor(renderer, opts={}){ this.renderer=renderer;
+    this.domElement=document.createElement('div');
+    Object.assign(this.domElement.style,{position:'absolute',top:'0',left:'0',width:'100%',height:'100%'});
+    this.pre=document.createElement('pre'); this.domElement.appendChild(this.pre);
+    this.canvas=document.createElement('canvas'); this.context=this.canvas.getContext('2d');
+    this.domElement.appendChild(this.canvas);
+    this.deg=0; this.invert=opts.invert??true; this.fontSize=opts.fontSize??12;
+    this.fontFamily=opts.fontFamily??"'IBM Plex Mono', 'Courier New', monospace";
+    this.charset=opts.charset??' .\\'\\`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
+    this.context.imageSmoothingEnabled=false;
+    this._mm=this.onMouseMove.bind(this); document.addEventListener('mousemove', this._mm);
+  }
+  setSize(w,h){ this.width=w;this.height=h;this.renderer.setSize(w,h);this.reset();
+    this.center={x:w/2,y:h/2}; this.mouse={x:this.center.x,y:this.center.y}; }
+  reset(){ this.context.font=`${this.fontSize}px ${this.fontFamily}`;
+    const cw=this.context.measureText('A').width;
+    this.cols=Math.floor(this.width/(this.fontSize*(cw/this.fontSize)));
+    this.rows=Math.floor(this.height/this.fontSize);
+    this.canvas.width=this.cols; this.canvas.height=this.rows;
+    Object.assign(this.pre.style,{fontFamily:this.fontFamily,fontSize:`${this.fontSize}px`,margin:'0',padding:'0',lineHeight:'1em',position:'absolute',left:'0',top:'0',zIndex:'9',backgroundAttachment:'fixed',mixBlendMode:'difference'}); }
+  render(scene,camera){ this.renderer.render(scene,camera);
+    const w=this.canvas.width,h=this.canvas.height; this.context.clearRect(0,0,w,h);
+    if(w&&h) this.context.drawImage(this.renderer.domElement,0,0,w,h);
+    this.asciify(this.context,w,h); this.hue(); }
+  onMouseMove(e){ this.mouse={x:e.clientX*PX_RATIO,y:e.clientY*PX_RATIO}; }
+  get dx(){return this.mouse.x-this.center.x;} get dy(){return this.mouse.y-this.center.y;}
+  hue(){ const d=(Math.atan2(this.dy,this.dx)*180)/Math.PI; this.deg+=(d-this.deg)*0.075;
+    this.domElement.style.filter=`hue-rotate(${this.deg.toFixed(1)}deg)`; }
+  asciify(ctx,w,h){ if(!w||!h) return; const data=ctx.getImageData(0,0,w,h).data; let s='';
+    for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ const i=x*4+y*4*w;
+      const r=data[i],g=data[i+1],b=data[i+2],a=data[i+3];
+      if(a===0){ s+=' '; continue; }
+      const gray=(0.3*r+0.6*g+0.1*b)/255;
+      let idx=Math.floor((1-gray)*(this.charset.length-1));
+      if(this.invert) idx=this.charset.length-idx-1;
+      s+=this.charset[idx]; } s+='\\n'; } this.pre.innerHTML=s; }
+  dispose(){ document.removeEventListener('mousemove', this._mm); }
+}
+class CanvasTxt {
+  constructor(txt,opts={}){ this.canvas=document.createElement('canvas'); this.context=this.canvas.getContext('2d');
+    this.txt=txt; this.fontSize=opts.fontSize||200; this.fontFamily=opts.fontFamily||'Arial';
+    this.color=opts.color||'#fdf9f3'; this.font=`600 ${this.fontSize}px ${this.fontFamily}`; }
+  resize(){ this.context.font=this.font; const m=this.context.measureText(this.txt);
+    const tw=Math.ceil(m.width)+20;
+    const th=Math.ceil(m.actualBoundingBoxAscent+m.actualBoundingBoxDescent)+20;
+    this.canvas.width=tw; this.canvas.height=th; }
+  render(){ this.context.clearRect(0,0,this.canvas.width,this.canvas.height);
+    this.context.fillStyle=this.color; this.context.font=this.font;
+    const m=this.context.measureText(this.txt); const y=10+m.actualBoundingBoxAscent;
+    this.context.fillText(this.txt,10,y); }
+  get width(){return this.canvas.width;} get height(){return this.canvas.height;}
+  get texture(){return this.canvas;}
+}
+class CanvAscii {
+  constructor(cfg, container, w, h){
+    Object.assign(this, cfg); this.container=container; this.width=w; this.height=h;
+    this.camera=new THREE.PerspectiveCamera(45, w/h, 1, 1000); this.camera.position.z=30;
+    this.scene=new THREE.Scene(); this.mouse={x:w/2,y:h/2};
+    this._mm=this.onMouseMove.bind(this);
+  }
+  async init(){ try{ await document.fonts.load('600 200px "IBM Plex Mono"'); await document.fonts.load('500 12px "IBM Plex Mono"'); }catch(e){}
+    await document.fonts.ready; this.setMesh(); this.setRenderer(); }
+  setMesh(){ this.textCanvas=new CanvasTxt(this.text,{fontSize:this.textFontSize,fontFamily:'IBM Plex Mono',color:this.textColor});
+    this.textCanvas.resize(); this.textCanvas.render();
+    this.texture=new THREE.CanvasTexture(this.textCanvas.texture); this.texture.minFilter=THREE.NearestFilter;
+    const ar=this.textCanvas.width/this.textCanvas.height; const baseH=this.planeBaseHeight;
+    this.geometry=new THREE.PlaneGeometry(baseH*ar, baseH, 36, 36);
+    this.material=new THREE.ShaderMaterial({vertexShader,fragmentShader,transparent:true,
+      uniforms:{ uTime:{value:0}, uTexture:{value:this.texture}, uEnableWaves:{value:this.enableWaves?1.0:0.0} } });
+    this.mesh=new THREE.Mesh(this.geometry,this.material); this.scene.add(this.mesh); }
+  setRenderer(){ this.renderer=new THREE.WebGLRenderer({antialias:false,alpha:true});
+    this.renderer.setPixelRatio(1); this.renderer.setClearColor(0x000000,0);
+    this.filter=new AsciiFilter(this.renderer,{fontFamily:'IBM Plex Mono',fontSize:this.asciiFontSize,invert:true});
+    this.container.appendChild(this.filter.domElement); this.setSize(this.width,this.height);
+    this.container.addEventListener('mousemove', this._mm); this.container.addEventListener('touchmove', this._mm); }
+  setSize(w,h){ this.width=w; this.height=h; this.camera.aspect=w/h; this.camera.updateProjectionMatrix();
+    this.filter.setSize(w,h); this.center={x:w/2,y:h/2}; }
+  load(){ const tick=()=>{ this.raf=requestAnimationFrame(tick); this.render(); }; tick(); }
+  onMouseMove(evt){ const e=evt.touches?evt.touches[0]:evt; const r=this.container.getBoundingClientRect();
+    this.mouse={x:e.clientX-r.left,y:e.clientY-r.top}; }
+  render(){ const t=Date.now()*0.001; this.textCanvas.render(); this.texture.needsUpdate=true;
+    this.mesh.material.uniforms.uTime.value=Math.sin(t);
+    const x=Math.map(this.mouse.y,0,this.height,0.5,-0.5);
+    const y=Math.map(this.mouse.x,0,this.width,-0.5,0.5);
+    this.mesh.rotation.x+=(x-this.mesh.rotation.x)*0.05;
+    this.mesh.rotation.y+=(y-this.mesh.rotation.y)*0.05;
+    this.filter.render(this.scene,this.camera); }
+}
+
+const root = document.getElementById('root');
+const r = root.getBoundingClientRect();
+const cfg = { text, asciiFontSize, textFontSize, textColor, planeBaseHeight, enableWaves };
+const inst = new CanvAscii(cfg, root, r.width||window.innerWidth, r.height||window.innerHeight);
+await inst.init();
+inst.load();
+window.addEventListener('resize', ()=>{ const b=root.getBoundingClientRect(); inst.setSize(b.width,b.height); });
+</script>
+</body></html>
+"""
+
+
+@api_router.get("/asciitext.html")
+async def asciitext_html():
+    return Response(content=ASCIITEXT_HTML, media_type="text/html")
+
+
 @api_router.post("/spotify/queue")
 async def spotify_queue(body: QueueRequest):
     try:

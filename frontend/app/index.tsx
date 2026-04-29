@@ -14,6 +14,7 @@ import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import { getLoginUrl, loadAuth, saveAuth, StoredAuth } from "../src/api";
 import PixelBlastBackground from "../src/components/PixelBlastBackground";
+import ASCIIText from "../src/components/ASCIIText";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -165,12 +166,15 @@ export default function Login() {
       <View style={styles.scrim} pointerEvents="none" />
 
       <View style={styles.top} testID="login-hero">
-        <View style={styles.logoWrap}>
-          <Ionicons name="musical-notes" size={42} color="#D4FF00" />
-        </View>
-        <Text style={styles.brand} testID="app-title">
-          SOUNDMAP
-        </Text>
+        <ASCIIText
+          text="GeoBeats"
+          asciiFontSize={8}
+          textFontSize={200}
+          textColor="#fdf9f3"
+          planeBaseHeight={8}
+          enableWaves
+          style={styles.brandAscii}
+        />
         <Text style={styles.tagline}>
           see the world through{"\n"}the music it&apos;s playing.
         </Text>
@@ -241,22 +245,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(5,5,10,0.55)",
   },
   top: { marginTop: 40 },
-  logoWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "rgba(212,255,0,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(212,255,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 28,
-  },
-  brand: {
-    color: "#fff",
-    fontSize: 44,
-    fontWeight: "900",
-    letterSpacing: 2,
+  brandAscii: {
+    width: "100%",
+    height: 140,
+    marginBottom: 4,
+    marginLeft: -8, // ASCII pre adds left padding; visually re-center
   },
   tagline: {
     color: "rgba(255,255,255,0.6)",
