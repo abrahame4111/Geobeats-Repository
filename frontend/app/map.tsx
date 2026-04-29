@@ -409,6 +409,10 @@ export default function MapScreen() {
             try {
               await playerAction("pause", auth, {});
               setMyIsPlaying(false);
+              // Aggressively reset local state so the listen-along card and
+              // marker pill update immediately, without waiting for the next
+              // 5s poll cycle. The next pull() will reconcile from Spotify.
+              setMyTrack(null);
               showToast("PLAYBACK ENDED", "Queue finished — autoplay blocked", "live");
             } catch (e) {
               console.warn("[autostop] pause failed", e);
@@ -526,7 +530,42 @@ export default function MapScreen() {
   }, [markers, mapSelfId]);
 
   // ---- Handlers ----
-  const selectedUser = selectedUserId ? (usersMap[selectedUserId] || (selectedUserId === auth?.user_id ? { user_id: auth.user_id, display_name: auth.display_name, profile_image: auth.profile_image, current_track: myTrack, is_playing: myIsPlaying } : null)) : null;
+  // selectedUser:
+  //  - For SELF: always trust local state (myTrack / myIsPlaying) so the card
+  //    immediately reflects pause / autopause / app-close, without waiting for
+  //    a server WS roundtrip that might leave stale data in usersMap.
+  //  - For OTHERS: read from usersMap (server-broadcast positions/tracks).
+  const selectedUser = selectedUserId
+    ? (selectedUserId === auth?.user_id
+        ? (auth ? { user_id: auth.user_id, display_name: auth.display_name, profile_image: auth.profile_image, current_track: myTrack, is_playing: myIsPlaying } : null)
+        : (usersMap[selectedUserId] || null))
+    : null;
+
+  // Auto-close the card and leave any active listen-along session when the
+  // user (self) stops playing music — covers Spotify pause, queue end with
+  // autoplay-block kicking in, app being backgrounded, or device disconnect.
+  // Without this the card would linger showing a stale track.
+  useEffect(() => {
+    if (!auth) return;
+    const selfHasMusic = !!myTrack && !!myIsPlaying;
+    if (!selfHasMusic) {
+      // 1) Close the self-card if it's open
+      if (selectedUserId === auth.user_id) {
+        setSelectedUserId(null);
+      }
+      // 2) Stop hosting any session — others can no longer sync to silence
+      if (syncStatus === "hosting") {
+        try {
+          wsRef.current?.send(JSON.stringify({ type: "session:stop" }));
+        } catch {}
+        setHostId(null);
+        setSyncStatus("idle");
+      }
+      // 3) If joined as a guest and self isn't playing, leaving the session
+      //    is too aggressive (guests by definition stop playing during sync);
+      //    so we do NOT auto-leave guest sessions here.
+    }
+  }, [myTrack, myIsPlaying, selectedUserId, auth?.user_id, syncStatus]);
 
   const handleMarker = (uid: string) => setSelectedUserId(uid);
 
