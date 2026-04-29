@@ -1098,17 +1098,10 @@ async def map_html(key: str):
 <style>
   html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }}
   /* PixelBlast pattern sits behind the map; visible mainly around the
-     globe-in-space view at low zoom. Lower opacity since satellite
-     imagery is opaque when zoomed in. */
+     globe-in-space view at low zoom (the cosmic backdrop). */
   #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; opacity: 0.85; }}
   #map-wrap {{ position: relative; z-index: 1; width: 100vw; height: 100vh; }}
-  #map {{ position: absolute; inset: 0; }}
-  /* Tint satellite imagery toward the GeoBeats purple-noir palette.
-     Targets the first child of .gm-style which holds the tile/canvas
-     layers, leaving overlays/markers (later siblings) at full color. */
-  #map .gm-style > div:nth-child(1) {{
-    filter: hue-rotate(245deg) saturate(0.55) brightness(0.6) contrast(1.15);
-  }}
+  #map {{ position: absolute; inset: 0; background: transparent !important; }}
   /* Markers / overlays should stay fully opaque, so we re-overlay them
      on a non-blended layer via Google Maps' floatPane. */
   #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; z-index:2; }}
@@ -1174,16 +1167,16 @@ async def map_html(key: str):
       // Cinematic intro: open at globe-in-space view; we auto-fly to the
       // user's location when their first WS location update arrives.
       center: {{ lat: 20, lng: 0 }},
-      zoom: 2.2,
-      mapId: 'DEMO_MAP_ID', // required for vector rendering (tilt/heading/globe)
-      mapTypeId: 'hybrid',  // satellite imagery + roads & labels
+      zoom: 1.5,
+      mapId: '2c42daaa74a7741732d7690f', // Vector map — enables globe view + tilt + heading
+      mapTypeId: 'roadmap',  // CRITICAL: globe view only works with roadmap, not hybrid/satellite
       tilt: 0,
       heading: 0,
       disableDefaultUI: true,
       gestureHandling: 'greedy',
       backgroundColor: '#000', // black space behind the globe
       isFractionalZoomEnabled: true,
-      minZoom: 1.5,
+      minZoom: 1,
       maxZoom: 20,
     }});
     map.addListener('idle', recomputeClusters);
