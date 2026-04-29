@@ -1182,7 +1182,7 @@ async def mapbox_html(token: str):
   }}
   function upsertMarker(u){{
     if (!u.lat || !u.lng) return;
-    if (u.user_id && meIdRef.id && u.user_id === meIdRef.id && !window.__flown) {{
+    if (u.isSelf && !window.__flown) {{
       window.__flown = true;
       spinEnabled = false;
       // Cinematic fly from globe to user location
@@ -1190,9 +1190,12 @@ async def mapbox_html(token: str):
     }}
     const existing = markers[u.user_id];
     if (existing) {{
+      // Replace contents in-place to update track/avatar without flicker
       existing.setLngLat([u.lng, u.lat]);
-      existing.getElement().replaceWith(makeBubbleEl(u));
-      // re-bind because replaceWith disconnects: easier to recreate
+      const newEl = makeBubbleEl(u);
+      const oldEl = existing.getElement();
+      // Mapbox owns the parent container of getElement(); easiest to remove
+      // and recreate the marker so the click handlers/anchor are correct.
       existing.remove();
       delete markers[u.user_id];
     }}
@@ -1200,6 +1203,12 @@ async def mapbox_html(token: str):
     const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom' }})
       .setLngLat([u.lng, u.lat]).addTo(map);
     markers[u.user_id] = m;
+  }}
+  function setMarkersBulk(list){{
+    const seen = new Set();
+    (list||[]).forEach(u => {{ if (u && u.user_id) {{ seen.add(u.user_id); upsertMarker(u); }} }});
+    // Remove markers that are no longer present in the latest snapshot
+    Object.keys(markers).forEach(uid => {{ if (!seen.has(uid)) {{ markers[uid].remove(); delete markers[uid]; }} }});
   }}
   function removeMarker(uid){{
     const m = markers[uid];
@@ -1210,7 +1219,8 @@ async def mapbox_html(token: str):
     if (typeof msg === 'string') {{ try {{ msg = JSON.parse(msg); }} catch(e) {{ return; }} }}
     if (!msg || !msg.type) return;
     if (msg.type === 'me:set') meIdRef.id = msg.user_id;
-    else if (msg.type === 'markers:bulk') {{ (msg.users||[]).forEach(upsertMarker); }}
+    else if (msg.type === 'set_markers') setMarkersBulk(msg.markers);
+    else if (msg.type === 'markers:bulk') setMarkersBulk(msg.users || msg.markers);
     else if (msg.type === 'marker:upsert') upsertMarker(msg.user);
     else if (msg.type === 'marker:remove') removeMarker(msg.user_id);
     else if (msg.type === 'center') {{ if (map) map.flyTo({{ center: [msg.lng, msg.lat], zoom: msg.zoom||14, pitch: 45, essential: true }}); }}
