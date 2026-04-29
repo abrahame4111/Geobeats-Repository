@@ -1097,7 +1097,15 @@ async def map_html(key: str):
 <meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
 <style>
   html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }}
-  #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; }}
+  /* PixelBlast pattern sits behind the map; the map itself is rendered at
+     slightly reduced opacity so the pattern subtly bleeds through the
+     terrain, evoking the GeoBeats login background. */
+  #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; }}
+  #map-wrap {{ position: relative; z-index: 1; width: 100vw; height: 100vh; }}
+  #map {{ position: absolute; inset: 0; opacity: 0.88; }}
+  /* Markers / overlays should stay fully opaque, so we re-overlay them
+     on a non-blended layer via Google Maps' floatPane. */
+  #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; z-index:2; }}
   #status .err {{ color:#FF4500; max-width: 80vw; word-break: break-word; }}
   .bubble {{ position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; }}
   .cluster {{ position: relative; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer; }}
@@ -1114,7 +1122,8 @@ async def map_html(key: str):
   @keyframes pulse {{ 0%,100% {{ transform: scale(1); }} 50% {{ transform: scale(1.08); }} }}
 </style>
 </head><body>
-<div id="map"></div>
+<iframe id="bg-pixels" src="/api/pixelblast.html?variant=circle&pixelSize=4&color=%23B026FF&patternScale=3&patternDensity=1.0&pixelSizeJitter=0.5&enableRipples=0&liquid=0&speed=0.35&edgeFade=0" frameborder="0" scrolling="no"></iframe>
+<div id="map-wrap"><div id="map"></div></div>
 <div id="status">Initializing…</div>
 <script>
   let map; let markers = {{}}; let meId = null;
@@ -1265,13 +1274,19 @@ async def map_html(key: str):
   document.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
   function AdvancedBubble(position, map, el){{ this.position = position; this.el = el; this.setMap(map); }}
   const DARK_STYLE = [
-    {{elementType:'geometry',stylers:[{{color:'#0a0a12'}}]}},
-    {{elementType:'labels.text.stroke',stylers:[{{color:'#0a0a12'}}]}},
-    {{elementType:'labels.text.fill',stylers:[{{color:'#746855'}}]}},
-    {{featureType:'poi.park',elementType:'geometry',stylers:[{{color:'#10231a'}}]}},
-    {{featureType:'road',elementType:'geometry',stylers:[{{color:'#1a1a28'}}]}},
-    {{featureType:'road',elementType:'labels.text.fill',stylers:[{{color:'#9ca3af'}}]}},
-    {{featureType:'water',elementType:'geometry',stylers:[{{color:'#020617'}}]}},
+    {{elementType:'geometry',stylers:[{{color:'#0a0414'}}]}},
+    {{elementType:'labels.text.stroke',stylers:[{{color:'#0a0414'}}]}},
+    {{elementType:'labels.text.fill',stylers:[{{color:'#8a6fb3'}}]}},
+    {{featureType:'administrative',elementType:'geometry.stroke',stylers:[{{color:'#3a1a52'}}]}},
+    {{featureType:'poi',elementType:'labels',stylers:[{{visibility:'off'}}]}},
+    {{featureType:'poi.park',elementType:'geometry',stylers:[{{color:'#1a0a24'}}]}},
+    {{featureType:'road',elementType:'geometry',stylers:[{{color:'#1c0e2c'}}]}},
+    {{featureType:'road',elementType:'labels.text.fill',stylers:[{{color:'#a78bd1'}}]}},
+    {{featureType:'road.highway',elementType:'geometry',stylers:[{{color:'#321647'}}]}},
+    {{featureType:'road.highway',elementType:'geometry.stroke',stylers:[{{color:'#5a2a85'}}]}},
+    {{featureType:'transit',elementType:'geometry',stylers:[{{color:'#190a25'}}]}},
+    {{featureType:'water',elementType:'geometry',stylers:[{{color:'#03000a'}}]}},
+    {{featureType:'water',elementType:'labels.text.fill',stylers:[{{color:'#5a3d80'}}]}},
   ];
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key={key}&callback=initMap" async defer></script>

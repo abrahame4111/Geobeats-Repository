@@ -122,6 +122,9 @@ frontend:
         -working: "NA"
         -agent: "main"
         -comment: "Tuned PixelBlast props (pixelSize 6→4, density 1.2→1.6, edgeFade 0.25→0, etc.) for richer edge-to-edge fill. Replaced lime CTA button with StarBorder component (new /api/starborder.html endpoint + StarBorder.tsx WebView wrapper). Bitbucket icon removed, plain text 'CONNECT WITH SPOTIFY' kept. onPress bridged via window.ReactNativeWebView.postMessage('star_press')."
+        -working: "NA"
+        -agent: "main"
+        -comment: "Recolored entire app from lime (#D4FF00) to neon purple (#B026FF). 9 files updated incl. server.py, map.tsx, all bottom sheets, ListenAlong card, sound map markers/clusters/avatars, auth-success spinner, ASCII gradient. Map terrain restyled with purple-noir Google Maps style (deep purple land, navy water, magenta highways) and PixelBlast iframe layered behind the map at z=0 with map opacity:0.88 so the dot pattern subtly bleeds through the terrain — gives the home map the same GeoBeats aesthetic as the login screen."
 
 metadata:
   created_by: "main_agent"
