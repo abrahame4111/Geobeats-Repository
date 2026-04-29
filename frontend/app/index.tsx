@@ -194,7 +194,7 @@ export default function Login() {
           speed="5s"
           busy={busy}
           onPress={handleLogin}
-          height={64}
+          height={50}
           testID="login-spotify-button"
         />
         {err && (

@@ -905,43 +905,45 @@ STARBORDER_HTML = """<!doctype html>
   .border-gradient-bottom {
     position:absolute;
     width:300%;
-    height:50%;
-    opacity:0.7;
-    bottom:-12px;
+    height:30%;
+    opacity:0.55;
+    bottom:-6px;
     right:-250%;
     border-radius:50%;
     animation: star-movement-bottom linear infinite alternate;
     z-index:0;
     pointer-events:none;
+    filter: blur(0.5px);
   }
   .border-gradient-top {
     position:absolute;
-    opacity:0.7;
+    opacity:0.55;
     width:300%;
-    height:50%;
-    top:-12px;
+    height:30%;
+    top:-6px;
     left:-250%;
     border-radius:50%;
     animation: star-movement-top linear infinite alternate;
     z-index:0;
     pointer-events:none;
+    filter: blur(0.5px);
   }
   .inner-content {
     position:relative;
     border:1px solid #222;
     background:#000;
     color:#fff;
-    font-size:15px;
+    font-size:14px;
     font-weight:900;
     letter-spacing:1.5px;
     text-align:center;
-    padding:18px 26px;
+    padding:12px 22px;
     border-radius:999px;
     z-index:1;
     user-select:none;
-    width:calc(100% - 6px);
-    height:calc(100% - 6px);
-    margin:3px;
+    width:calc(100% - 4px);
+    height:calc(100% - 4px);
+    margin:2px;
     display:flex;
     align-items:center;
     justify-content:center;
