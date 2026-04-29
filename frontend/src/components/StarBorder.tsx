@@ -11,6 +11,7 @@ type Props = {
   onPress?: () => void;
   style?: ViewStyle;
   height?: number;
+  width?: number;
   testID?: string;
 };
 
@@ -22,6 +23,9 @@ type Props = {
  *
  * Tap is bridged via window.ReactNativeWebView.postMessage('star_press') on
  * native, and `window.parent.postMessage({ __starborder_press: true })` on web.
+ *
+ * Sizing: the WebView has no intrinsic size, so we estimate width from the
+ * label length. Pass an explicit `width` to override.
  */
 export default function StarBorder({
   label,
@@ -30,9 +34,18 @@ export default function StarBorder({
   busy = false,
   onPress,
   style,
-  height = 64,
+  height = 50,
+  width,
   testID,
 }: Props) {
+  // Estimate width based on label length when not provided. Tuned for the
+  // 14px / 900-weight / 1.5px letter-spacing label.
+  const estimatedWidth = Math.max(
+    180,
+    Math.min(360, label.length * 11 + 56),
+  );
+  const pillWidth = width ?? estimatedWidth;
+
   const params = new URLSearchParams({
     label,
     color,
@@ -53,7 +66,10 @@ export default function StarBorder({
 
   if (Platform.OS === "web") {
     return (
-      <View style={[{ height, width: "100%" }, style]} testID={testID}>
+      <View
+        style={[{ height, width: pillWidth, alignSelf: "center" }, style]}
+        testID={testID}
+      >
         {/* @ts-ignore: iframe is web-only */}
         <iframe
           src={url}
@@ -75,7 +91,10 @@ export default function StarBorder({
   }
 
   return (
-    <View style={[{ height, width: "100%" }, style]} testID={testID}>
+    <View
+      style={[{ height, width: pillWidth, alignSelf: "center" }, style]}
+      testID={testID}
+    >
       <WebView
         // Re-key on busy/label so the WebView reflects the new state cleanly.
         key={`${busy ? 1 : 0}-${label}`}
