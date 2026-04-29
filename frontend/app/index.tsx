@@ -137,7 +137,7 @@ export default function Login() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator color="#D4FF00" />
+        <ActivityIndicator color="#B026FF" />
       </SafeAreaView>
     );
   }
@@ -147,7 +147,7 @@ export default function Login() {
       <PixelBlastBackground
         variant="circle"
         pixelSize={5}
-        color="#D4FF00"
+        color="#B026FF"
         patternScale={2.5}
         patternDensity={1.6}
         pixelSizeJitter={0.6}
@@ -190,7 +190,7 @@ export default function Login() {
       <View style={styles.ctaWrap}>
         <StarBorder
           label="CONNECT WITH SPOTIFY"
-          color="#D4FF00"
+          color="#B026FF"
           speed="5s"
           busy={busy}
           onPress={handleLogin}
@@ -215,7 +215,7 @@ function Feature({ icon, text }: { icon: any; text: string }) {
   return (
     <View style={styles.featureRow}>
       <View style={styles.featureIcon}>
-        <Ionicons name={icon} size={18} color="#D4FF00" />
+        <Ionicons name={icon} size={18} color="#B026FF" />
       </View>
       <Text style={styles.featureText}>{text}</Text>
     </View>
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(212,255,0,0.1)",
+    backgroundColor: "rgba(176,38,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },

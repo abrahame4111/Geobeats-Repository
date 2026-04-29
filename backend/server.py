@@ -717,7 +717,7 @@ ASCIITEXT_HTML = """<!doctype html>
     image-rendering:pixelated;image-rendering:crisp-edges;}
   #root pre{margin:0;padding:0;line-height:1em;text-align:left;position:absolute;left:0;top:0;
     user-select:none;
-    background-image:radial-gradient(circle, #D4FF00 0%, #b6e000 50%, #fdf9f3 100%);
+    background-image:radial-gradient(circle, #B026FF 0%, #7E1FB8 50%, #fdf9f3 100%);
     background-attachment:fixed;
     -webkit-text-fill-color:transparent;-webkit-background-clip:text;background-clip:text;
     z-index:9;mix-blend-mode:difference;}
