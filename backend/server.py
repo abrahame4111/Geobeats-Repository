@@ -1022,6 +1022,17 @@ async def starborder_html():
     return Response(content=STARBORDER_HTML, media_type="text/html")
 
 
+@api_router.get("/geobeats-style.json")
+async def geobeats_style_json():
+    """Serves the NFS Neon map style JSON for pasting into Google Cloud
+    Console → Map Styles → JSON tab. Open this URL in a browser, Ctrl+A,
+    Ctrl+C, then paste it into the Cloud Console JSON editor."""
+    style_path = ROOT_DIR / "geobeats_style.json"
+    if not style_path.exists():
+        return Response(content="[]", media_type="application/json")
+    return Response(content=style_path.read_text(), media_type="application/json")
+
+
 @api_router.post("/spotify/queue")
 async def spotify_queue(body: QueueRequest):
     try:
