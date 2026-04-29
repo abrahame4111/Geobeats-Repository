@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   Animated,
   Easing,
-  Platform,
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+} from "expo-audio";
 import { BACKEND_URL } from "../api";
 
 export type RadarMatch = {
@@ -38,14 +42,13 @@ export type Phase = "idle" | "recording" | "uploading" | "success" | "error";
 const RECORD_MS = 10_000;
 
 /**
- * Pulsing mic FAB that records ~10 seconds of ambient audio and uploads it to
- * the backend `/api/recognize` endpoint (Shazam). The button visually pulses
- * while recording and shows a count-down ring.
+ * Pulsing mic FAB that records ~10 seconds of ambient audio (via the new
+ * SDK 55 `expo-audio` recorder) and uploads it to `/api/recognize` (Shazam).
  */
 export default function SongRadarFab({ onResult, onPhaseChange }: Props) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [remaining, setRemaining] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,21 +128,18 @@ export default function SongRadarFab({ onResult, onPhaseChange }: Props) {
   };
 
   const stopAndUpload = async () => {
-    const rec = recordingRef.current;
-    recordingRef.current = null;
-    if (!rec) return;
     cleanupTimers();
     setRemaining(0);
     setPhase("uploading");
     let uri: string | null = null;
     try {
-      await rec.stopAndUnloadAsync();
-      uri = rec.getURI();
+      await recorder.stop();
+      uri = recorder.uri;
     } catch (e) {
       console.warn("[radar] stop failed", e);
     }
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await setAudioModeAsync({ allowsRecording: false });
     } catch {}
 
     if (!uri) {
@@ -176,18 +176,6 @@ export default function SongRadarFab({ onResult, onPhaseChange }: Props) {
     }
   };
 
-  const cancel = async () => {
-    const rec = recordingRef.current;
-    recordingRef.current = null;
-    cleanupTimers();
-    setRemaining(0);
-    setPhase("idle");
-    if (rec) {
-      try { await rec.stopAndUnloadAsync(); } catch {}
-    }
-    try { await Audio.setAudioModeAsync({ allowsRecordingIOS: false }); } catch {}
-  };
-
   const start = async () => {
     if (phase === "recording") {
       // Tap again → finish early.
@@ -196,7 +184,7 @@ export default function SongRadarFab({ onResult, onPhaseChange }: Props) {
     }
     if (phase !== "idle") return;
     try {
-      const perm = await Audio.requestPermissionsAsync();
+      const perm = await requestRecordingPermissionsAsync();
       if (!perm.granted) {
         Alert.alert(
           "Microphone needed",
@@ -204,19 +192,12 @@ export default function SongRadarFab({ onResult, onPhaseChange }: Props) {
         );
         return;
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      await recording.startAsync();
-      recordingRef.current = recording;
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setPhase("recording");
       setRemaining(Math.ceil(RECORD_MS / 1000));
 
@@ -230,8 +211,10 @@ export default function SongRadarFab({ onResult, onPhaseChange }: Props) {
       }, 250);
     } catch (e) {
       console.warn("[radar] start failed", e);
-      cancel();
+      cleanupTimers();
+      setRemaining(0);
       flashThen("error");
+      try { await setAudioModeAsync({ allowsRecording: false }); } catch {}
     }
   };
 
