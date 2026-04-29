@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import * as Location from "expo-location";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import SoundMapView, { MapMarker, SoundMapHandle } from "../src/components/SoundMapView";
 import ListenAlongCard from "../src/components/ListenAlongCard";
 import PlayerBottomSheet from "../src/components/PlayerBottomSheet";
@@ -55,6 +56,24 @@ export default function MapScreen() {
   const syncIntervalRef = useRef<any>(null);
   const pendingSyncRef = useRef<any>(null);
   const [broadcastOn, setBroadcastOn] = useState(true);
+  const [mapStyle, setMapStyleState] = useState<"geobeats" | "satellite">("geobeats");
+  // Persist theme choice across sessions
+  useEffect(() => {
+    AsyncStorage.getItem("@geobeats/mapStyle").then((v) => {
+      if (v === "geobeats" || v === "satellite") setMapStyleState(v);
+    });
+  }, []);
+  const toggleMapStyle = () => {
+    const next = mapStyle === "geobeats" ? "satellite" : "geobeats";
+    setMapStyleState(next);
+    AsyncStorage.setItem("@geobeats/mapStyle", next).catch(() => {});
+    setToast({
+      title: next === "geobeats" ? "GeoBeats Theme" : "Satellite Theme",
+      subtitle: next === "geobeats" ? "Neon NFS-style map" : "Photorealistic Earth",
+      tone: "live",
+    });
+    setTimeout(() => setToast(null), 1800);
+  };
   const broadcastOnRef = useRef(true);
   const [toast, setToast] = useState<{ title: string; subtitle: string; tone: "live" | "ghost" } | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
@@ -564,6 +583,7 @@ export default function MapScreen() {
         markers={mapMarkers}
         myLocation={myLocation}
         onMarkerPress={handleMarker}
+        mapStyle={mapStyle}
       />
 
       {/* Top bar */}
@@ -665,6 +685,21 @@ export default function MapScreen() {
         onPrev={handlePrev}
         onOpenListeners={() => setListenersOpen(true)}
       />
+
+      {/* Theme toggle FAB — sits above the locate-me FAB, swaps map style */}
+      <TouchableOpacity
+        onPress={toggleMapStyle}
+        style={styles.themeFab}
+        activeOpacity={0.85}
+        testID="theme-toggle"
+        hitSlop={8}
+      >
+        <Ionicons
+          name={mapStyle === "geobeats" ? "earth" : "color-palette"}
+          size={19}
+          color="#B026FF"
+        />
+      </TouchableOpacity>
 
       {/* Locate-me FAB */}
       <TouchableOpacity
@@ -802,6 +837,19 @@ const styles = StyleSheet.create({
   },
   locateFabDisabled: {
     borderColor: "rgba(176,38,255,0.15)",
+  },
+  themeFab: {
+    position: "absolute",
+    right: 16,
+    bottom: 204, // sits 54px above locateFab (44 + 10 spacing)
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(10,10,18,0.85)",
+    borderWidth: 1,
+    borderColor: "rgba(176,38,255,0.4)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   ghostBtnOff: {
     borderColor: "rgba(255,255,255,0.18)",

@@ -1100,10 +1100,19 @@ async def root():
 
 
 @api_router.get("/mapbox.html")
-async def mapbox_html(token: str):
+async def mapbox_html(token: str, style: str = "geobeats"):
     """Mapbox GL JS globe view — Snapchat-style 3D Earth with atmosphere,
-    stars, and satellite terrain. The marker/message protocol matches
-    /api/map.html so the SoundMapView WebView swap is drop-in."""
+    stars, and configurable terrain style (custom GeoBeats neon or
+    Mapbox satellite-streets). The marker/message protocol matches
+    /api/map.html so the SoundMapView WebView swap is drop-in.
+
+    style param:
+      - "geobeats" (default): custom dark-v11 base with NFS neon paint overrides
+      - "satellite": Mapbox satellite-streets-v12 (photorealistic terrain)
+    """
+    is_satellite = style == "satellite"
+    base_style = "mapbox://styles/mapbox/satellite-streets-v12" if is_satellite else "mapbox://styles/mapbox/dark-v11"
+    apply_paint = "false" if is_satellite else "true"
     html = f"""<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8" />
@@ -1250,12 +1259,12 @@ async def mapbox_html(token: str):
   window.__handle = handle;
   document.addEventListener('message', e => handle(e.data));
   window.addEventListener('message', e => handle(e.data));
-  // Init globe — base style is dark-v11; we recolor layers to GeoBeats theme
-  // on style.load below for a fully custom NFS-neon look without needing
-  // Mapbox Studio setup.
+  // Init globe — base style is configurable; we recolor layers to GeoBeats
+  // theme on style.load when apply_paint is true (otherwise we keep the
+  // satellite-streets photo terrain as-is).
   map = new mapboxgl.Map({{
     container: 'map',
-    style: 'mapbox://styles/mapbox/dark-v11',
+    style: '{base_style}',
     center: [20, 20],
     zoom: 1.4,
     projection: 'globe',
@@ -1410,8 +1419,8 @@ async def mapbox_html(token: str):
       'space-color': 'rgb(8, 4, 18)',
       'star-intensity': 0.85
     }});
-    // Apply our GeoBeats neon palette
-    paintGeoBeats();
+    // Apply our GeoBeats neon palette only when configured (not for satellite)
+    if ({apply_paint}) paintGeoBeats();
     document.getElementById('status').style.display = 'none';
     post({{ type: 'map:ready' }});
   }});

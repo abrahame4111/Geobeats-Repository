@@ -23,6 +23,8 @@ type Props = {
   markers: MapMarker[];
   myLocation?: { lat: number; lng: number } | null;
   onMarkerPress?: (userId: string) => void;
+  /** Mapbox base style: "geobeats" (NFS neon overrides) or "satellite" (photo terrain). */
+  mapStyle?: "geobeats" | "satellite";
 };
 
 const DEFAULT_CENTER = { lat: 40.758, lng: -73.9855 }; // Times Square fallback
@@ -239,21 +241,18 @@ function buildHtml(apiKey: string): string {
 </html>`;
 }
 
-function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress }: Props, ref: React.Ref<SoundMapHandle>) {
+function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, mapStyle = "geobeats" }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
     const mbxToken = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "";
-    // Cache-buster ensures the WebView fetches a fresh /api/mapbox.html every
-    // mount — important for picking up backend HTML/style changes during
-    // active development without needing to clear app data.
+    // Cache-buster + style key in the URL so when the user toggles theme the
+    // WebView remounts to a fresh /api/mapbox.html with the new base style.
     const cacheBust = `&_v=${Date.now()}`;
-    // Use Mapbox globe view (Snapchat-style) when a token is configured,
-    // fall back to the legacy Google Maps page if not.
     if (mbxToken) {
-      return `${base}/api/mapbox.html?token=${encodeURIComponent(mbxToken)}${cacheBust}`;
+      return `${base}/api/mapbox.html?token=${encodeURIComponent(mbxToken)}&style=${encodeURIComponent(mapStyle)}${cacheBust}`;
     }
     return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}${cacheBust}`;
-  }, [apiKey]);
+  }, [apiKey, mapStyle]);
   const iframeRef = useRef<any>(null);
   const webViewRef = useRef<WebView>(null);
   const readyRef = useRef(false);
