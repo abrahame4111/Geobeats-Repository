@@ -1,6 +1,6 @@
 """SoundMap backend - Spotify OAuth, Web API proxy, and real-time WebSocket sync."""
 from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -456,6 +456,230 @@ async def spotify_seek(body: PlayRequest):
         return {"status": "seeked"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+PIXELBLAST_HTML = """<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>PixelBlast Background</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;background:#05050A;overflow:hidden;}
+  #root{position:fixed;inset:0;width:100vw;height:100vh;}
+  canvas{display:block;width:100%!important;height:100%!important;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="importmap">
+{ "imports": {
+    "three": "https://esm.sh/three@0.166.0",
+    "postprocessing": "https://esm.sh/postprocessing@6.36.0?deps=three@0.166.0"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { Effect, EffectComposer, EffectPass, RenderPass } from 'postprocessing';
+
+const params = new URLSearchParams(location.search);
+const num = (k, d) => { const v = parseFloat(params.get(k)); return Number.isFinite(v) ? v : d; };
+const str = (k, d) => params.get(k) || d;
+const bool = (k, d) => { const v = params.get(k); if (v === null) return d; return v !== '0' && v !== 'false'; };
+
+const variant = str('variant', 'circle');
+const pixelSize = num('pixelSize', 6);
+const color = str('color', '#D4FF00');
+const patternScale = num('patternScale', 3);
+const patternDensity = num('patternDensity', 1.2);
+const pixelSizeJitter = num('pixelSizeJitter', 0.5);
+const enableRipples = bool('enableRipples', true);
+const rippleSpeed = num('rippleSpeed', 0.4);
+const rippleThickness = num('rippleThickness', 0.12);
+const rippleIntensityScale = num('rippleIntensityScale', 1.5);
+const liquid = bool('liquid', true);
+const liquidStrength = num('liquidStrength', 0.12);
+const liquidRadius = num('liquidRadius', 1.2);
+const liquidWobbleSpeed = num('liquidWobbleSpeed', 5);
+const speed = num('speed', 0.6);
+const edgeFade = num('edgeFade', 0.25);
+const noiseAmount = num('noiseAmount', 0);
+const transparent = bool('transparent', false);
+
+const SHAPE_MAP = { square:0, circle:1, triangle:2, diamond:3 };
+const MAX_CLICKS = 10;
+const VERTEX_SRC = `void main(){gl_Position=vec4(position,1.0);}`;
+const FRAGMENT_SRC = `precision highp float;
+uniform vec3 uColor;uniform vec2 uResolution;uniform float uTime;
+uniform float uPixelSize;uniform float uScale;uniform float uDensity;uniform float uPixelJitter;
+uniform int uEnableRipples;uniform float uRippleSpeed;uniform float uRippleThickness;
+uniform float uRippleIntensity;uniform float uEdgeFade;uniform int uShapeType;
+const int SHAPE_SQUARE=0,SHAPE_CIRCLE=1,SHAPE_TRIANGLE=2,SHAPE_DIAMOND=3;
+const int MAX_CLICKS=10;uniform vec2 uClickPos[MAX_CLICKS];uniform float uClickTimes[MAX_CLICKS];
+out vec4 fragColor;
+float Bayer2(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}
+#define Bayer4(a) (Bayer2(.5*(a))*0.25 + Bayer2(a))
+#define Bayer8(a) (Bayer4(.5*(a))*0.25 + Bayer2(a))
+#define FBM_OCTAVES 5
+#define FBM_LACUNARITY 1.25
+#define FBM_GAIN 1.0
+float hash11(float n){return fract(sin(n)*43758.5453);}
+float vnoise(vec3 p){vec3 ip=floor(p);vec3 fp=fract(p);
+float n000=hash11(dot(ip+vec3(0.,0.,0.),vec3(1.,57.,113.)));float n100=hash11(dot(ip+vec3(1.,0.,0.),vec3(1.,57.,113.)));
+float n010=hash11(dot(ip+vec3(0.,1.,0.),vec3(1.,57.,113.)));float n110=hash11(dot(ip+vec3(1.,1.,0.),vec3(1.,57.,113.)));
+float n001=hash11(dot(ip+vec3(0.,0.,1.),vec3(1.,57.,113.)));float n101=hash11(dot(ip+vec3(1.,0.,1.),vec3(1.,57.,113.)));
+float n011=hash11(dot(ip+vec3(0.,1.,1.),vec3(1.,57.,113.)));float n111=hash11(dot(ip+vec3(1.,1.,1.),vec3(1.,57.,113.)));
+vec3 w=fp*fp*fp*(fp*(fp*6.-15.)+10.);
+float x00=mix(n000,n100,w.x);float x10=mix(n010,n110,w.x);float x01=mix(n001,n101,w.x);float x11=mix(n011,n111,w.x);
+float y0=mix(x00,x10,w.y);float y1=mix(x01,x11,w.y);return mix(y0,y1,w.z)*2.-1.;}
+float fbm2(vec2 uv,float t){vec3 p=vec3(uv*uScale,t);float amp=1.,freq=1.,sum=1.;
+for(int i=0;i<FBM_OCTAVES;++i){sum+=amp*vnoise(p*freq);freq*=FBM_LACUNARITY;amp*=FBM_GAIN;}return sum*0.5+0.5;}
+float maskCircle(vec2 p,float cov){float r=sqrt(cov)*.25;float d=length(p-0.5)-r;float aa=0.5*fwidth(d);return cov*(1.-smoothstep(-aa,aa,d*2.));}
+float maskTriangle(vec2 p,vec2 id,float cov){bool flip=mod(id.x+id.y,2.)>0.5;if(flip)p.x=1.-p.x;float r=sqrt(cov);float d=p.y-r*(1.-p.x);float aa=fwidth(d);return cov*clamp(0.5-d/aa,0.,1.);}
+float maskDiamond(vec2 p,float cov){float r=sqrt(cov)*0.564;return step(abs(p.x-0.49)+abs(p.y-0.49),r);}
+void main(){float pixelSize=uPixelSize;vec2 fragCoord=gl_FragCoord.xy-uResolution*.5;float ar=uResolution.x/uResolution.y;
+vec2 pixelId=floor(fragCoord/pixelSize);vec2 pixelUV=fract(fragCoord/pixelSize);
+float cellPixelSize=8.*pixelSize;vec2 cellId=floor(fragCoord/cellPixelSize);vec2 cellCoord=cellId*cellPixelSize;
+vec2 uv=cellCoord/uResolution*vec2(ar,1.);float base=fbm2(uv,uTime*0.05);base=base*0.5-0.65;
+float feed=base+(uDensity-0.5)*0.3;float speed=uRippleSpeed;float thickness=uRippleThickness;
+const float dampT=1.;const float dampR=10.;
+if(uEnableRipples==1){for(int i=0;i<MAX_CLICKS;++i){vec2 pos=uClickPos[i];if(pos.x<0.)continue;
+float cellPixelSize=8.*pixelSize;vec2 cuv=(((pos-uResolution*.5-cellPixelSize*.5)/(uResolution)))*vec2(ar,1.);
+float t=max(uTime-uClickTimes[i],0.);float r=distance(uv,cuv);float waveR=speed*t;
+float ring=exp(-pow((r-waveR)/thickness,2.));float atten=exp(-dampT*t)*exp(-dampR*r);
+feed=max(feed,ring*atten*uRippleIntensity);}}
+float bayer=Bayer8(fragCoord/uPixelSize)-0.5;float bw=step(0.5,feed+bayer);
+float h=fract(sin(dot(floor(fragCoord/uPixelSize),vec2(127.1,311.7)))*43758.5453);
+float jitterScale=1.+(h-0.5)*uPixelJitter;float coverage=bw*jitterScale;
+float M;if(uShapeType==SHAPE_CIRCLE)M=maskCircle(pixelUV,coverage);
+else if(uShapeType==SHAPE_TRIANGLE)M=maskTriangle(pixelUV,pixelId,coverage);
+else if(uShapeType==SHAPE_DIAMOND)M=maskDiamond(pixelUV,coverage);
+else M=coverage;
+if(uEdgeFade>0.){vec2 norm=gl_FragCoord.xy/uResolution;
+float edge=min(min(norm.x,norm.y),min(1.-norm.x,1.-norm.y));float fade=smoothstep(0.,uEdgeFade,edge);M*=fade;}
+vec3 col=uColor;
+vec3 srgb=mix(col*12.92,1.055*pow(col,vec3(1./2.4))-0.055,step(0.0031308,col));
+fragColor=vec4(srgb,M);}`;
+
+// --- Touch texture for liquid effect ---
+function createTouchTexture(){const size=64;const c=document.createElement('canvas');c.width=size;c.height=size;const ctx=c.getContext('2d');
+ctx.fillStyle='black';ctx.fillRect(0,0,size,size);const tex=new THREE.Texture(c);
+tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+const trail=[];let last=null;const maxAge=64;let radius=0.1*size;const sp=1/maxAge;
+const clear=()=>{ctx.fillStyle='black';ctx.fillRect(0,0,size,size);};
+const drawPoint=p=>{const pos={x:p.x*size,y:(1-p.y)*size};let inten=1;
+const easeOutSine=t=>Math.sin((t*Math.PI)/2);const easeOutQuad=t=>-t*(t-2);
+if(p.age<maxAge*0.3)inten=easeOutSine(p.age/(maxAge*0.3));else inten=easeOutQuad(1-(p.age-maxAge*0.3)/(maxAge*0.7))||0;
+inten*=p.force;const col=`${((p.vx+1)/2)*255}, ${((p.vy+1)/2)*255}, ${inten*255}`;const off=size*5;
+ctx.shadowOffsetX=off;ctx.shadowOffsetY=off;ctx.shadowBlur=radius;ctx.shadowColor=`rgba(${col},${0.22*inten})`;
+ctx.beginPath();ctx.fillStyle='rgba(255,0,0,1)';ctx.arc(pos.x-off,pos.y-off,radius,0,Math.PI*2);ctx.fill();};
+return{canvas:c,texture:tex,
+addTouch(n){let f=0,vx=0,vy=0;if(last){const dx=n.x-last.x,dy=n.y-last.y;if(dx===0&&dy===0)return;
+const dd=dx*dx+dy*dy,d=Math.sqrt(dd);vx=dx/(d||1);vy=dy/(d||1);f=Math.min(dd*10000,1);}
+last={x:n.x,y:n.y};trail.push({x:n.x,y:n.y,age:0,force:f,vx,vy});},
+update(){clear();for(let i=trail.length-1;i>=0;i--){const p=trail[i];const f=p.force*sp*(1-p.age/maxAge);p.x+=p.vx*f;p.y+=p.vy*f;p.age++;if(p.age>maxAge)trail.splice(i,1);}for(let i=0;i<trail.length;i++)drawPoint(trail[i]);tex.needsUpdate=true;},
+set radiusScale(v){radius=0.1*size*v;},get radiusScale(){return radius/(0.1*size);},size};}
+
+function createLiquidEffect(texture,opts){
+const fragment=`uniform sampler2D uTexture;uniform float uStrength;uniform float uTime;uniform float uFreq;
+void mainUv(inout vec2 uv){vec4 tex=texture2D(uTexture,uv);float vx=tex.r*2.-1.;float vy=tex.g*2.-1.;float intensity=tex.b;
+float wave=0.5+0.5*sin(uTime*uFreq+intensity*6.2831853);float amt=uStrength*intensity*wave;
+uv+=vec2(vx,vy)*amt;}`;
+return new Effect('LiquidEffect',fragment,{uniforms:new Map([
+['uTexture',new THREE.Uniform(texture)],['uStrength',new THREE.Uniform(opts?.strength??0.025)],
+['uTime',new THREE.Uniform(0)],['uFreq',new THREE.Uniform(opts?.freq??4.5)]])});}
+
+const container = document.getElementById('root');
+const canvas = document.createElement('canvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true, powerPreference:'high-performance'});
+renderer.domElement.style.width='100%';renderer.domElement.style.height='100%';
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+container.appendChild(renderer.domElement);
+if(transparent) renderer.setClearAlpha(0); else renderer.setClearColor(0x05050A,1);
+
+const uniforms={
+  uResolution:{value:new THREE.Vector2(0,0)},
+  uTime:{value:0},
+  uColor:{value:new THREE.Color(color)},
+  uClickPos:{value:Array.from({length:MAX_CLICKS},()=>new THREE.Vector2(-1,-1))},
+  uClickTimes:{value:new Float32Array(MAX_CLICKS)},
+  uShapeType:{value:SHAPE_MAP[variant]??0},
+  uPixelSize:{value:pixelSize*renderer.getPixelRatio()},
+  uScale:{value:patternScale},
+  uDensity:{value:patternDensity},
+  uPixelJitter:{value:pixelSizeJitter},
+  uEnableRipples:{value:enableRipples?1:0},
+  uRippleSpeed:{value:rippleSpeed},
+  uRippleThickness:{value:rippleThickness},
+  uRippleIntensity:{value:rippleIntensityScale},
+  uEdgeFade:{value:edgeFade}
+};
+
+const scene=new THREE.Scene();
+const camera=new THREE.OrthographicCamera(-1,1,1,-1,0,1);
+const material=new THREE.ShaderMaterial({vertexShader:VERTEX_SRC,fragmentShader:FRAGMENT_SRC,uniforms,transparent:true,depthTest:false,depthWrite:false,glslVersion:THREE.GLSL3});
+const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),material);
+scene.add(quad);
+const clock=new THREE.Clock();
+
+let composer, touch, liquidEffect;
+if(liquid){
+  touch = createTouchTexture(); touch.radiusScale = liquidRadius;
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  liquidEffect = createLiquidEffect(touch.texture, { strength: liquidStrength, freq: liquidWobbleSpeed });
+  const ep = new EffectPass(camera, liquidEffect); ep.renderToScreen = true;
+  composer.addPass(ep);
+}
+
+function setSize(){
+  const w=container.clientWidth||window.innerWidth||1;
+  const h=container.clientHeight||window.innerHeight||1;
+  renderer.setSize(w,h,false);
+  uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
+  uniforms.uPixelSize.value = pixelSize * renderer.getPixelRatio();
+  if(composer) composer.setSize(renderer.domElement.width, renderer.domElement.height);
+}
+setSize();
+window.addEventListener('resize', setSize);
+
+let clickIx=0;
+function mapToPixels(e){
+  const rect=renderer.domElement.getBoundingClientRect();
+  const sx=renderer.domElement.width/rect.width;
+  const sy=renderer.domElement.height/rect.height;
+  const fx=(e.clientX-rect.left)*sx;
+  const fy=(rect.height-(e.clientY-rect.top))*sy;
+  return {fx,fy,w:renderer.domElement.width,h:renderer.domElement.height};
+}
+renderer.domElement.addEventListener('pointerdown', e=>{
+  const {fx,fy}=mapToPixels(e);
+  uniforms.uClickPos.value[clickIx].set(fx,fy);
+  uniforms.uClickTimes.value[clickIx]=uniforms.uTime.value;
+  clickIx=(clickIx+1)%MAX_CLICKS;
+}, {passive:true});
+renderer.domElement.addEventListener('pointermove', e=>{
+  if(!touch) return;
+  const {fx,fy,w,h}=mapToPixels(e);
+  touch.addTouch({x:fx/w,y:fy/h});
+}, {passive:true});
+
+const timeOffset = Math.random()*1000;
+function animate(){
+  uniforms.uTime.value = timeOffset + clock.getElapsedTime() * speed;
+  if(liquidEffect) liquidEffect.uniforms.get('uTime').value = uniforms.uTime.value;
+  if(composer){ if(touch) touch.update(); composer.render(); }
+  else renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body></html>
+"""
+
+
+@api_router.get("/pixelblast.html")
+async def pixelblast_html():
+    return Response(content=PIXELBLAST_HTML, media_type="text/html")
 
 
 @api_router.post("/spotify/queue")

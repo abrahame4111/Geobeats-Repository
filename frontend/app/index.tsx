@@ -13,6 +13,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Ionicons } from "@expo/vector-icons";
 import { getLoginUrl, loadAuth, saveAuth, StoredAuth } from "../src/api";
+import PixelBlastBackground from "../src/components/PixelBlastBackground";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -142,8 +143,26 @@ export default function Login() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.glow1} />
-      <View style={styles.glow2} />
+      <PixelBlastBackground
+        variant="circle"
+        pixelSize={6}
+        color="#D4FF00"
+        patternScale={3}
+        patternDensity={1.2}
+        pixelSizeJitter={0.5}
+        enableRipples
+        rippleSpeed={0.4}
+        rippleThickness={0.12}
+        rippleIntensityScale={1.5}
+        liquid
+        liquidStrength={0.12}
+        liquidRadius={1.2}
+        liquidWobbleSpeed={5}
+        speed={0.6}
+        edgeFade={0.25}
+      />
+      {/* Subtle vertical scrim so text stays legible over the pixel pattern */}
+      <View style={styles.scrim} pointerEvents="none" />
 
       <View style={styles.top} testID="login-hero">
         <View style={styles.logoWrap}>
@@ -213,25 +232,13 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     overflow: "hidden",
   },
-  glow1: {
+  scrim: {
     position: "absolute",
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: "#D4FF00",
-    opacity: 0.08,
-    top: -120,
-    right: -120,
-  },
-  glow2: {
-    position: "absolute",
-    width: 380,
-    height: 380,
-    borderRadius: 190,
-    backgroundColor: "#FF4500",
-    opacity: 0.06,
-    bottom: -140,
-    left: -100,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(5,5,10,0.55)",
   },
   top: { marginTop: 40 },
   logoWrap: {
