@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -34,18 +34,66 @@ function extractTrack(ct: any) {
 }
 
 /**
- * State machine (per latest spec):
- *  - PAUSED (no song playing) → just the header with "PAUSED" label, no track,
- *    no Listen Along button. Auto-refreshes when the user resumes playback
- *    because we recompute on every render.
- *  - PLAYING + can join (not self, not already in session) → track + button.
- *  - PLAYING + already in session (or viewing self) → track only, no button.
- *
- * If the viewer is in an active session and presses the close (X) icon,
- * onClose() should propagate session-leave logic in the parent.
+ * Atomic track swaps: when a track changes, name/artist update synchronously
+ * via React batching, but the album art is fetched async by <Image>. To avoid
+ * the brief "new title + old art" desync, we treat the *displayed* track as a
+ * derived snapshot that only commits once the new artwork has been prefetched
+ * (or after a 1.2s timeout fallback). All visible parts swap together.
  */
 export default function ListenAlongCard({ user, onClose, onListenAlong, onReact, busy, isActiveSession, isSelf }: Props) {
-  const t = extractTrack(user.current_track);
+  const incoming = useMemo(() => extractTrack(user.current_track), [user.current_track]);
+  const [displayed, setDisplayed] = useState(incoming);
+  const [artLoading, setArtLoading] = useState(false);
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const sameName = (displayed?.name || "") === (incoming?.name || "");
+    const sameArt = (displayed?.art || "") === (incoming?.art || "");
+    if (sameName && sameArt) return;
+
+    if (!incoming) {
+      setDisplayed(null);
+      setArtLoading(false);
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (!incoming.art) {
+      setDisplayed(incoming);
+      setArtLoading(false);
+      return;
+    }
+
+    setArtLoading(true);
+    let cancelled = false;
+    Image.prefetch(incoming.art)
+      .catch(() => {})
+      .finally(() => {
+        if (cancelled) return;
+        setDisplayed(incoming);
+        setArtLoading(false);
+        if (fallbackTimerRef.current) {
+          clearTimeout(fallbackTimerRef.current);
+          fallbackTimerRef.current = null;
+        }
+      });
+
+    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = setTimeout(() => {
+      if (cancelled) return;
+      setDisplayed(incoming);
+      setArtLoading(false);
+    }, 1200);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [incoming, displayed]);
+
+  const t = displayed;
   const isPlaying = !!user.is_playing && !!t;
   const showTrack = isPlaying;
   const showButton = isPlaying && !isActiveSession && !isSelf;
@@ -79,7 +127,7 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
       </View>
 
       {showTrack ? (
-        <View style={styles.trackRow}>
+        <View style={styles.trackRow} key={t!.art || t!.name}>
           {t!.art ? (
             <Image source={{ uri: t!.art }} style={styles.art} />
           ) : (
@@ -95,6 +143,9 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
               </Text>
             ) : null}
           </View>
+          {artLoading ? (
+            <ActivityIndicator size="small" color="rgba(176,38,255,0.6)" />
+          ) : null}
         </View>
       ) : null}
 
@@ -166,52 +217,29 @@ const styles = StyleSheet.create({
   name: { color: "#fff", fontSize: 17, fontWeight: "700" },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 6, height: 6, borderRadius: 3,
     backgroundColor: "#B026FF",
-    shadowColor: "#B026FF",
-    shadowOpacity: 1,
-    shadowRadius: 4,
+    shadowColor: "#B026FF", shadowOpacity: 1, shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
   },
   dotMuted: { backgroundColor: "rgba(255,255,255,0.35)", shadowOpacity: 0 },
-  liveLabel: {
-    color: "rgba(255,255,255,0.6)",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
+  liveLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "700", letterSpacing: 1 },
   trackRow: { flexDirection: "row", gap: 14, alignItems: "center" },
-  art: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    backgroundColor: "#1a0a24",
-  },
+  art: { width: 56, height: 56, borderRadius: 8, backgroundColor: "#1a0a24" },
   artPlaceholder: { borderWidth: 1, borderColor: "rgba(176,38,255,0.2)" },
   trackName: { color: "#fff", fontSize: 15, fontWeight: "700" },
   trackArtist: { color: "rgba(255,255,255,0.55)", fontSize: 13 },
   reactionRow: { flexDirection: "row", justifyContent: "center", gap: 14 },
   reactionBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: "rgba(176,38,255,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(176,38,255,0.3)",
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(176,38,255,0.3)",
+    alignItems: "center", justifyContent: "center",
   },
   reactionEmoji: { fontSize: 22 },
   cta: {
-    backgroundColor: "#B026FF",
-    borderRadius: 999,
-    paddingVertical: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
+    backgroundColor: "#B026FF", borderRadius: 999, paddingVertical: 16,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
   },
   ctaDisabled: { opacity: 0.4 },
   ctaText: { color: "#000", fontWeight: "900", fontSize: 15, letterSpacing: 1 },
