@@ -1174,9 +1174,17 @@ async def mapbox_html(token: str):
     const el = document.createElement('div');
     el.className = 'bubble' + (u.isSelf ? ' self' : '') + (u.host_session ? ' host' : '');
     const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
-    const track = u.current_track && u.current_track.name ? u.current_track.name : '';
+    // current_track may arrive in two shapes:
+    //  1) From local Spotify poll (self):  {{ item: {{ name, artists }} }}
+    //  2) From server WS broadcast (others): {{ name, artists }} or {{ item: {{ name, artists }} }}
+    const ct = u.current_track || {{}};
+    const trackObj = ct.item || ct;
+    const trackName = trackObj && trackObj.name ? String(trackObj.name) : '';
+    const artistName = trackObj && Array.isArray(trackObj.artists) && trackObj.artists.length ? String(trackObj.artists[0].name || '') : '';
+    const trackLabel = artistName ? (trackName + ' — ' + artistName) : trackName;
+    const safeLabel = trackLabel.replace(/[<>&]/g, '');
     el.innerHTML = '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
-                   (track ? '<div class="pill"><span class="dot"></span><span>'+track.replace(/[<>&]/g,'')+'</span></div>' : '');
+                   (safeLabel ? '<div class="pill"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '');
     el.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
     return el;
   }}
