@@ -7,8 +7,6 @@ import {
   Animated,
   Easing,
   useWindowDimensions,
-  Platform,
-  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TiltedCard from "./TiltedCard";
@@ -72,21 +70,6 @@ export default function SongFoundCard({ visible, data, onDismiss }: Props) {
   // Card sized to ~70% of screen width, capped at 340.
   const cardSize = Math.min(340, Math.round(width * 0.72));
 
-  const openSpotify = async () => {
-    const target = data.spotifyUri || data.spotifyUrl;
-    if (!target) return;
-    try {
-      const can = await Linking.canOpenURL(target);
-      if (can) {
-        Linking.openURL(target);
-      } else if (data.spotifyUrl) {
-        Linking.openURL(data.spotifyUrl);
-      }
-    } catch {
-      if (data.spotifyUrl) Linking.openURL(data.spotifyUrl).catch(() => {});
-    }
-  };
-
   return (
     <Animated.View
       pointerEvents="auto"
@@ -140,19 +123,6 @@ export default function SongFoundCard({ visible, data, onDismiss }: Props) {
               </Text>
             ) : null}
           </View>
-
-          {/* Optional Open in Spotify */}
-          {(data.spotifyUrl || data.spotifyUri) ? (
-            <TouchableOpacity
-              onPress={openSpotify}
-              style={styles.spotifyBtn}
-              activeOpacity={0.85}
-              testID="song-found-open-spotify"
-            >
-              <Ionicons name="musical-notes" size={16} color="#0A0A12" />
-              <Text style={styles.spotifyBtnText}>OPEN IN SPOTIFY</Text>
-            </TouchableOpacity>
-          ) : null}
 
           {/* Dismiss */}
           <TouchableOpacity
@@ -225,25 +195,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   spotifyBtn: {
-    marginTop: 22,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: "#B026FF",
-    ...Platform.select({
-      ios: { shadowColor: "#B026FF", shadowOpacity: 0.55, shadowRadius: 20, shadowOffset: { width: 0, height: 6 } },
-      android: { elevation: 8 },
-      default: {},
-    }),
+    // unused — kept for future re-enable
+    display: "none",
   },
   spotifyBtnText: {
-    color: "#0A0A12",
-    fontWeight: "900",
-    letterSpacing: 1.5,
-    fontSize: 12,
+    display: "none",
   },
   dismissBtn: {
     marginTop: 14,
