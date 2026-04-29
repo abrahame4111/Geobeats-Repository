@@ -1097,12 +1097,18 @@ async def map_html(key: str):
 <meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
 <style>
   html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }}
-  /* PixelBlast pattern sits behind the map; the map itself is rendered at
-     slightly reduced opacity so the pattern subtly bleeds through the
-     terrain, evoking the GeoBeats login background. */
-  #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; }}
+  /* PixelBlast pattern sits behind the map; visible mainly around the
+     globe-in-space view at low zoom. Lower opacity since satellite
+     imagery is opaque when zoomed in. */
+  #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; opacity: 0.85; }}
   #map-wrap {{ position: relative; z-index: 1; width: 100vw; height: 100vh; }}
-  #map {{ position: absolute; inset: 0; opacity: 0.88; }}
+  #map {{ position: absolute; inset: 0; }}
+  /* Tint satellite imagery toward the GeoBeats purple-noir palette.
+     Targets the first child of .gm-style which holds the tile/canvas
+     layers, leaving overlays/markers (later siblings) at full color. */
+  #map .gm-style > div:nth-child(1) {{
+    filter: hue-rotate(245deg) saturate(0.55) brightness(0.6) contrast(1.15);
+  }}
   /* Markers / overlays should stay fully opaque, so we re-overlay them
      on a non-blended layer via Google Maps' floatPane. */
   #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; z-index:2; }}
@@ -1165,14 +1171,33 @@ async def map_html(key: str):
     AdvancedBubble.prototype.onRemove = function(){{ if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el); }};
     AdvancedBubble.prototype.setPosition = function(latLng){{ this.position = latLng; this.draw(); }};
     map = new google.maps.Map(document.getElementById('map'), {{
-      center: {{ lat: 40.758, lng: -73.9855 }},
-      zoom: 12,
+      // Cinematic intro: open at globe-in-space view; we auto-fly to the
+      // user's location when their first WS location update arrives.
+      center: {{ lat: 20, lng: 0 }},
+      zoom: 2.2,
+      mapId: 'DEMO_MAP_ID', // required for vector rendering (tilt/heading/globe)
+      mapTypeId: 'hybrid',  // satellite imagery + roads & labels
+      tilt: 0,
+      heading: 0,
       disableDefaultUI: true,
       gestureHandling: 'greedy',
-      backgroundColor: '#05050A',
-      styles: DARK_STYLE,
+      backgroundColor: '#000', // black space behind the globe
+      isFractionalZoomEnabled: true,
+      minZoom: 1.5,
+      maxZoom: 20,
     }});
     map.addListener('idle', recomputeClusters);
+    // Cinematic auto-fly to user once their location arrives. We trigger this
+    // from upsertMarker the first time we see the self-marker.
+    window.__flyToUser = function(lat, lng){{
+      if (window.__flown) return;
+      window.__flown = true;
+      // Two-stage flight: zoom from 2 → 5 → 14 with smooth easing + tilt.
+      try {{ map.panTo({{ lat: lat, lng: lng }}); }} catch(e) {{}}
+      setTimeout(function(){{ try {{ map.setZoom(5); }} catch(e) {{}} }}, 700);
+      setTimeout(function(){{ try {{ map.setZoom(10); map.setTilt(45); }} catch(e) {{}} }}, 1500);
+      setTimeout(function(){{ try {{ map.setZoom(14); }} catch(e) {{}} }}, 2300);
+    }};
     post({{ type: 'map:ready' }});
   }};
   function recomputeClusters(){{
@@ -1229,6 +1254,11 @@ async def map_html(key: str):
   }}
   function upsertMarker(u) {{
     if (!u.lat || !u.lng) return;
+    // Cinematic auto-fly: when our own (self) location arrives for the first
+    // time, smoothly transition from globe-in-space → user's location.
+    if (u.user_id && meId && u.user_id === meId && window.__flyToUser) {{
+      window.__flyToUser(u.lat, u.lng);
+    }}
     const existing = markers[u.user_id];
     if (existing) {{
       existing.setPosition(new google.maps.LatLng(u.lat, u.lng));
