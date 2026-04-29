@@ -1181,6 +1181,11 @@ async def map_html(key: str):
       zoom: 1.5,
       mapId: '2c42daaa74a7741732d7690f', // Vector map — enables globe view + tilt + heading
       mapTypeId: 'roadmap',  // CRITICAL: globe view only works with roadmap, not hybrid/satellite
+      // Force LIGHT color scheme so the user's "NFS Neon" map style (saved
+      // as Light mode in Cloud Console) is always applied, regardless of
+      // device dark-mode preference. Without this, the device's system theme
+      // would pick the Dark slot which is still Google's default.
+      colorScheme: 'LIGHT',
       tilt: 0,
       heading: 0,
       disableDefaultUI: true,
