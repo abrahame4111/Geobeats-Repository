@@ -1231,7 +1231,21 @@ async def mapbox_html(token: str):
     else if (msg.type === 'markers:bulk') setMarkersBulk(msg.users || msg.markers);
     else if (msg.type === 'marker:upsert') upsertMarker(msg.user);
     else if (msg.type === 'marker:remove') removeMarker(msg.user_id);
-    else if (msg.type === 'center') {{ if (map) map.flyTo({{ center: [msg.lng, msg.lat], zoom: msg.zoom||14, pitch: 45, essential: true }}); }}
+    else if (msg.type === 'center') {{
+      if (!map) return;
+      // Reset bearing to 0 (north up) and pitch to a tasteful 45° tilt so
+      // the user re-orients no matter how badly they rotated the globe.
+      // This makes "Locate Me" function as a true reset button.
+      map.flyTo({{
+        center: [msg.lng, msg.lat],
+        zoom: msg.zoom || 14,
+        pitch: 45,
+        bearing: 0,
+        speed: 1.2,
+        curve: 1.5,
+        essential: true
+      }});
+    }}
   }}
   window.__handle = handle;
   document.addEventListener('message', e => handle(e.data));
