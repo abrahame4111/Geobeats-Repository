@@ -155,7 +155,7 @@ export default function ListenersSheet({
               return (
                 <View style={styles.listenerRow}>
                   <Image
-                    source={{ uri: item.profile_image || "https://placehold.co/100x100/121218/D4FF00?text=M" }}
+                    source={{ uri: item.profile_image || "https://placehold.co/100x100/121218/B026FF?text=M" }}
                     style={styles.avatar}
                   />
                   <View style={{ flex: 1 }}>
@@ -166,7 +166,7 @@ export default function ListenersSheet({
                       </Text>
                       {isHost && !isMe ? (
                         <View style={styles.hostPill}>
-                          <Ionicons name="radio" size={9} color="#D4FF00" />
+                          <Ionicons name="radio" size={9} color="#B026FF" />
                           <Text style={styles.hostPillText}>HOST</Text>
                         </View>
                       ) : null}
@@ -218,7 +218,7 @@ export default function ListenersSheet({
                   </View>
                 ) : null}
                 {queue.length > 0 ? <Text style={[styles.sectionLabel, { marginTop: 8 }]}>UP NEXT</Text> : null}
-                {queueLoading ? <ActivityIndicator color="#D4FF00" style={{ marginTop: 16 }} /> : null}
+                {queueLoading ? <ActivityIndicator color="#B026FF" style={{ marginTop: 16 }} /> : null}
                 {queueError ? <Text style={styles.empty}>{queueError}</Text> : null}
               </View>
             }
@@ -252,13 +252,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderColor: "rgba(212,255,0,0.15)",
+    borderColor: "rgba(176,38,255,0.15)",
   },
   handle: { alignSelf: "center", width: 44, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.18)", marginBottom: 10 },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 12, gap: 10 },
   tabs: { flex: 1, flexDirection: "row", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 4, gap: 4 },
   tab: { flex: 1, flexDirection: "row", gap: 6, alignItems: "center", justifyContent: "center", paddingVertical: 8, borderRadius: 999 },
-  tabActive: { backgroundColor: "#D4FF00" },
+  tabActive: { backgroundColor: "#B026FF" },
   tabText: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   tabTextActive: { color: "#05050A" },
   closeBtn: { padding: 4 },
@@ -270,14 +270,14 @@ const styles = StyleSheet.create({
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#12121A" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
   name: { color: "#fff", fontSize: 14, fontWeight: "700", flexShrink: 1 },
-  hostPill: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: "rgba(212,255,0,0.12)", borderWidth: 1, borderColor: "rgba(212,255,0,0.3)" },
-  hostPillText: { color: "#D4FF00", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
+  hostPill: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: "rgba(176,38,255,0.12)", borderWidth: 1, borderColor: "rgba(176,38,255,0.3)" },
+  hostPillText: { color: "#B026FF", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 },
   track: { color: "rgba(255,255,255,0.5)", fontSize: 12 },
   actionBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: "#D4FF00",
+    paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: "#B026FF",
   },
-  actionBtnDisabled: { backgroundColor: "rgba(212,255,0,0.3)" },
+  actionBtnDisabled: { backgroundColor: "rgba(176,38,255,0.3)" },
   actionBtnText: { fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
   leaveBtn: { backgroundColor: "rgba(255,69,0,0.16)", borderWidth: 1, borderColor: "rgba(255,69,0,0.55)" },
   sectionLabel: { color: "rgba(255,255,255,0.45)", fontSize: 10, fontWeight: "900", letterSpacing: 1, marginVertical: 6 },

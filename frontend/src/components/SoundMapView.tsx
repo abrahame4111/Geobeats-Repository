@@ -47,12 +47,12 @@ function buildHtml(apiKey: string): string {
   .avatar-wrap {
     width: 56px; height: 56px; border-radius: 50%;
     padding: 3px;
-    background: linear-gradient(135deg, #D4FF00, #BEE600);
-    box-shadow: 0 0 18px rgba(212,255,0,0.55);
+    background: linear-gradient(135deg, #B026FF, #7E1FB8);
+    box-shadow: 0 0 18px rgba(176,38,255,0.55);
     animation: pulse 2.4s ease-in-out infinite;
   }
   .avatar-wrap.self { background: linear-gradient(135deg, #FF4500, #FF8A00); box-shadow: 0 0 18px rgba(255,69,0,0.55);}
-  .avatar-wrap.hosting { background: linear-gradient(135deg, #D4FF00, #00FFE0); animation: pulse 1.3s ease-in-out infinite;}
+  .avatar-wrap.hosting { background: linear-gradient(135deg, #B026FF, #00FFE0); animation: pulse 1.3s ease-in-out infinite;}
   .avatar-wrap.paused { background: rgba(255,255,255,0.25); box-shadow: none; animation: none;}
   .avatar {
     width: 100%; height: 100%; border-radius: 50%;
@@ -75,7 +75,7 @@ function buildHtml(apiKey: string): string {
     overflow: hidden; text-overflow: ellipsis;
     display: flex; align-items: center; gap: 6px;
   }
-  .pill .dot { width:6px; height:6px; border-radius:50%; background:#D4FF00; box-shadow:0 0 6px #D4FF00;}
+  .pill .dot { width:6px; height:6px; border-radius:50%; background:#B026FF; box-shadow:0 0 6px #B026FF;}
   .pill.paused .dot { background: rgba(255,255,255,0.35); box-shadow:none; }
   @keyframes pulse {
     0%,100% { transform: scale(1); }
@@ -329,7 +329,7 @@ function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress }: Props
   return (
     <View style={styles.container}>
       <View style={styles.fallback} pointerEvents="none">
-        <ActivityIndicator color="#D4FF00" />
+        <ActivityIndicator color="#B026FF" />
         <Text style={styles.fallbackText}>Loading map…</Text>
       </View>
       <WebView

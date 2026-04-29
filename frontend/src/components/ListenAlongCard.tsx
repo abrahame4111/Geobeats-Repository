@@ -38,7 +38,7 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
     <View style={styles.card} testID="listen-along-card">
       <View style={styles.header}>
         <Image
-          source={{ uri: user.profile_image || "https://placehold.co/100x100/121218/D4FF00?text=M" }}
+          source={{ uri: user.profile_image || "https://placehold.co/100x100/121218/B026FF?text=M" }}
           style={styles.avatar}
         />
         <View style={{ flex: 1 }}>
@@ -138,12 +138,12 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     borderWidth: 2,
-    borderColor: "#D4FF00",
+    borderColor: "#B026FF",
     backgroundColor: "#12121A",
   },
   name: { color: "#fff", fontSize: 18, fontWeight: "800" },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#D4FF00", shadowColor: "#D4FF00", shadowOpacity: 0.8, shadowRadius: 6 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#B026FF", shadowColor: "#B026FF", shadowOpacity: 0.8, shadowRadius: 6 },
   dotMuted: { backgroundColor: "rgba(255,255,255,0.3)" },
   liveLabel: { color: "rgba(255,255,255,0.55)", fontSize: 10, fontWeight: "800", letterSpacing: 1.2 },
   trackRow: { flexDirection: "row", alignItems: "center", gap: 14 },
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   },
   emptyText: { color: "rgba(255,255,255,0.5)", fontSize: 13 },
   cta: {
-    backgroundColor: "#D4FF00",
+    backgroundColor: "#B026FF",
     borderRadius: 999,
     paddingVertical: 14,
     flexDirection: "row",

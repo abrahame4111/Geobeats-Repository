@@ -29,7 +29,7 @@ type Props = {
  */
 export default function StarBorder({
   label,
-  color = "#D4FF00",
+  color = "#B026FF",
   speed = "5s",
   busy = false,
   onPress,

@@ -76,7 +76,7 @@ export default function AuthSuccess() {
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator color="#D4FF00" size="large" />
+      <ActivityIndicator color="#B026FF" size="large" />
       <Text style={styles.text} testID="auth-success-message">
         {msg}
       </Text>

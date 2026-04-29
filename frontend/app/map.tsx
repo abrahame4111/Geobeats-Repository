@@ -551,7 +551,7 @@ export default function MapScreen() {
   if (loading || !auth) {
     return (
       <View style={styles.loadingWrap}>
-        <ActivityIndicator color="#D4FF00" size="large" />
+        <ActivityIndicator color="#B026FF" size="large" />
       </View>
     );
   }
@@ -577,7 +577,7 @@ export default function MapScreen() {
               activeOpacity={0.8}
               hitSlop={8}
             >
-              <Ionicons name="search" size={19} color="#D4FF00" />
+              <Ionicons name="search" size={19} color="#B026FF" />
             </TouchableOpacity>
           </View>
           <View style={styles.liveCount} testID="live-count">
@@ -597,7 +597,7 @@ export default function MapScreen() {
               <Ionicons
                 name={broadcastOn ? "radio" : "eye-off"}
                 size={19}
-                color={broadcastOn ? "#D4FF00" : "rgba(255,255,255,0.55)"}
+                color={broadcastOn ? "#B026FF" : "rgba(255,255,255,0.55)"}
               />
             </TouchableOpacity>
           </View>
@@ -629,7 +629,7 @@ export default function MapScreen() {
           <Ionicons
             name={toast.tone === "ghost" ? "eye-off" : "radio"}
             size={16}
-            color={toast.tone === "ghost" ? "#fff" : "#D4FF00"}
+            color={toast.tone === "ghost" ? "#fff" : "#B026FF"}
           />
           <View style={{ flex: 1 }}>
             <Text style={[styles.toastTitle, toast.tone === "ghost" && { color: "#fff" }]}>
@@ -677,7 +677,7 @@ export default function MapScreen() {
         testID="locate-me"
         hitSlop={8}
       >
-        <Ionicons name="locate" size={19} color={myLocation ? "#D4FF00" : "rgba(212,255,0,0.35)"} />
+        <Ionicons name="locate" size={19} color={myLocation ? "#B026FF" : "rgba(176,38,255,0.35)"} />
       </TouchableOpacity>
       <SearchSheet
         visible={searchOpen}
@@ -767,18 +767,18 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(10,10,18,0.85)",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(212,255,0,0.25)",
+    borderColor: "rgba(176,38,255,0.25)",
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D4FF00" },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#B026FF" },
   liveDotMuted: { backgroundColor: "rgba(255,255,255,0.4)" },
-  liveCountText: { color: "#D4FF00", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  liveCountText: { color: "#B026FF", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   ghostBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
     backgroundColor: "rgba(10,10,18,0.85)",
     borderWidth: 1,
-    borderColor: "rgba(212,255,0,0.4)",
+    borderColor: "rgba(176,38,255,0.4)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -796,12 +796,12 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: "rgba(10,10,18,0.85)",
     borderWidth: 1,
-    borderColor: "rgba(212,255,0,0.4)",
+    borderColor: "rgba(176,38,255,0.4)",
     alignItems: "center",
     justifyContent: "center",
   },
   locateFabDisabled: {
-    borderColor: "rgba(212,255,0,0.15)",
+    borderColor: "rgba(176,38,255,0.15)",
   },
   ghostBtnOff: {
     borderColor: "rgba(255,255,255,0.18)",
@@ -822,13 +822,13 @@ const styles = StyleSheet.create({
   },
   toastLive: {
     backgroundColor: "rgba(20,28,5,0.95)",
-    borderColor: "rgba(212,255,0,0.5)",
+    borderColor: "rgba(176,38,255,0.5)",
   },
   toastGhost: {
     backgroundColor: "rgba(15,15,22,0.95)",
     borderColor: "rgba(255,255,255,0.18)",
   },
-  toastTitle: { color: "#D4FF00", fontWeight: "900", fontSize: 12, letterSpacing: 1.5 },
+  toastTitle: { color: "#B026FF", fontWeight: "900", fontSize: 12, letterSpacing: 1.5 },
   toastSubtitle: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
   permWarn: {
     marginTop: 8,

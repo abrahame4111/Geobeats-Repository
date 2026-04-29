@@ -162,7 +162,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
             {isInSession ? (
               <View pointerEvents="none" style={styles.hostBadgeWrap}>
                 <View style={styles.hostBadge}>
-                  <Ionicons name="headset" size={11} color="#D4FF00" />
+                  <Ionicons name="headset" size={11} color="#B026FF" />
                   <Text style={styles.hostBadgeText} numberOfLines={1}>
                     Queues to {hostName || "host"}
                   </Text>
@@ -189,7 +189,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
               returnKeyType="search"
               clearButtonMode="while-editing"
             />
-            {loading && <ActivityIndicator size="small" color="#D4FF00" />}
+            {loading && <ActivityIndicator size="small" color="#B026FF" />}
           </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <FlatList
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderColor: "rgba(212,255,0,0.15)",
+    borderColor: "rgba(176,38,255,0.15)",
   },
   handle: {
     alignSelf: "center",
@@ -328,13 +328,13 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: "rgba(212,255,0,0.08)",
+    backgroundColor: "rgba(176,38,255,0.08)",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(212,255,0,0.35)",
+    borderColor: "rgba(176,38,255,0.35)",
     maxWidth: "60%",
   },
-  hostBadgeText: { color: "#D4FF00", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  hostBadgeText: { color: "#B026FF", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   closeBtn: { padding: 4 },
   searchRow: {
     flexDirection: "row",
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#D4FF00",
+    backgroundColor: "#B026FF",
   },
   queueBtnOk: { backgroundColor: "#7CFF55" },
   queueBtnErr: { backgroundColor: "#FF4500" },

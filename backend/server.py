@@ -229,7 +229,7 @@ async def spotify_callback(code: Optional[str] = None, error: Optional[str] = No
             html = f"""<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>SoundMap</title>
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
 <style>body{{margin:0;background:#05050A;color:#fff;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px}}
-.s{{width:32px;height:32px;border:3px solid #D4FF00;border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite}}
+.s{{width:32px;height:32px;border:3px solid #B026FF;border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite}}
 @keyframes s{{to{{transform:rotate(360deg)}}}}</style>
 </head><body><div class=\"s\"></div><div>Returning to SoundMap…</div>
 <script>window.location.replace({json.dumps(target)});setTimeout(function(){{window.location.href={json.dumps(target)}}},250);</script>
@@ -488,7 +488,7 @@ const bool = (k, d) => { const v = params.get(k); if (v === null) return d; retu
 
 const variant = str('variant', 'circle');
 const pixelSize = num('pixelSize', 6);
-const color = str('color', '#D4FF00');
+const color = str('color', '#B026FF');
 const patternScale = num('patternScale', 3);
 const patternDensity = num('patternDensity', 1.2);
 const pixelSizeJitter = num('pixelSizeJitter', 0.5);
@@ -979,7 +979,7 @@ STARBORDER_HTML = """<!doctype html>
 <script>
 (function(){
   const params = new URLSearchParams(location.search);
-  const color = params.get('color') || '#D4FF00';
+  const color = params.get('color') || '#B026FF';
   const speed = params.get('speed') || '5s';
   const label = params.get('label') || 'CONNECT WITH SPOTIFY';
   const busy = params.get('busy') === '1';
@@ -1101,15 +1101,15 @@ async def map_html(key: str):
   #status .err {{ color:#FF4500; max-width: 80vw; word-break: break-word; }}
   .bubble {{ position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; }}
   .cluster {{ position: relative; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer; }}
-  .cluster-circle {{ width: 52px; height: 52px; border-radius: 50%; background: rgba(212,255,0,0.92); color:#05050A; font: 800 17px -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 0 14px rgba(212,255,0,0.5), inset 0 0 0 2px rgba(255,255,255,0.18); }}
+  .cluster-circle {{ width: 52px; height: 52px; border-radius: 50%; background: rgba(176,38,255,0.92); color:#05050A; font: 800 17px -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 0 14px rgba(176,38,255,0.5), inset 0 0 0 2px rgba(255,255,255,0.18); }}
   .cluster-circle.lg {{ width: 62px; height: 62px; font-size: 19px; }}
-  .avatar-wrap {{ width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #D4FF00, #BEE600); box-sizing: border-box; }}
+  .avatar-wrap {{ width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #B026FF, #7E1FB8); box-sizing: border-box; }}
   .avatar-wrap.self {{ background: linear-gradient(135deg, #FF4500, #FF8A00); }}
-  .avatar-wrap.hosting {{ background: linear-gradient(135deg, #D4FF00, #00FFE0); }}
+  .avatar-wrap.hosting {{ background: linear-gradient(135deg, #B026FF, #00FFE0); }}
   .avatar-wrap.paused {{ background: rgba(255,255,255,0.25); }}
   .avatar {{ width: 50px; height: 50px; border-radius: 50%; background-size: cover; background-position: center; background-color: #12121A; box-sizing: border-box; }}
   .pill {{ margin-top: 6px; max-width: 160px; padding: 4px 10px; background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; color: #fff; font: 600 11px -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }}
-  .pill .dot {{ width:6px; height:6px; border-radius:50%; background:#D4FF00; box-shadow:0 0 6px #D4FF00;}}
+  .pill .dot {{ width:6px; height:6px; border-radius:50%; background:#B026FF; box-shadow:0 0 6px #B026FF;}}
   .pill.paused .dot {{ background: rgba(255,255,255,0.35); box-shadow:none; }}
   @keyframes pulse {{ 0%,100% {{ transform: scale(1); }} 50% {{ transform: scale(1.08); }} }}
 </style>

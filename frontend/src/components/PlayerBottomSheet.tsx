@@ -45,7 +45,7 @@ export default function PlayerBottomSheet({
 
   const syncBadge = (() => {
     if (syncStatus === "hosting")
-      return { color: "#D4FF00", text: "YOU'RE HOSTING", icon: "radio" as const };
+      return { color: "#B026FF", text: "YOU'RE HOSTING", icon: "radio" as const };
     if (syncStatus === "syncing")
       return { color: "#FF8A00", text: "SYNCING…", icon: "sync" as const };
     if (syncStatus === "synced")
@@ -65,7 +65,7 @@ export default function PlayerBottomSheet({
       <View style={styles.row}>
         {t && isPlaying ? (
           <Image
-            source={{ uri: t.art || profileImage || "https://placehold.co/100x100/121218/D4FF00?text=M" }}
+            source={{ uri: t.art || profileImage || "https://placehold.co/100x100/121218/B026FF?text=M" }}
             style={styles.art}
           />
         ) : (
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.06)",
   },
-  ctrlPrimary: { backgroundColor: "#D4FF00" },
+  ctrlPrimary: { backgroundColor: "#B026FF" },
   ctrlGroup: { width: 48, height: 48, borderRadius: 24 },
   logoutBtn: {
     alignSelf: "flex-start",
