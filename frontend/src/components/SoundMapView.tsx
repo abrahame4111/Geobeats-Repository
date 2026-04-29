@@ -242,7 +242,11 @@ function buildHtml(apiKey: string): string {
 function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
-    return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}`;
+    // Cache-buster ensures the WebView fetches a fresh /api/map.html every
+    // mount — important for picking up backend HTML/style changes during
+    // active development without needing to clear app data.
+    const cacheBust = `&_v=${Date.now()}`;
+    return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}${cacheBust}`;
   }, [apiKey]);
   const iframeRef = useRef<any>(null);
   const webViewRef = useRef<WebView>(null);
