@@ -1,5 +1,11 @@
-import React from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import React, { useState, useCallback } from "react";
+import {
+  Platform,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  LayoutChangeEvent,
+} from "react-native";
 import { WebView } from "react-native-webview";
 import { BACKEND_URL } from "../api";
 
@@ -29,10 +35,28 @@ type Props = {
  * Animated PixelBlast WebGL background that works on both web (iframe) and
  * native (react-native-webview). The shader runs inside a backend-served
  * HTML page so we get a single source of truth and no Metro/three.js bundling
- * surprises. Touch events flow through naturally on native; on web the iframe
- * lets the WebGL canvas receive ripple clicks while the parent overlays UI.
+ * surprises.
+ *
+ * Mobile WebView quirks: window.innerWidth/innerHeight and 100vw/100vh are
+ * unreliable inside react-native-webview before layout settles (and on iOS the
+ * URL bar can shrink the layout viewport mid-animation). We therefore measure
+ * the actual screen size on the RN side and inject those exact pixel
+ * dimensions into the page via `injectedJavaScriptBeforeContentLoaded` BEFORE
+ * the shader script runs. The HTML reads `window.__RN_VIEWPORT` first.
  */
 export default function PixelBlastBackground(props: Props) {
+  const { width: winW, height: winH } = useWindowDimensions();
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: winW, h: winH });
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setSize((prev) =>
+        prev.w === width && prev.h === height ? prev : { w: width, h: height },
+      );
+    }
+  }, []);
+
   const params: Record<string, string> = {};
   for (const [k, v] of Object.entries(props)) {
     if (v === undefined) continue;
@@ -43,7 +67,11 @@ export default function PixelBlastBackground(props: Props) {
 
   if (Platform.OS === "web") {
     return (
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <View
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+        onLayout={onLayout}
+      >
         {/* @ts-ignore: iframe is fine on web */}
         <iframe
           src={url}
@@ -61,9 +89,34 @@ export default function PixelBlastBackground(props: Props) {
       </View>
     );
   }
+
+  // Inject the measured viewport BEFORE any HTML script runs.
+  const injectedBefore = `
+    (function(){
+      try {
+        window.__RN_VIEWPORT = { w: ${size.w}, h: ${size.h} };
+      } catch(e) {}
+      true;
+    })();
+  `;
+
+  // After load, also push updates if the size changes (e.g. rotation).
+  const injectedAfter = `
+    (function(){
+      try {
+        window.__RN_VIEWPORT = { w: ${size.w}, h: ${size.h} };
+        window.dispatchEvent(new Event('resize'));
+      } catch(e) {}
+      true;
+    })();
+  `;
+
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none" onLayout={onLayout}>
       <WebView
+        // Re-mount when viewport changes drastically (rotation) so the canvas
+        // can rebuild buffers cleanly.
+        key={`${Math.round(size.w)}x${Math.round(size.h)}`}
         source={{ uri: url }}
         style={styles.webview}
         scrollEnabled={false}
@@ -73,9 +126,9 @@ export default function PixelBlastBackground(props: Props) {
         domStorageEnabled
         originWhitelist={["*"]}
         androidLayerType="hardware"
-        // Clear background so app's own dark color shows through if WebGL fails
-        // (iOS specific to avoid the default white flash):
-        // @ts-ignore
+        injectedJavaScriptBeforeContentLoaded={injectedBefore}
+        injectedJavaScript={injectedAfter}
+        // @ts-ignore — RN WebView prop
         backgroundColor="transparent"
       />
     </View>
@@ -85,6 +138,8 @@ export default function PixelBlastBackground(props: Props) {
 const styles = StyleSheet.create({
   webview: {
     flex: 1,
+    width: "100%",
+    height: "100%",
     backgroundColor: "transparent",
   },
 });

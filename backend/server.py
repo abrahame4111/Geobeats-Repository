@@ -461,12 +461,12 @@ async def spotify_seek(body: PlayRequest):
 PIXELBLAST_HTML = """<!doctype html>
 <html><head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 <title>PixelBlast Background</title>
 <style>
-  html,body{margin:0;padding:0;height:100%;background:#05050A;overflow:hidden;}
-  #root{position:fixed;inset:0;width:100vw;height:100vh;}
-  canvas{display:block;width:100%!important;height:100%!important;}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:#05050A;overflow:hidden;}
+  #root{position:absolute;left:0;top:0;right:0;bottom:0;width:100%;height:100%;}
+  canvas{display:block;position:absolute;left:0;top:0;width:100%!important;height:100%!important;}
 </style>
 </head>
 <body>
@@ -632,12 +632,26 @@ if(liquid){
 }
 
 function setSize(){
-  // On mobile WebViews container.clientWidth/Height may report stale values
-  // before first layout settles. Always prefer the visual viewport size if
-  // available, falling back to window.innerWidth/innerHeight, then container.
-  const vw = (window.visualViewport && window.visualViewport.width) || window.innerWidth || container.clientWidth || 1;
-  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || container.clientHeight || 1;
-  renderer.setSize(vw, vh, false);
+  // PRIORITY ORDER for mobile WebView reliability:
+  // 1) RN-injected explicit dims (most reliable inside react-native-webview)
+  // 2) document.documentElement.clientWidth/Height (reliable on Android WebView)
+  // 3) visualViewport
+  // 4) window.innerWidth/innerHeight
+  // 5) container.clientWidth/Height
+  const rn = window.__RN_VIEWPORT;
+  let vw, vh;
+  if (rn && rn.w > 0 && rn.h > 0) {
+    vw = rn.w; vh = rn.h;
+  } else {
+    const docEl = document.documentElement;
+    vw = docEl.clientWidth || (window.visualViewport && window.visualViewport.width) || window.innerWidth || container.clientWidth || 1;
+    vh = docEl.clientHeight || (window.visualViewport && window.visualViewport.height) || window.innerHeight || container.clientHeight || 1;
+  }
+  // Force CSS size of canvas explicitly so it always fills the viewport,
+  // even if parent layout reports zero on first frame.
+  renderer.setSize(vw, vh, true);
+  renderer.domElement.style.width = vw + 'px';
+  renderer.domElement.style.height = vh + 'px';
   uniforms.uResolution.value.set(renderer.domElement.width, renderer.domElement.height);
   uniforms.uPixelSize.value = pixelSize * renderer.getPixelRatio();
   if(composer) composer.setSize(renderer.domElement.width, renderer.domElement.height);
@@ -694,11 +708,11 @@ async def pixelblast_html():
 ASCIITEXT_HTML = """<!doctype html>
 <html><head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
 <title>ASCII Text</title>
 <style>
-  html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden;}
-  #root{position:fixed;inset:0;width:100vw;height:100vh;}
+  html,body{margin:0;padding:0;width:100%;height:100%;background:transparent;overflow:hidden;}
+  #root{position:absolute;left:0;top:0;right:0;bottom:0;width:100%;height:100%;}
   #root canvas{position:absolute;left:0;top:0;width:100%;height:100%;
     image-rendering:pixelated;image-rendering:crisp-edges;}
   #root pre{margin:0;padding:0;line-height:1em;text-align:left;position:absolute;left:0;top:0;
@@ -833,12 +847,26 @@ class CanvAscii {
 }
 
 const root = document.getElementById('root');
-const r = root.getBoundingClientRect();
+function getDims(){
+  const rn = window.__RN_VIEWPORT;
+  if (rn && rn.w > 0 && rn.h > 0) return { w: rn.w, h: rn.h };
+  const r = root.getBoundingClientRect();
+  const docEl = document.documentElement;
+  const w = r.width || docEl.clientWidth || window.innerWidth || 0;
+  const h = r.height || docEl.clientHeight || window.innerHeight || 0;
+  return { w, h };
+}
 const cfg = { text, asciiFontSize, textFontSize, textColor, planeBaseHeight, enableWaves };
-const inst = new CanvAscii(cfg, root, r.width||window.innerWidth, r.height||window.innerHeight);
+const d0 = getDims();
+const inst = new CanvAscii(cfg, root, d0.w || 1, d0.h || 1);
 await inst.init();
 inst.load();
-window.addEventListener('resize', ()=>{ const b=root.getBoundingClientRect(); inst.setSize(b.width,b.height); });
+// Re-measure shortly after init in case layout settles late inside RN WebViews
+setTimeout(()=>{ const d=getDims(); inst.setSize(d.w, d.h); }, 80);
+setTimeout(()=>{ const d=getDims(); inst.setSize(d.w, d.h); }, 400);
+window.addEventListener('resize', ()=>{ const d=getDims(); inst.setSize(d.w, d.h); });
+if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>{ const d=getDims(); inst.setSize(d.w, d.h); });
+new ResizeObserver(()=>{ const d=getDims(); inst.setSize(d.w, d.h); }).observe(root);
 </script>
 </body></html>
 """

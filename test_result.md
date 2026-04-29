@@ -101,3 +101,38 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Build full-stack real-time social music app with Spotify (login/sync), live map, listen-along, and a custom WebGL login screen using PixelBlast + ASCII text."
+
+frontend:
+  - task: "Login Screen WebGL background fills full viewport on mobile (PixelBlast + ASCIIText)"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/PixelBlastBackground.tsx, /app/frontend/src/components/ASCIIText.tsx, /app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: false
+        -agent: "main"
+        -comment: "First fix relied on window.innerWidth/innerHeight inside the WebView and 100vw/100vh CSS — both unreliable inside react-native-webview. Background was clipped to a small box on Expo Go."
+        -working: "NA"
+        -agent: "main"
+        -comment: "Reworked: RN side now passes measured viewport (useWindowDimensions + onLayout) into the WebView via injectedJavaScriptBeforeContentLoaded as window.__RN_VIEWPORT. HTML's setSize() reads __RN_VIEWPORT first; CSS swapped from position:fixed/100vw/100vh to position:absolute/100% with explicit canvas pixel sizing. WebView is keyed on size to remount on rotation. Web preview verified visually. Awaiting user verification on Expo Go mobile."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Login Screen WebGL background fills full viewport on mobile (PixelBlast + ASCIIText)"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Re-did P0 login WebGL sizing fix. New approach: inject measured screen dimensions from RN into the WebView before script load (window.__RN_VIEWPORT), HTML reads those first. Changed CSS from position:fixed+100vw/vh to position:absolute+100%. Verified on web preview — ready for user mobile (Expo Go) verification."
