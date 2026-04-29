@@ -695,7 +695,7 @@ export default function MapScreen() {
         hitSlop={8}
       >
         <Ionicons
-          name={mapStyle === "geobeats" ? "earth" : "color-palette"}
+          name="earth"
           size={19}
           color="#B026FF"
         />
