@@ -1108,9 +1108,11 @@ async def map_html(key: str):
 <meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
 <style>
   html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }}
-  /* PixelBlast pattern sits behind the map; visible mainly around the
-     globe-in-space view at low zoom (the cosmic backdrop). */
-  #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; opacity: 0.85; }}
+  /* PixelBlast pattern sits behind the map. With water layer set to
+     visibility:off in the cloud-based map style, the map canvas is
+     transparent over the oceans/lakes/rivers so the pulsing purple
+     pattern shows through ONLY the water — land keeps its NFS palette. */
+  #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; opacity: 1; }}
   #map-wrap {{ position: relative; z-index: 1; width: 100vw; height: 100vh; }}
   #map {{ position: absolute; inset: 0; background: transparent !important; }}
   /* Markers / overlays should stay fully opaque, so we re-overlay them
@@ -1190,7 +1192,7 @@ async def map_html(key: str):
       heading: 0,
       disableDefaultUI: true,
       gestureHandling: 'greedy',
-      backgroundColor: '#000', // black space behind the globe
+      backgroundColor: 'transparent', // canvas clear is transparent so PixelBlast iframe shows through hidden water layer
       isFractionalZoomEnabled: true,
       minZoom: 1,
       maxZoom: 20,

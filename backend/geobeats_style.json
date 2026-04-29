@@ -31,7 +31,7 @@
   {"featureType":"transit","stylers":[{"visibility":"off"}]},
   {"featureType":"transit.line","elementType":"geometry","stylers":[{"color":"#B026FF"}]},
   {"featureType":"transit.station","elementType":"geometry","stylers":[{"color":"#1a0a24"}]},
-  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#040818"}]},
-  {"featureType":"water","elementType":"geometry.fill","stylers":[{"color":"#040818"}]},
-  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#0080A0"}]}
+  {"featureType":"water","elementType":"geometry","stylers":[{"visibility":"off"}]},
+  {"featureType":"water","elementType":"geometry.fill","stylers":[{"visibility":"off"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#FF66E0"}]}
 ]
