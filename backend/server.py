@@ -1134,7 +1134,7 @@ async def map_html(key: str):
   @keyframes pulse {{ 0%,100% {{ transform: scale(1); }} 50% {{ transform: scale(1.08); }} }}
 </style>
 </head><body>
-<iframe id="bg-pixels" src="/api/pixelblast.html?variant=circle&pixelSize=4&color=%23B026FF&patternScale=3&patternDensity=1.0&pixelSizeJitter=0.5&enableRipples=0&liquid=0&speed=0.35&edgeFade=0" frameborder="0" scrolling="no"></iframe>
+<iframe id="bg-pixels" src="/api/pixelblast.html?variant=circle&pixelSize=2&color=%23B026FF&patternScale=1.2&patternDensity=1.6&pixelSizeJitter=0.4&enableRipples=0&liquid=0&speed=0.25&edgeFade=0" frameborder="0" scrolling="no"></iframe>
 <div id="map-wrap"><div id="map"></div></div>
 <div id="status">Initializing…</div>
 <script>
