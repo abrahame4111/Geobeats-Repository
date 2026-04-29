@@ -1226,6 +1226,33 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     (list||[]).forEach(u => {{ if (u && u.user_id) {{ seen.add(u.user_id); upsertMarker(u); }} }});
     // Remove markers that are no longer present in the latest snapshot
     Object.keys(markers).forEach(uid => {{ if (!seen.has(uid)) {{ markers[uid].remove(); delete markers[uid]; }} }});
+    // Refresh the Snap-style heatmap with the new listener positions
+    updateHeatmap(list || []);
+    // Honour current zoom-driven marker visibility
+    updateMarkerVisibility();
+  }}
+  function updateHeatmap(list){{
+    const features = (list || [])
+      .filter(u => u && typeof u.lat === 'number' && typeof u.lng === 'number')
+      .map(u => ({{
+        type: 'Feature',
+        geometry: {{ type: 'Point', coordinates: [u.lng, u.lat] }},
+        // Active listeners contribute more "warmth" than idle/ghost users.
+        properties: {{ weight: u.is_playing ? 1 : 0.35 }}
+      }}));
+    const src = map && map.getSource && map.getSource('listeners-heat-src');
+    if (src) src.setData({{ type: 'FeatureCollection', features }});
+  }}
+  function updateMarkerVisibility(){{
+    if (!map) return;
+    const z = map.getZoom();
+    // Below zoom 5, the globe is showing the heatmap story — hide individual
+    // avatars so they don't crowd the visualization. At/above zoom 5 the
+    // bubbles smoothly take over.
+    const visible = z >= 5;
+    Object.values(markers).forEach(m => {{
+      try {{ m.getElement().style.opacity = visible ? '1' : '0'; }} catch(e) {{}}
+    }});
   }}
   function removeMarker(uid){{
     const m = markers[uid];
@@ -1421,9 +1448,58 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     }});
     // Apply our GeoBeats neon palette only when configured (not for satellite)
     if ({apply_paint}) paintGeoBeats();
+    // Snap-style listener heatmap source + layer. Seeded empty; populated
+    // from setMarkersBulk every time marker data arrives.
+    if (!map.getSource('listeners-heat-src')) {{
+      map.addSource('listeners-heat-src', {{
+        type: 'geojson',
+        data: {{ type: 'FeatureCollection', features: [] }}
+      }});
+    }}
+    if (!map.getLayer('listeners-heat')) {{
+      map.addLayer({{
+        id: 'listeners-heat',
+        type: 'heatmap',
+        source: 'listeners-heat-src',
+        maxzoom: 13,
+        paint: {{
+          // Active listeners weighted higher than idle ones (set per-feature)
+          'heatmap-weight': ['interpolate', ['linear'], ['get', 'weight'], 0, 0.3, 1, 1],
+          // Intensity ramps up with zoom so single users still produce a
+          // visible bloom at globe scale.
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 4, 1.4, 9, 2.0],
+          // Snap-style cyan -> purple -> yellow -> orange -> red gradient
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0,   'rgba(0, 0, 0, 0)',
+            0.1, 'rgba(0, 229, 255, 0.55)',
+            0.3, 'rgba(176, 38, 255, 0.7)',
+            0.5, 'rgba(255, 196, 0, 0.85)',
+            0.7, 'rgba(255, 100, 0, 0.92)',
+            1,   'rgba(255, 0, 50, 0.96)'
+          ],
+          // Halo grows with zoom so individual users have presence at every scale
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 18, 4, 38, 9, 70, 13, 110],
+          // Heatmap fully opaque while zoomed out, fades out as user zooms in
+          // (avatars take over for street-level detail).
+          'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.95, 9, 0.75, 12, 0.25, 13, 0]
+        }}
+      }});
+    }}
+    // Re-emit any previously-set markers so the new heatmap source gets data
+    // even if set_markers arrived before style.load.
+    if (Object.keys(markers).length > 0) {{
+      const list = Object.values(markers).map(m => {{
+        const ll = m.getLngLat();
+        return {{ lat: ll.lat, lng: ll.lng, is_playing: true }};
+      }});
+      updateHeatmap(list);
+    }}
     document.getElementById('status').style.display = 'none';
     post({{ type: 'map:ready' }});
   }});
+  // Hide individual avatars at globe scale, fade them in as user zooms toward city level
+  map.on('zoom', () => updateMarkerVisibility());
   map.on('error', (e) => {{
     const s = document.getElementById('status');
     s.textContent = 'Map error: ' + (e && e.error && e.error.message || 'unknown');
