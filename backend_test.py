@@ -5,7 +5,7 @@ import json
 import sys
 import requests
 
-BACKEND_URL = "https://beat-together-2.preview.emergentagent.com"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8001")
 API = f"{BACKEND_URL}/api"
 
 results = []

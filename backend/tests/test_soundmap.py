@@ -6,7 +6,7 @@ import pytest
 import requests
 import websockets
 
-BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://beat-together-2.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "http://localhost:8001").rstrip("/")
 WS_BASE = BASE.replace("http", "ws", 1) + "/api/ws"
 API = BASE + "/api"
 
