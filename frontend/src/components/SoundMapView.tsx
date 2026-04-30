@@ -296,7 +296,7 @@ function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, mapStyl
       } else if (d.type === "marker:click" && onMarkerPress) {
         onMarkerPress(d.user_id);
       } else if (d.type === "map:auth_failure") {
-        setMapError("Google Maps key restrictions are blocking this domain. Open the Google Cloud Console → Credentials → your API key, and either remove HTTP referrer restrictions or add https://*.preview.emergentagent.com/* and exp://* as allowed referrers.");
+        setMapError("Google Maps key restrictions are blocking this domain. Open the Google Cloud Console → Credentials → your API key, and either remove HTTP referrer restrictions or add the deployment hostname (e.g. https://*.your-domain.com/*) and exp://* as allowed referrers.");
       } else if (d.type === "map:timeout") {
         setMapError("Google Maps script did not load in 10s. Most likely your API key has restrictions blocking this WebView. In Google Cloud Console set Application restrictions to 'None' for testing, and make sure the Maps JavaScript API is enabled.");
       } else if (d.type === "map:script_error") {

@@ -29,7 +29,9 @@ class TestSpotifyAuthURLs:
         assert "accounts.spotify.com/authorize" in url
         assert "client_id=f50dc62b9eab4292a2b0c48992ef153f" in url
         assert "redirect_uri=" in url
-        assert "beat-together-2.preview.emergentagent.com" in url
+        # The redirect_uri value should reflect whatever's in the
+        # SPOTIFY_REDIRECT_URI env var — domain-agnostic check.
+        assert "%2Fapi%2Fspotify%2Fcallback" in url or "/api/spotify/callback" in url
 
     def test_refresh_invalid_token(self):
         r = requests.post(f"{API}/spotify/refresh", json={"refresh_token": "bogus-refresh"}, timeout=15)
