@@ -601,6 +601,38 @@ export default function MapScreen() {
 
   const handleMarker = (uid: string) => setSelectedUserId(uid);
 
+  // ---- Centralized leave-session logic ------------------------------------
+  // Fixes a bug where, after leaving a listen-along session, the host's last
+  // track would keep looping on the guest's Spotify (and even pause+wait 5s
+  // would auto-resume). Three things have to happen atomically:
+  //   1) Tell the server we left (so it stops broadcasting host syncs to us).
+  //   2) Clear our local resync state (interval + pendingSyncRef) so any
+  //      in-flight applySync becomes a no-op and never re-issues `play`.
+  //   3) On Spotify itself: turn repeat:off and pause playback so the
+  //      host's track stops and doesn't loop.
+  const leaveSession = async () => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: "session:leave" })); } catch {}
+    }
+    if (syncIntervalRef.current) {
+      clearInterval(syncIntervalRef.current);
+      syncIntervalRef.current = null;
+    }
+    pendingSyncRef.current = null;
+    setHostId(null);
+    setSyncStatus("idle");
+    if (auth) {
+      // Best-effort — silently ignore if the user has no active device or
+      // their token is briefly stale; the next pull() will reconcile.
+      try { await setRepeat(auth, "off"); } catch {}
+      try { await playerAction("pause", auth, {}); } catch {}
+      // Optimistic local state so the UI updates immediately without
+      // waiting for the next 5s poll cycle.
+      setMyIsPlaying(false);
+    }
+  };
+
   const handleListenAlong = () => {
     if (!auth || !selectedUser) return;
     const ws = wsRef.current;
@@ -611,9 +643,7 @@ export default function MapScreen() {
     }
     if (hostId === selectedUser.user_id) {
       console.log("[listen-along] leave", selectedUser.user_id);
-      ws.send(JSON.stringify({ type: "session:leave" }));
-      setHostId(null);
-      setSyncStatus("idle");
+      leaveSession();
       setSelectedUserId(null);
     } else if (selectedUser.user_id !== auth.user_id) {
       console.log("[listen-along] join host", selectedUser.user_id);
@@ -798,12 +828,7 @@ export default function MapScreen() {
             // the card via the X (which becomes an "exit" icon), also leave
             // the session so we don't keep syncing in the background.
             if (hostId && hostId === selectedUser.user_id) {
-              const ws = wsRef.current;
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                try { ws.send(JSON.stringify({ type: "session:leave" })); } catch {}
-              }
-              setHostId(null);
-              setSyncStatus("idle");
+              leaveSession();
             }
             setSelectedUserId(null);
           }}
@@ -905,12 +930,7 @@ export default function MapScreen() {
           setListenersOpen(false);
         }}
         onLeaveSession={() => {
-          const ws = wsRef.current;
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "session:leave" }));
-          }
-          setHostId(null);
-          setSyncStatus("idle");
+          leaveSession();
           setListenersOpen(false);
         }}
       />
