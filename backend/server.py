@@ -1249,6 +1249,22 @@ async def tiltedcard_html():
     return Response(content=TILTEDCARD_HTML, media_type="text/html")
 
 
+@api_router.get("/assets/icon.png")
+async def geobeats_icon():
+    """Serve the GeoBeats app icon (1024x1024) for easy download."""
+    from fastapi.responses import FileResponse
+    import os as _os
+    icon_path = _os.path.join(_os.path.dirname(__file__), "..", "frontend", "assets", "images", "icon.png")
+    icon_path = _os.path.abspath(icon_path)
+    if not _os.path.exists(icon_path):
+        raise HTTPException(status_code=404, detail="icon not found")
+    return FileResponse(
+        icon_path,
+        media_type="image/png",
+        filename="geobeats_icon_1024.png",
+    )
+
+
 @api_router.get("/geobeats-style.json")
 async def geobeats_style_json():
     """Serves the NFS Neon map style JSON for pasting into Google Cloud
