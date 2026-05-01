@@ -1282,6 +1282,22 @@ async def geobeats_store_asset(filename: str):
     return FileResponse(path, media_type="image/png", filename=filename)
 
 
+@api_router.get("/assets/store/screenshots/{filename}")
+async def geobeats_store_screenshot(filename: str):
+    """Serve Play Store phone screenshots (1080x1920 PNG)."""
+    from fastapi.responses import FileResponse
+    import os as _os
+    if "/" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="invalid filename")
+    base = _os.path.abspath(
+        _os.path.join(_os.path.dirname(__file__), "..", "frontend", "assets", "store", "screenshots")
+    )
+    path = _os.path.join(base, filename)
+    if not _os.path.exists(path):
+        raise HTTPException(status_code=404, detail="screenshot not found")
+    return FileResponse(path, media_type="image/png", filename=filename)
+
+
 @api_router.get("/privacy", response_class=HTMLResponse)
 @api_router.get("/privacy.html", response_class=HTMLResponse)
 async def privacy_policy():
