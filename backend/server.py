@@ -1265,6 +1265,23 @@ async def geobeats_icon():
     )
 
 
+@api_router.get("/assets/store/{filename}")
+async def geobeats_store_asset(filename: str):
+    """Serve Play Store listing assets (icon_512.png, feature_graphic.png)."""
+    from fastapi.responses import FileResponse
+    import os as _os
+    # basic path-traversal guard
+    if "/" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="invalid filename")
+    base = _os.path.abspath(
+        _os.path.join(_os.path.dirname(__file__), "..", "frontend", "assets", "store")
+    )
+    path = _os.path.join(base, filename)
+    if not _os.path.exists(path):
+        raise HTTPException(status_code=404, detail="asset not found")
+    return FileResponse(path, media_type="image/png", filename=filename)
+
+
 @api_router.get("/privacy", response_class=HTMLResponse)
 @api_router.get("/privacy.html", response_class=HTMLResponse)
 async def privacy_policy():
