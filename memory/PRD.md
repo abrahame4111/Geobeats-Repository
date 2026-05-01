@@ -27,5 +27,5 @@ Real-time social music app (Expo mobile + web) where users see each other on a l
 
 ## Required Setup (by user)
 - In [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add this Redirect URI to the app:
-  `https://beat-together-2.preview.emergentagent.com/api/spotify/callback`
+  `https://globe-tune.preview.emergentagent.com/api/spotify/callback`
 - Testing requires at least one **Spotify Premium** account (playback control is Premium-only per Spotify API). Free accounts can still appear on the map with their currently-playing track.

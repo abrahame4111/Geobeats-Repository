@@ -33,6 +33,6 @@
   "seed_data_creation": "None needed - WebSocket tests use ephemeral TEST_ prefixed user_ids that auto-cleanup on disconnect.",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Backend tests in /app/backend/tests/test_soundmap.py cover all REST + WebSocket flows. WebSocket test helper _recv_until() filters messages by type since connection generates multiple broadcast messages. Spotify OAuth redirect URI https://beat-together-2.preview.emergentagent.com/api/spotify/callback IS registered in the Spotify Dashboard (confirmed - login flow reaches Spotify's real login form). End-to-end OAuth completion requires a real Spotify account and cannot be automated.",
+  "context_for_next_testing_agent": "Backend tests in /app/backend/tests/test_soundmap.py cover all REST + WebSocket flows. WebSocket test helper _recv_until() filters messages by type since connection generates multiple broadcast messages. Spotify OAuth redirect URI https://globe-tune.preview.emergentagent.com/api/spotify/callback IS registered in the Spotify Dashboard (confirmed - login flow reaches Spotify's real login form). End-to-end OAuth completion requires a real Spotify account and cannot be automated.",
   "rca_of_issue": "N/A - no bugs found."
 }

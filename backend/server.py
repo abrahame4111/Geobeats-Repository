@@ -1265,6 +1265,27 @@ async def geobeats_icon():
     )
 
 
+@api_router.get("/privacy", response_class=HTMLResponse)
+@api_router.get("/privacy.html", response_class=HTMLResponse)
+async def privacy_policy():
+    """Serves the GeoBeats privacy policy as a standalone HTML page.
+
+    This URL (e.g. https://live.geobeats.app/api/privacy) is the one you
+    paste into:
+      - App Store Connect → App Privacy → Privacy Policy URL
+      - Google Play Console → App content → Privacy Policy
+      - In-app Settings → Privacy Policy link
+    """
+    import os as _os
+    tpl_path = _os.path.join(_os.path.dirname(__file__), "templates", "privacy.html")
+    try:
+        with open(tpl_path, "r", encoding="utf-8") as f:
+            html = f.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="privacy template missing")
+    return HTMLResponse(content=html, status_code=200)
+
+
 @api_router.get("/geobeats-style.json")
 async def geobeats_style_json():
     """Serves the NFS Neon map style JSON for pasting into Google Cloud
