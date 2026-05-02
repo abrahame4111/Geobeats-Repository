@@ -223,16 +223,57 @@ async def spotify_callback(code: Optional[str] = None, error: Optional[str] = No
         return f"{FRONTEND_URL}/auth-success?{params}"
 
     def _render_redirect(target: str):
-        """Render an HTML page that JS-redirects to `target`. Some browsers block 307
-        redirects to non-http(s) schemes (e.g. exp:// for Expo Go) — this works reliably."""
+        """Render an HTML page that JS-redirects to `target`. If the Android
+        browser doesn't have the app's intent filter registered, the deep-link
+        navigation silently fails and the user used to see a 404. We now show
+        a branded success screen with a visible "Open GeoBeats" button that
+        the user can tap manually — works on every Android build even if the
+        intent filter wasn't declared."""
         if mobile_redirect:
-            html = f"""<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>SoundMap</title>
-<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
-<style>body{{margin:0;background:#05050A;color:#fff;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px}}
-.s{{width:32px;height:32px;border:3px solid #B026FF;border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite}}
-@keyframes s{{to{{transform:rotate(360deg)}}}}</style>
-</head><body><div class=\"s\"></div><div>Returning to SoundMap…</div>
-<script>window.location.replace({json.dumps(target)});setTimeout(function(){{window.location.href={json.dumps(target)}}},250);</script>
+            target_json = json.dumps(target)
+            html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>GeoBeats</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{{--p:#A259FF;--c:#22D3EE}}
+  *{{box-sizing:border-box}}
+  html,body{{margin:0;padding:0;min-height:100vh;background:radial-gradient(1200px 800px at 20% 0%,#1a0b3a 0%,#07030f 55%,#030109 100%);color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}}
+  .wrap{{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;gap:18px;text-align:center}}
+  .badge{{width:72px;height:72px;border-radius:22px;background:linear-gradient(135deg,var(--p) 0%,#ff4dd2 60%,var(--c) 100%);box-shadow:0 10px 40px rgba(162,89,255,0.45),inset 0 1px 0 rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:34px}}
+  h1{{margin:10px 0 0;font-size:26px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(90deg,#fff 0%,#c7a6ff 55%,#22d3ee 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}}
+  p{{margin:0;color:#b9a9e6;font-size:15px;line-height:1.55;max-width:340px}}
+  .btn{{margin-top:14px;display:inline-flex;align-items:center;justify-content:center;padding:16px 28px;border-radius:999px;background:linear-gradient(135deg,var(--p) 0%,#c026ff 100%);color:#fff;text-decoration:none;font-weight:700;font-size:16px;letter-spacing:.3px;box-shadow:0 10px 30px rgba(162,89,255,.4),inset 0 1px 0 rgba(255,255,255,.15);border:none;cursor:pointer;min-width:220px}}
+  .btn:active{{transform:scale(.98)}}
+  .hint{{margin-top:10px;color:#8f7fd1;font-size:12.5px}}
+  .s{{width:28px;height:28px;border:3px solid var(--p);border-top-color:transparent;border-radius:50%;animation:s 1s linear infinite;margin-bottom:4px}}
+  @keyframes s{{to{{transform:rotate(360deg)}}}}
+  .hidden{{display:none}}
+</style>
+</head><body>
+<div class="wrap">
+  <div class="badge">✓</div>
+  <h1>Signed in to Spotify</h1>
+  <div id="spin" class="s"></div>
+  <p id="msg">Returning to GeoBeats…</p>
+  <a id="openBtn" href={target_json} class="btn hidden">Open GeoBeats</a>
+  <div class="hint">If the app doesn't open automatically, tap the button above.</div>
+</div>
+<script>
+  var target = {target_json};
+  // Attempt deep link immediately
+  try {{ window.location.replace(target); }} catch(e) {{}}
+  // If we're still here after 1.2s, the app isn't registered for the scheme
+  // (old build without intentFilters). Show the manual button.
+  setTimeout(function(){{
+    var spin = document.getElementById('spin');
+    var msg = document.getElementById('msg');
+    var btn = document.getElementById('openBtn');
+    if (spin) spin.style.display = 'none';
+    if (msg) msg.textContent = 'Tap below to return to the app.';
+    if (btn) btn.classList.remove('hidden');
+  }}, 1200);
+  // Second automatic attempt (some Android Chrome versions need the delay)
+  setTimeout(function(){{ try {{ window.location.href = target; }} catch(e) {{}} }}, 250);
+</script>
 </body></html>"""
             return HTMLResponse(html)
         return RedirectResponse(target)
