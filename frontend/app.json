@@ -35,9 +35,14 @@
         {
           "action": "VIEW",
           "data": [
-            { "scheme": "geobeats" }
+            {
+              "scheme": "geobeats"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -59,7 +64,8 @@
       ],
       "expo-web-browser",
       "expo-font",
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
