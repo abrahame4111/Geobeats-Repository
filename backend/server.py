@@ -1555,10 +1555,26 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   #status {{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; pointer-events:none; z-index:5; }}
   .bubble {{
     position: relative;
-    display: flex; flex-direction: column; align-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     pointer-events: auto;
     cursor: pointer;
+    /* Smooth opacity fade for the cross-zoom transition */
+    transition: opacity 0.35s ease;
+  }}
+  /* Inner wrapper that we scale based on zoom. transform-origin at the
+     bottom means as we shrink, the avatar collapses *down* onto the pill
+     (which is anchored at the lat/lng), so the marker visually rests on
+     the user's actual location at low zoom. */
+  .bubble-inner {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     transform-origin: 50% 100%;
+    transform: scale(var(--marker-scale, 1)) translateY(var(--marker-lift, 0px));
+    transition: transform 0.55s cubic-bezier(0.2, 0.65, 0.2, 1);
+    will-change: transform;
   }}
   .avatar-wrap {{
     width: 56px; height: 56px; border-radius: 50%;
@@ -1623,8 +1639,10 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     const artistName = trackObj && Array.isArray(trackObj.artists) && trackObj.artists.length ? String(trackObj.artists[0].name || '') : '';
     const trackLabel = artistName ? (trackName + ' — ' + artistName) : trackName;
     const safeLabel = trackLabel.replace(/[<>&]/g, '');
-    el.innerHTML = '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
-                   (safeLabel ? '<div class="pill"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '');
+    el.innerHTML = '<div class="bubble-inner">' +
+                   '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
+                   (safeLabel ? '<div class="pill"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '') +
+                   '</div>';
     el.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
     return el;
   }}
@@ -1674,15 +1692,28 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     const src = map && map.getSource && map.getSource('listeners-heat-src');
     if (src) src.setData({{ type: 'FeatureCollection', features }});
   }}
+  // ---- Zoom-driven marker scale ----
+  // Returns the scale factor (0..1) for the bubble-inner element based on
+  // current zoom. At low zoom the marker shrinks down toward its bottom
+  // anchor (which is the user's actual lat/lng), eliminating the visual
+  // "drift" where the avatar appeared far from the user's pin location.
+  function zoomToMarkerScale(z){{
+    if (z >= 12) return 1;        // high zoom: full size, full hover
+    if (z >= 9)  return 0.65 + (z - 9) * (0.35 / 3);  // 9→0.65, 12→1.0
+    if (z >= 6)  return 0.35 + (z - 6) * (0.30 / 3);  // 6→0.35, 9→0.65
+    if (z >= 4)  return 0.18 + (z - 4) * (0.17 / 2);  // 4→0.18, 6→0.35
+    return 0;                      // <4: invisible (heatmap takes over)
+  }}
   function updateMarkerVisibility(){{
     if (!map) return;
     const z = map.getZoom();
-    // Below zoom 5, the globe is showing the heatmap story — hide individual
-    // avatars so they don't crowd the visualization. At/above zoom 5 the
-    // bubbles smoothly take over.
-    const visible = z >= 5;
+    const scale = zoomToMarkerScale(z);
     Object.values(markers).forEach(m => {{
-      try {{ m.getElement().style.opacity = visible ? '1' : '0'; }} catch(e) {{}}
+      try {{
+        const el = m.getElement();
+        el.style.setProperty('--marker-scale', String(scale));
+        el.style.opacity = scale > 0.05 ? '1' : '0';
+      }} catch(e) {{}}
     }});
   }}
   function removeMarker(uid){{
