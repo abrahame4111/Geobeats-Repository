@@ -57,6 +57,15 @@ export default function MapScreen() {
   const pullRef = useRef<(() => Promise<void>) | null>(null);
   const syncIntervalRef = useRef<any>(null);
   const pendingSyncRef = useRef<any>(null);
+  // Tracks what we last actually applied to Spotify so we can suppress
+  // redundant play() calls (which Spotify treats as full-restart and
+  // causes the audio to stutter/cut out mid-song).
+  const appliedSyncRef = useRef<{
+    uri: string | null;
+    is_playing: boolean;
+    appliedAt: number;     // ms, when we issued the play command
+    appliedPositionMs: number; // ms within track at appliedAt
+  }>({ uri: null, is_playing: false, appliedAt: 0, appliedPositionMs: 0 });
   const [broadcastOn, setBroadcastOn] = useState(true);
   const [mapStyle, setMapStyleState] = useState<"geobeats" | "satellite">("geobeats");
   // Persist theme choice across sessions
@@ -507,7 +516,12 @@ export default function MapScreen() {
   }, []);
 
   // ---- Apply sync (guest side) ----
-  const applySync = async () => {
+  // Only issue Spotify play/pause commands when something has actually
+  // changed (track, play/pause state, or significant drift). Spotify
+  // treats every play() call as a full restart/seek, which is what
+  // caused the audio to cut out / stutter every 5 seconds before.
+  const SYNC_DRIFT_THRESHOLD_MS = 3500;
+  const applySync = async (force: boolean = false) => {
     if (!auth) return;
     const sync = pendingSyncRef.current;
     if (!sync || !sync.track) return;
@@ -517,10 +531,45 @@ export default function MapScreen() {
       // Estimate current host position based on elapsed time since message timestamp
       const elapsed = Math.max(0, (Date.now() / 1000 - (sync.timestamp || Date.now() / 1000)) * 1000);
       const targetPos = Math.floor((sync.position_ms || 0) + (sync.is_playing ? elapsed : 0));
+
+      const last = appliedSyncRef.current;
+      const trackChanged = last.uri !== uri;
+      const playStateChanged = last.is_playing !== !!sync.is_playing;
+
+      // Project where Spotify SHOULD be right now based on the last play
+      // command we sent (assuming it kept playing). If the host's target
+      // and our projection differ by < SYNC_DRIFT_THRESHOLD_MS, we're
+      // already in sync — skip the call so audio keeps flowing.
+      let drift = 0;
+      if (last.uri === uri && last.is_playing && sync.is_playing) {
+        const projectedPos = last.appliedPositionMs + (Date.now() - last.appliedAt);
+        drift = Math.abs(targetPos - projectedPos);
+      }
+
+      const shouldApply =
+        force ||
+        trackChanged ||
+        playStateChanged ||
+        (sync.is_playing && drift > SYNC_DRIFT_THRESHOLD_MS);
+
+      if (!shouldApply) return; // already in sync, do nothing
+
       if (sync.is_playing) {
         await playerAction("play", auth, { track_uri: uri, position_ms: targetPos });
+        appliedSyncRef.current = {
+          uri,
+          is_playing: true,
+          appliedAt: Date.now(),
+          appliedPositionMs: targetPos,
+        };
       } else {
         await playerAction("pause", auth, {});
+        appliedSyncRef.current = {
+          uri,
+          is_playing: false,
+          appliedAt: Date.now(),
+          appliedPositionMs: targetPos,
+        };
       }
     } catch (e) {
       // user may not have an active Spotify device; silent fail
@@ -620,6 +669,7 @@ export default function MapScreen() {
       syncIntervalRef.current = null;
     }
     pendingSyncRef.current = null;
+    appliedSyncRef.current = { uri: null, is_playing: false, appliedAt: 0, appliedPositionMs: 0 };
     setHostId(null);
     setSyncStatus("idle");
     if (auth) {
