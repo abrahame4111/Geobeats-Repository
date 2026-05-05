@@ -817,19 +817,35 @@ export default function MapScreen() {
             </Text>
           </View>
           <View style={styles.sideSpacer}>
-            <TouchableOpacity
-              onPress={toggleBroadcast}
-              style={[styles.ghostBtn, !broadcastOn && styles.ghostBtnOff]}
-              testID="ghost-toggle"
-              activeOpacity={0.8}
-              hitSlop={8}
-            >
-              <Ionicons
-                name={broadcastOn ? "radio" : "eye-off"}
-                size={19}
-                color={broadcastOn ? "#B026FF" : "rgba(255,255,255,0.55)"}
-              />
-            </TouchableOpacity>
+            <View style={styles.sideRow}>
+              <TouchableOpacity
+                onPress={() => setListenersOpen(true)}
+                style={styles.ghostBtn}
+                testID="users-toggle"
+                activeOpacity={0.8}
+                hitSlop={8}
+              >
+                <Ionicons name="people" size={19} color="#B026FF" />
+                {markers.length > 0 ? (
+                  <View style={styles.usersBadge}>
+                    <Text style={styles.usersBadgeText}>{markers.length > 99 ? "99+" : markers.length}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={toggleBroadcast}
+                style={[styles.ghostBtn, !broadcastOn && styles.ghostBtnOff]}
+                testID="ghost-toggle"
+                activeOpacity={0.8}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={broadcastOn ? "radio" : "eye-off"}
+                  size={19}
+                  color={broadcastOn ? "#B026FF" : "rgba(255,255,255,0.55)"}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
         {permissionError && (
@@ -983,6 +999,11 @@ export default function MapScreen() {
           leaveSession();
           setListenersOpen(false);
         }}
+        onFlyTo={(_uid, lat, lng) => {
+          // Smoothly fly to the selected user's pin and close the sheet
+          mapRef.current?.centerOn(lat, lng, 14);
+          setListenersOpen(false);
+        }}
       />
 
       {/* Song Radar — match-found modal with React Bits TiltedCard */}
@@ -1046,6 +1067,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  usersBadge: {
+    position: "absolute",
+    top: 1,
+    right: 1,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: "#B026FF",
+    borderWidth: 2,
+    borderColor: "rgba(10,10,18,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  usersBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.2,
   },
   locateFab: {
     position: "absolute",

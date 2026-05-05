@@ -19,6 +19,8 @@ type Listener = {
   profile_image?: string;
   current_track?: any;
   is_playing?: boolean;
+  lat?: number;
+  lng?: number;
 };
 
 type Props = {
@@ -30,6 +32,9 @@ type Props = {
   onClose: () => void;
   onListenAlong?: (userId: string) => void;
   onLeaveSession?: () => void;
+  /** Fly the map to the given user's lat/lng. The sheet typically closes
+   *  itself afterwards so the camera move is visible. */
+  onFlyTo?: (userId: string, lat: number, lng: number) => void;
 };
 
 function trackInfo(ct: any) {
@@ -51,6 +56,7 @@ export default function ListenersSheet({
   onClose,
   onListenAlong,
   onLeaveSession,
+  onFlyTo,
 }: Props) {
   const [tab, setTab] = useState<"listeners" | "queue">("listeners");
   const [queue, setQueue] = useState<any[]>([]);
@@ -154,27 +160,38 @@ export default function ListenersSheet({
               const isHost = item.user_id === hostId;
               return (
                 <View style={styles.listenerRow}>
-                  <Image
-                    source={{ uri: item.profile_image || "https://placehold.co/100x100/121218/B026FF?text=M" }}
-                    style={styles.avatar}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.nameRow}>
-                      <Text style={styles.name} numberOfLines={1}>
-                        {item.display_name}
-                        {isMe ? " (you)" : ""}
+                  <TouchableOpacity
+                    style={styles.flyToTap}
+                    activeOpacity={0.7}
+                    disabled={typeof item.lat !== "number" || typeof item.lng !== "number"}
+                    onPress={() => {
+                      if (typeof item.lat === "number" && typeof item.lng === "number") {
+                        onFlyTo?.(item.user_id, item.lat, item.lng);
+                      }
+                    }}
+                  >
+                    <Image
+                      source={{ uri: item.profile_image || "https://placehold.co/100x100/121218/B026FF?text=M" }}
+                      style={styles.avatar}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.nameRow}>
+                        <Text style={styles.name} numberOfLines={1}>
+                          {item.display_name}
+                          {isMe ? " (you)" : ""}
+                        </Text>
+                        {isHost && !isMe ? (
+                          <View style={styles.hostPill}>
+                            <Ionicons name="radio" size={9} color="#B026FF" />
+                            <Text style={styles.hostPillText}>HOST</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={styles.track} numberOfLines={1}>
+                        {t ? `${t.name} — ${t.artists}` : "Not playing"}
                       </Text>
-                      {isHost && !isMe ? (
-                        <View style={styles.hostPill}>
-                          <Ionicons name="radio" size={9} color="#B026FF" />
-                          <Text style={styles.hostPillText}>HOST</Text>
-                        </View>
-                      ) : null}
                     </View>
-                    <Text style={styles.track} numberOfLines={1}>
-                      {t ? `${t.name} — ${t.artists}` : "Not playing"}
-                    </Text>
-                  </View>
+                  </TouchableOpacity>
                   {!isMe ? (
                     isHost ? (
                       <TouchableOpacity style={[styles.actionBtn, styles.leaveBtn]} onPress={onLeaveSession}>
@@ -266,6 +283,9 @@ const styles = StyleSheet.create({
   listenerRow: {
     flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10,
     borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.05)",
+  },
+  flyToTap: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 12,
   },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#12121A" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 },
