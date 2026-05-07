@@ -1782,7 +1782,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     style: '{base_style}',
     center: [20, 20],
     zoom: 1.4,
-    minZoom: 1.4,   // CRITICAL: prevents Android WebView pinch-out drift
+    minZoom: 0.5,   // allow zoom-out to see whole Earth on tall phone viewports
     maxZoom: 19,
     projection: 'globe',
     pitch: 0,
@@ -1796,8 +1796,32 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   }});
   // Belt-and-suspenders: also enforce after init in case style-load or
   // resize re-derives bounds (some Android WebViews over-eager pinch).
-  try {{ map.setMinZoom(1.4); }} catch(e) {{}}
+  try {{ map.setMinZoom(0.5); }} catch(e) {{}}
   try {{ map.setMaxZoom(19); }} catch(e) {{}}
+
+  // Auto-recenter to Earth's geometric center when zoomed out so the
+  // globe sits perfectly centered in the viewport instead of being
+  // anchored to the user's lat/lng (which would push it off-screen on
+  // tall phone viewports). When zoomed in, the user's marker stays put.
+  let __recenterTimer = null;
+  map.on('zoomend', () => {{
+    try {{
+      const z = map.getZoom();
+      if (z < 2.2) {{
+        // Throttle so consecutive pinch-zoom-out events don't fight.
+        if (__recenterTimer) clearTimeout(__recenterTimer);
+        __recenterTimer = setTimeout(() => {{
+          try {{
+            map.easeTo({{
+              center: [20, 20],
+              duration: 700,
+              essential: true,
+            }});
+          }} catch(e) {{}}
+        }}, 60);
+      }}
+    }} catch(e) {{}}
+  }});
   // GeoBeats neon palette (mirrors the NFS aesthetic from the rest of the app)
   const PALETTE = {{
     bg:           '#05010f', // outer space / void behind the globe
