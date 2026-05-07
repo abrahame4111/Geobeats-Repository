@@ -1757,6 +1757,10 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     else if (msg.type === 'marker:remove') removeMarker(msg.user_id);
     else if (msg.type === 'center') {{
       if (!map) return;
+      // Suppress auto-recenter for the duration of the user-initiated flight
+      // so it doesn't yank the camera back to [20,20] mid-animation.
+      window.__suppressRecenter = true;
+      if (window.__recenterTimer) {{ clearTimeout(window.__recenterTimer); window.__recenterTimer = null; }}
       // Reset bearing to 0 (north up) and pitch to a tasteful 45° tilt so
       // the user re-orients no matter how badly they rotated the globe.
       // This makes "Locate Me" function as a true reset button.
@@ -1769,6 +1773,8 @@ async def mapbox_html(token: str, style: str = "geobeats"):
         curve: 1.5,
         essential: true
       }});
+      // Lift suppression once the flight ends.
+      map.once('moveend', () => {{ window.__suppressRecenter = false; }});
     }}
   }}
   window.__handle = handle;
@@ -1803,14 +1809,19 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   // globe sits perfectly centered in the viewport instead of being
   // anchored to the user's lat/lng (which would push it off-screen on
   // tall phone viewports). When zoomed in, the user's marker stays put.
-  let __recenterTimer = null;
+  // The __suppressRecenter flag (set by the 'center' message handler) lets
+  // explicit user-initiated flights to a location skip the auto-recenter.
+  window.__suppressRecenter = false;
+  window.__recenterTimer = null;
   map.on('zoomend', () => {{
     try {{
+      if (window.__suppressRecenter) return;
       const z = map.getZoom();
       if (z < 2.2) {{
         // Throttle so consecutive pinch-zoom-out events don't fight.
-        if (__recenterTimer) clearTimeout(__recenterTimer);
-        __recenterTimer = setTimeout(() => {{
+        if (window.__recenterTimer) clearTimeout(window.__recenterTimer);
+        window.__recenterTimer = setTimeout(() => {{
+          if (window.__suppressRecenter) return;
           try {{
             map.easeTo({{
               center: [20, 20],
