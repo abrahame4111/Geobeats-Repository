@@ -1306,6 +1306,32 @@ async def geobeats_icon():
     )
 
 
+@api_router.get("/assets/fonts/{filename}")
+async def geobeats_font_asset(filename: str):
+    """Serve bundled TTF fonts over HTTPS — fallback path for Expo Go SDK 54
+    fast-resolver bug that returns empty buffers for required font assets.
+    The frontend uses Font.loadAsync({ ionicons: { uri: <this URL> } }) to
+    bypass Metro's broken asset bundler entirely.
+    """
+    from fastapi.responses import FileResponse
+    import os as _os
+    if "/" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="invalid filename")
+    if not filename.lower().endswith(".ttf"):
+        raise HTTPException(status_code=400, detail="only .ttf supported")
+    base = _os.path.abspath(
+        _os.path.join(_os.path.dirname(__file__), "..", "frontend", "assets", "fonts")
+    )
+    path = _os.path.join(base, filename)
+    if not _os.path.exists(path):
+        raise HTTPException(status_code=404, detail="font not found")
+    return FileResponse(
+        path,
+        media_type="font/ttf",
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
 @api_router.get("/assets/store/{filename}")
 async def geobeats_store_asset(filename: str):
     """Serve Play Store listing assets (icon_512.png, feature_graphic.png)."""
