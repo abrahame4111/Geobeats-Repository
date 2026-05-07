@@ -239,7 +239,7 @@ def _parse_state(state: Optional[str]) -> dict:
 
 
 @api_router.get("/spotify/callback")
-async def spotify_callback(code: Optional[str] = None, error: Optional[str] = None, state: Optional[str] = None):
+async def spotify_callback(request: Request, code: Optional[str] = None, error: Optional[str] = None, state: Optional[str] = None):
     """Spotify redirects here after user login. Exchange code for tokens and redirect back to app."""
     st = _parse_state(state)
     mobile_redirect = st.get("m")
@@ -312,7 +312,11 @@ async def spotify_callback(code: Optional[str] = None, error: Optional[str] = No
     if not code:
         return _render_redirect(_build_redirect("error=missing_code"))
     try:
-        oauth = get_oauth()
+        # Use the SAME redirect_uri that was sent during /spotify/login —
+        # reconstructed from the request host. Spotify rejects the token
+        # exchange if redirect_uri doesn't match what was sent in /authorize.
+        redirect_uri = _resolve_redirect_uri(request)
+        oauth = get_oauth(redirect_uri=redirect_uri)
         token_info = oauth.get_access_token(code, as_dict=True, check_cache=False)
         access_token = token_info["access_token"]
         refresh_token = token_info.get("refresh_token", "")
