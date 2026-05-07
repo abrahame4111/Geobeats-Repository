@@ -1,5 +1,5 @@
 """SoundMap backend - Spotify OAuth, Web API proxy, and real-time WebSocket sync."""
-from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request
 from fastapi.responses import RedirectResponse, HTMLResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -170,28 +170,57 @@ async def send_to(user_id: str, message: dict):
 
 # ------------------------ Spotify OAuth ------------------------
 
-def get_oauth() -> SpotifyOAuth:
+def get_oauth(redirect_uri: Optional[str] = None) -> SpotifyOAuth:
     return SpotifyOAuth(
         client_id=SPOTIFY_CLIENT_ID,
         client_secret=SPOTIFY_CLIENT_SECRET,
-        redirect_uri=SPOTIFY_REDIRECT_URI,
+        redirect_uri=redirect_uri or SPOTIFY_REDIRECT_URI,
         scope=SCOPES,
         cache_handler=spotipy.MemoryCacheHandler(),
         show_dialog=True,
     )
 
 
+def _resolve_redirect_uri(request: Request) -> str:
+    """Build the redirect_uri dynamically from the incoming request's host.
+
+    This makes Spotify OAuth work seamlessly on BOTH the preview AND the
+    deployed (Play-Store-AAB) environments without needing a manual env
+    var swap on each publish. We honor reverse-proxy headers
+    (X-Forwarded-Proto / X-Forwarded-Host) which are set by Emergent's
+    Cloudflare ingress so we always reconstruct the public URL.
+    """
+    proto = (
+        request.headers.get("x-forwarded-proto")
+        or request.url.scheme
+        or "https"
+    )
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.netloc
+    )
+    return f"{proto}://{host}/api/spotify/callback"
+
+
 @api_router.get("/spotify/login")
-async def spotify_login(mobile_redirect: Optional[str] = None, popup: Optional[int] = 0):
+async def spotify_login(
+    request: Request,
+    mobile_redirect: Optional[str] = None,
+    popup: Optional[int] = 0,
+):
     """Return Spotify auth URL. Encode platform/return-target in `state` so the
-    callback can redirect to the right place (mobile deep link, popup poster, or web)."""
+    callback can redirect to the right place (mobile deep link, popup poster, or web).
+    The redirect_uri is reconstructed dynamically from the request's host so
+    OAuth works on preview AND deployed environments without env-var swaps."""
     parts = []
     if mobile_redirect:
         parts.append(f"m={requests.utils.quote(mobile_redirect, safe='')}")
     if popup:
         parts.append("p=1")
     state = "&".join(parts) if parts else None
-    oauth = get_oauth()
+    redirect_uri = _resolve_redirect_uri(request)
+    oauth = get_oauth(redirect_uri=redirect_uri)
     auth_url = oauth.get_authorize_url(state=state) if state else oauth.get_authorize_url()
     return {"auth_url": auth_url}
 
