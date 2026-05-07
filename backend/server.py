@@ -1782,12 +1782,22 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     style: '{base_style}',
     center: [20, 20],
     zoom: 1.4,
+    minZoom: 1.4,   // CRITICAL: prevents Android WebView pinch-out drift
+    maxZoom: 19,
     projection: 'globe',
     pitch: 0,
     bearing: 0,
     attributionControl: false,
     antialias: true,
+    renderWorldCopies: false,  // keep single Earth, no horizontal repeat
+    dragRotate: true,
+    touchZoomRotate: true,
+    pitchWithRotate: false,
   }});
+  // Belt-and-suspenders: also enforce after init in case style-load or
+  // resize re-derives bounds (some Android WebViews over-eager pinch).
+  try {{ map.setMinZoom(1.4); }} catch(e) {{}}
+  try {{ map.setMaxZoom(19); }} catch(e) {{}}
   // GeoBeats neon palette (mirrors the NFS aesthetic from the rest of the app)
   const PALETTE = {{
     bg:           '#05010f', // outer space / void behind the globe
