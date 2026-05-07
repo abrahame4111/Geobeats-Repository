@@ -63,7 +63,15 @@
         }
       ],
       "expo-web-browser",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Ionicons.ttf",
+            "./assets/fonts/SpaceMono-Regular.ttf"
+          ]
+        }
+      ],
       "expo-audio",
       "expo-asset"
     ],
