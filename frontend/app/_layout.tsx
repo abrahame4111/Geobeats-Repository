@@ -11,11 +11,13 @@ import { View } from "react-native";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  // Pre-register the "Ionicons" font NAME using our locally bundled TTF.
-  // @expo/vector-icons looks up this exact name internally; once it's
-  // already loaded, it skips its own (broken in Expo Go SDK 55) loader.
+  // Pre-register vector-icons' EXACT font name ("ionicons", lowercase)
+  // but pointed at our LOCAL bundled TTF instead of the broken node_modules
+  // asset path. Once Font.isLoaded("ionicons") is true, <Ionicons /> skips
+  // its own internal Font.loadAsync (which is broken in Expo Go SDK 55:
+  // "Font file for ionicons is empty").
   const [fontsLoaded, fontsError] = useFonts({
-    Ionicons: require("../assets/fonts/Ionicons.ttf"),
+    ionicons: require("../assets/fonts/Ionicons.ttf"),
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
 
