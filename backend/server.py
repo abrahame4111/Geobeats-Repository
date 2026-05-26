@@ -1662,6 +1662,64 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   .pill .dot {{ width: 6px; height: 6px; border-radius: 50%; background:#B026FF; box-shadow: 0 0 6px #B026FF; flex-shrink: 0; }}
   .self .avatar-wrap {{ background: linear-gradient(135deg, #00E5FF, #B026FF); box-shadow: 0 6px 24px rgba(0,229,255,0.55); }}
   .host .avatar-wrap {{ background: linear-gradient(135deg, #FF1493, #B026FF); box-shadow: 0 6px 24px rgba(255,20,147,0.6); }}
+
+  /* ===== Profile Cluster (multi-user grouping) ===== */
+  /* Wraps a stacked avatar arrangement when 2+ users share roughly the
+     same on-screen pixel position. The wrapper participates in the same
+     bottom-anchored zoom-scale transform that solo bubbles use, so the
+     cluster collapses cleanly onto its lat/lng pin at low zoom. */
+  .cluster {{
+    position: relative;
+    width: 86px; height: 78px;
+    pointer-events: auto;
+    cursor: pointer;
+    transform-origin: 50% 100%;
+    transform: scale(var(--marker-scale, 1)) translateY(var(--marker-lift, 0px));
+    transition: transform 0.55s cubic-bezier(0.2, 0.65, 0.2, 1), opacity 0.35s ease;
+    will-change: transform;
+  }}
+  .cluster .stack {{
+    position: absolute;
+    inset: 0;
+    display: flex; align-items: center; justify-content: center;
+  }}
+  .cluster .av {{
+    position: absolute;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2.5px solid #fff;
+    background: #1a0a24;
+    box-shadow: 0 4px 18px rgba(162,89,255,0.55), 0 0 0 1.5px rgba(176,38,255,0.45);
+  }}
+  .cluster .av img {{
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }}
+  /* 2-avatar arrangement: side-by-side with slight overlap */
+  .cluster.n2 .av:nth-child(1) {{ transform: translate(-14px, 4px); z-index: 2; }}
+  .cluster.n2 .av:nth-child(2) {{ transform: translate(14px, 4px); z-index: 3; }}
+  /* 3+ avatar arrangement: triangular stack (Life360-style) */
+  .cluster.n3 .av:nth-child(1) {{ transform: translate(0, -18px); z-index: 4; }}
+  .cluster.n3 .av:nth-child(2) {{ transform: translate(-16px, 10px); z-index: 2; }}
+  .cluster.n3 .av:nth-child(3) {{ transform: translate(16px, 10px); z-index: 3; }}
+  /* Overflow badge ("+N") for clusters of 4+ users */
+  .cluster .overflow {{
+    position: absolute;
+    top: -4px; right: -4px;
+    min-width: 24px; height: 24px; padding: 0 7px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #A259FF, #C026FF);
+    color: #fff;
+    font-size: 11.5px; font-weight: 800; letter-spacing: 0.2px;
+    font-family: -apple-system, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 10px rgba(192,38,255,0.55);
+    z-index: 10;
+  }}
+  /* Tap feedback */
+  .cluster:active {{ transform: scale(calc(var(--marker-scale, 1) * 0.95)); }}
+
   /* Hide Mapbox attribution for cleaner UI (still link in console per Mapbox ToS for free tier) */
   .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-bottom-left {{ display: none !important; }}
 </style>
@@ -1705,6 +1763,118 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     el.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
     return el;
   }}
+  function makeClusterEl(usersInCluster){{
+    // Visually stacked avatars (up to 3 visible) + overflow "+N" badge.
+    const el = document.createElement('div');
+    const n = usersInCluster.length;
+    const nClass = n === 2 ? 'n2' : 'n3';   // 3+ shares the n3 triangular layout
+    el.className = 'cluster ' + nClass;
+    const shown = usersInCluster.slice(0, 3);
+    const overflow = Math.max(0, n - 3);
+    const inner = ['<div class="stack">'];
+    for (const u of shown) {{
+      const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
+      inner.push('<div class="av"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>');
+    }}
+    inner.push('</div>');
+    if (overflow > 0) {{
+      inner.push('<div class="overflow">+'+overflow+'</div>');
+    }}
+    el.innerHTML = inner.join('');
+    // Tap → fitBounds of all users in this cluster, so the cluster
+    // naturally explodes apart as Mapbox zooms in.
+    el.addEventListener('click', () => {{
+      try {{
+        const b = new mapboxgl.LngLatBounds();
+        usersInCluster.forEach(u => {{ b.extend([u.lng, u.lat]); }});
+        // For very tight real-world clusters (same building), the bounds are
+        // degenerate; flyTo a fixed zoom instead so the user gets visible motion.
+        const sw = b.getSouthWest(), ne = b.getNorthEast();
+        const sameSpot = sw && ne && Math.abs(sw.lng - ne.lng) < 1e-5 && Math.abs(sw.lat - ne.lat) < 1e-5;
+        if (sameSpot) {{
+          map.flyTo({{ center: [usersInCluster[0].lng, usersInCluster[0].lat], zoom: Math.max(map.getZoom()+2.2, 16), speed: 1.1, curve: 1.5, essential: true }});
+        }} else {{
+          map.fitBounds(b, {{ padding: {{ top: 120, bottom: 220, left: 80, right: 80 }}, maxZoom: 16, duration: 900, essential: true }});
+        }}
+        // Tell RN side which cluster was tapped (useful if you want a bottom sheet later)
+        post({{ type: 'cluster:click', user_ids: usersInCluster.map(u => u.user_id) }});
+      }} catch(e) {{}}
+    }});
+    return el;
+  }}
+
+  // ===== Cluster engine =====
+  // Holds the most recent flat user list so we can re-cluster on zoom
+  // (pixel-distance between fixed lng/lat pairs changes with zoom level).
+  let latestUsers = [];
+  // Re-cluster threshold in screen pixels. 56px ≈ 1.3x avatar width, which is
+  // the point at which two solo bubbles start visibly overlapping.
+  const CLUSTER_PX = 56;
+
+  function recluster(){{
+    if (!map || !map.loaded) return;
+    // Build groups: self gets its own solo group, others greedy-cluster by pixel distance.
+    const selfUsers = [];
+    const others = [];
+    for (const u of latestUsers) {{
+      if (!u || typeof u.lat !== 'number' || typeof u.lng !== 'number') continue;
+      if (u.isSelf || u.user_id === meIdRef.id) selfUsers.push(u);
+      else others.push(u);
+    }}
+    const groups = []; // each: cx, cy (px) + lng, lat (centroid) + users[]
+    for (const u of others) {{
+      let pt; try {{ pt = map.project([u.lng, u.lat]); }} catch(e) {{ continue; }}
+      let placed = false;
+      for (const g of groups) {{
+        const dx = g.cx - pt.x, dy = g.cy - pt.y;
+        if (dx*dx + dy*dy <= CLUSTER_PX*CLUSTER_PX) {{
+          g.users.push(u);
+          // Update centroid (running average)
+          const k = g.users.length;
+          g.cx = ((g.cx * (k-1)) + pt.x) / k;
+          g.cy = ((g.cy * (k-1)) + pt.y) / k;
+          g.lng = ((g.lng * (k-1)) + u.lng) / k;
+          g.lat = ((g.lat * (k-1)) + u.lat) / k;
+          placed = true; break;
+        }}
+      }}
+      if (!placed) groups.push({{ cx: pt.x, cy: pt.y, lng: u.lng, lat: u.lat, users: [u] }});
+    }}
+
+    // Stable signature for diffing (so we update in-place when contents unchanged)
+    const desired = {{}};
+    for (const u of selfUsers) {{
+      desired['self:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat }};
+    }}
+    for (const g of groups) {{
+      if (g.users.length === 1) {{
+        const u = g.users[0];
+        desired['solo:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat }};
+      }} else {{
+        const key = 'cl:' + g.users.map(x => x.user_id).sort().join('|');
+        desired[key] = {{ kind: 'cluster', users: g.users, lng: g.lng, lat: g.lat }};
+      }}
+    }}
+
+    // Remove markers that are no longer needed
+    Object.keys(markers).forEach(key => {{
+      if (!desired[key]) {{ markers[key].remove(); delete markers[key]; }}
+    }});
+    // Add / update remaining
+    Object.entries(desired).forEach(([key, spec]) => {{
+      const existing = markers[key];
+      if (existing) {{
+        existing.setLngLat([spec.lng, spec.lat]);
+        return;
+      }}
+      const el = spec.kind === 'solo' ? makeBubbleEl(spec.user) : makeClusterEl(spec.users);
+      const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom' }})
+        .setLngLat([spec.lng, spec.lat]).addTo(map);
+      markers[key] = m;
+    }});
+    updateMarkerVisibility();
+  }}
+
   function upsertMarker(u){{
     if (!u.lat || !u.lng) return;
     if (u.isSelf && !window.__flown) {{
@@ -1713,31 +1883,15 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       // Cinematic fly from globe to user location
       map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
     }}
-    const existing = markers[u.user_id];
-    if (existing) {{
-      // Replace contents in-place to update track/avatar without flicker
-      existing.setLngLat([u.lng, u.lat]);
-      const newEl = makeBubbleEl(u);
-      const oldEl = existing.getElement();
-      // Mapbox owns the parent container of getElement(); easiest to remove
-      // and recreate the marker so the click handlers/anchor are correct.
-      existing.remove();
-      delete markers[u.user_id];
-    }}
-    const el = makeBubbleEl(u);
-    const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom' }})
-      .setLngLat([u.lng, u.lat]).addTo(map);
-    markers[u.user_id] = m;
+    // Merge into latestUsers (replace by user_id) then re-cluster.
+    const idx = latestUsers.findIndex(x => x && x.user_id === u.user_id);
+    if (idx >= 0) latestUsers[idx] = u; else latestUsers.push(u);
+    recluster();
   }}
   function setMarkersBulk(list){{
-    const seen = new Set();
-    (list||[]).forEach(u => {{ if (u && u.user_id) {{ seen.add(u.user_id); upsertMarker(u); }} }});
-    // Remove markers that are no longer present in the latest snapshot
-    Object.keys(markers).forEach(uid => {{ if (!seen.has(uid)) {{ markers[uid].remove(); delete markers[uid]; }} }});
-    // Refresh the Snap-style heatmap with the new listener positions
-    updateHeatmap(list || []);
-    // Honour current zoom-driven marker visibility
-    updateMarkerVisibility();
+    latestUsers = (list || []).filter(u => u && u.user_id);
+    recluster();
+    updateHeatmap(latestUsers);
   }}
   function updateHeatmap(list){{
     const features = (list || [])
@@ -1776,8 +1930,10 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     }});
   }}
   function removeMarker(uid){{
-    const m = markers[uid];
-    if (m) {{ m.remove(); delete markers[uid]; }}
+    // Remove the user from latestUsers and re-cluster.
+    const idx = latestUsers.findIndex(u => u && u.user_id === uid);
+    if (idx >= 0) latestUsers.splice(idx, 1);
+    recluster();
   }}
   // RN -> map message bridge
   function handle(msg){{
@@ -1864,6 +2020,10 @@ async def mapbox_html(token: str, style: str = "geobeats"):
           }} catch(e) {{}}
         }}, 60);
       }}
+      // Re-cluster on every zoom-end since pixel distances between fixed
+      // lng/lat pairs change with zoom — clusters should split when you
+      // zoom in and re-form when you zoom out.
+      try {{ recluster(); }} catch(e) {{}}
     }} catch(e) {{}}
   }});
   // GeoBeats neon palette (mirrors the NFS aesthetic from the rest of the app)
