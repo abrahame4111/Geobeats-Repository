@@ -1663,14 +1663,13 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   .self .avatar-wrap {{ background: linear-gradient(135deg, #00E5FF, #B026FF); box-shadow: 0 6px 24px rgba(0,229,255,0.55); }}
   .host .avatar-wrap {{ background: linear-gradient(135deg, #FF1493, #B026FF); box-shadow: 0 6px 24px rgba(255,20,147,0.6); }}
 
-  /* ===== Profile Cluster (multi-user grouping) ===== */
-  /* Wraps a stacked avatar arrangement when 2+ users share roughly the
-     same on-screen pixel position. The wrapper participates in the same
-     bottom-anchored zoom-scale transform that solo bubbles use, so the
-     cluster collapses cleanly onto its lat/lng pin at low zoom. */
+  /* ===== Profile Cluster (3+ users — Life360-style white pill) =====
+     The 2-user case is handled by simply rendering two solo bubbles with
+     vertical pixel offsets (see JS), so the cluster element is only used
+     when 3+ users coincide on screen. */
   .cluster {{
     position: relative;
-    width: 86px; height: 78px;
+    width: 130px; height: 92px;
     pointer-events: auto;
     cursor: pointer;
     transform-origin: 50% 100%;
@@ -1678,34 +1677,55 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     transition: transform 0.55s cubic-bezier(0.2, 0.65, 0.2, 1), opacity 0.35s ease;
     will-change: transform;
   }}
+  /* Life360-style white rounded pill that holds the avatar stack */
+  .cluster .pill-bg {{
+    position: absolute;
+    inset: 6px 4px 16px 4px;     /* leaves room for the bottom tail */
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 8px 22px rgba(20, 0, 40, 0.35),
+                0 2px 8px rgba(0, 0, 0, 0.18),
+                inset 0 0 0 1px rgba(176, 38, 255, 0.08);
+  }}
+  /* Tiny white tail/triangle pointing down at the pin location */
+  .cluster .tail {{
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    width: 18px; height: 18px;
+    background: #ffffff;
+    transform: translateX(-50%) rotate(45deg);
+    border-bottom-right-radius: 4px;
+    box-shadow: 4px 4px 10px rgba(20, 0, 40, 0.18);
+    z-index: 1;
+  }}
   .cluster .stack {{
     position: absolute;
     inset: 0;
     display: flex; align-items: center; justify-content: center;
+    z-index: 2;
   }}
   .cluster .av {{
     position: absolute;
-    width: 42px; height: 42px;
+    width: 44px; height: 44px;
     border-radius: 50%;
     overflow: hidden;
-    border: 2.5px solid #fff;
+    border: 3px solid #fff;
     background: #1a0a24;
-    box-shadow: 0 4px 18px rgba(162,89,255,0.55), 0 0 0 1.5px rgba(176,38,255,0.45);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   }}
   .cluster .av img {{
     width: 100%; height: 100%; object-fit: cover; display: block;
   }}
-  /* 2-avatar arrangement: side-by-side with slight overlap */
-  .cluster.n2 .av:nth-child(1) {{ transform: translate(-14px, 4px); z-index: 2; }}
-  .cluster.n2 .av:nth-child(2) {{ transform: translate(14px, 4px); z-index: 3; }}
-  /* 3+ avatar arrangement: triangular stack (Life360-style) */
-  .cluster.n3 .av:nth-child(1) {{ transform: translate(0, -18px); z-index: 4; }}
-  .cluster.n3 .av:nth-child(2) {{ transform: translate(-16px, 10px); z-index: 2; }}
-  .cluster.n3 .av:nth-child(3) {{ transform: translate(16px, 10px); z-index: 3; }}
-  /* Overflow badge ("+N") for clusters of 4+ users */
+  /* Triangular avatar arrangement: 1 top + 2 below, exactly as in the
+     Life360 reference. Children appear in DOM order: top, bottom-left, bottom-right. */
+  .cluster .av:nth-child(1) {{ transform: translate(0, -16px); z-index: 4; }}
+  .cluster .av:nth-child(2) {{ transform: translate(-18px, 14px); z-index: 2; }}
+  .cluster .av:nth-child(3) {{ transform: translate(18px, 14px); z-index: 3; }}
+  /* Overflow "+N" badge for clusters of 4+ users — sits at top-right */
   .cluster .overflow {{
     position: absolute;
-    top: -4px; right: -4px;
+    top: 0; right: -2px;
     min-width: 24px; height: 24px; padding: 0 7px;
     border-radius: 12px;
     background: linear-gradient(135deg, #A259FF, #C026FF);
@@ -1714,7 +1734,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     font-family: -apple-system, sans-serif;
     display: flex; align-items: center; justify-content: center;
     border: 2px solid #fff;
-    box-shadow: 0 2px 10px rgba(192,38,255,0.55);
+    box-shadow: 0 2px 10px rgba(192, 38, 255, 0.55);
     z-index: 10;
   }}
   /* Tap feedback */
@@ -1764,31 +1784,29 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     return el;
   }}
   function makeClusterEl(usersInCluster){{
-    // Visually stacked avatars (up to 3 visible) + overflow "+N" badge.
+    // Life360-style: white rounded pill with a 3-avatar triangular stack
+    // and a small white tail pointing down at the pin. Only used for 3+
+    // users — the 2-user case is rendered as two solo bubbles with offsets.
     const el = document.createElement('div');
-    const n = usersInCluster.length;
-    const nClass = n === 2 ? 'n2' : 'n3';   // 3+ shares the n3 triangular layout
-    el.className = 'cluster ' + nClass;
+    el.className = 'cluster';
     const shown = usersInCluster.slice(0, 3);
-    const overflow = Math.max(0, n - 3);
-    const inner = ['<div class="stack">'];
+    const overflow = Math.max(0, usersInCluster.length - 3);
+    const parts = ['<div class="pill-bg"></div>', '<div class="tail"></div>', '<div class="stack">'];
     for (const u of shown) {{
       const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
-      inner.push('<div class="av"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>');
+      parts.push('<div class="av"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>');
     }}
-    inner.push('</div>');
+    parts.push('</div>');
     if (overflow > 0) {{
-      inner.push('<div class="overflow">+'+overflow+'</div>');
+      parts.push('<div class="overflow">+'+overflow+'</div>');
     }}
-    el.innerHTML = inner.join('');
+    el.innerHTML = parts.join('');
     // Tap → fitBounds of all users in this cluster, so the cluster
     // naturally explodes apart as Mapbox zooms in.
     el.addEventListener('click', () => {{
       try {{
         const b = new mapboxgl.LngLatBounds();
         usersInCluster.forEach(u => {{ b.extend([u.lng, u.lat]); }});
-        // For very tight real-world clusters (same building), the bounds are
-        // degenerate; flyTo a fixed zoom instead so the user gets visible motion.
         const sw = b.getSouthWest(), ne = b.getNorthEast();
         const sameSpot = sw && ne && Math.abs(sw.lng - ne.lng) < 1e-5 && Math.abs(sw.lat - ne.lat) < 1e-5;
         if (sameSpot) {{
@@ -1796,7 +1814,6 @@ async def mapbox_html(token: str, style: str = "geobeats"):
         }} else {{
           map.fitBounds(b, {{ padding: {{ top: 120, bottom: 220, left: 80, right: 80 }}, maxZoom: 16, duration: 900, essential: true }});
         }}
-        // Tell RN side which cluster was tapped (useful if you want a bottom sheet later)
         post({{ type: 'cluster:click', user_ids: usersInCluster.map(u => u.user_id) }});
       }} catch(e) {{}}
     }});
@@ -1844,15 +1861,24 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     // Stable signature for diffing (so we update in-place when contents unchanged)
     const desired = {{}};
     for (const u of selfUsers) {{
-      desired['self:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat }};
+      desired['self:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat, offset: [0, 0] }};
     }}
     for (const g of groups) {{
       if (g.users.length === 1) {{
         const u = g.users[0];
-        desired['solo:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat }};
+        desired['solo:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat, offset: [0, 0] }};
+      }} else if (g.users.length === 2) {{
+        // 2-user case: render BOTH as solo bubbles, stacked vertically via
+        // pixel offsets so each still shows its own avatar + track pill.
+        // Sort by user_id so the top/bottom assignment is stable across renders.
+        const sorted = g.users.slice().sort((a, b) => (a.user_id < b.user_id ? -1 : 1));
+        const [top, bottom] = sorted;
+        desired['solo:' + top.user_id]    = {{ kind: 'solo', user: top,    lng: g.lng, lat: g.lat, offset: [0, -95] }};
+        desired['solo:' + bottom.user_id] = {{ kind: 'solo', user: bottom, lng: g.lng, lat: g.lat, offset: [0, 0]   }};
       }} else {{
+        // 3+ users: Life360-style cluster pill
         const key = 'cl:' + g.users.map(x => x.user_id).sort().join('|');
-        desired[key] = {{ kind: 'cluster', users: g.users, lng: g.lng, lat: g.lat }};
+        desired[key] = {{ kind: 'cluster', users: g.users, lng: g.lng, lat: g.lat, offset: [0, 0] }};
       }}
     }}
 
@@ -1865,10 +1891,13 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       const existing = markers[key];
       if (existing) {{
         existing.setLngLat([spec.lng, spec.lat]);
+        // Update vertical offset (n=2 stacking flips when zoomed in past
+        // the cluster threshold so users separate naturally).
+        try {{ existing.setOffset(spec.offset || [0, 0]); }} catch(e) {{}}
         return;
       }}
       const el = spec.kind === 'solo' ? makeBubbleEl(spec.user) : makeClusterEl(spec.users);
-      const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom' }})
+      const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom', offset: spec.offset || [0, 0] }})
         .setLngLat([spec.lng, spec.lat]).addTo(map);
       markers[key] = m;
     }});
