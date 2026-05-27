@@ -1839,23 +1839,31 @@ async def mapbox_html(token: str, style: str = "geobeats"):
 
   function recluster(){{
     if (!map || !map.loaded) return;
-    // Build groups: self gets its own solo group, others greedy-cluster by pixel distance.
-    const selfUsers = [];
-    const others = [];
+    // Greedy-cluster ALL users (self included) by pixel distance. Including
+    // self in clustering means when another user is near you, you and them
+    // merge into a single Life360-style pill that stays visually unified at
+    // every zoom level (instead of drifting apart at low zoom because each
+    // bubble was anchored to its own slightly-different lat/lng pin).
+    const valid = [];
     for (const u of latestUsers) {{
       if (!u || typeof u.lat !== 'number' || typeof u.lng !== 'number') continue;
-      if (u.isSelf || u.user_id === meIdRef.id) selfUsers.push(u);
-      else others.push(u);
+      valid.push(u);
     }}
     const groups = []; // each: cx, cy (px) + lng, lat (centroid) + users[]
-    for (const u of others) {{
+    // Process self FIRST so it always becomes the cluster's anchor avatar
+    // (renders in the top/lead position of n2 and n3 layouts).
+    valid.sort((a, b) => {{
+      const sa = (a.isSelf || a.user_id === meIdRef.id) ? 0 : 1;
+      const sb = (b.isSelf || b.user_id === meIdRef.id) ? 0 : 1;
+      return sa - sb;
+    }});
+    for (const u of valid) {{
       let pt; try {{ pt = map.project([u.lng, u.lat]); }} catch(e) {{ continue; }}
       let placed = false;
       for (const g of groups) {{
         const dx = g.cx - pt.x, dy = g.cy - pt.y;
         if (dx*dx + dy*dy <= CLUSTER_PX*CLUSTER_PX) {{
           g.users.push(u);
-          // Update centroid (running average)
           const k = g.users.length;
           g.cx = ((g.cx * (k-1)) + pt.x) / k;
           g.cy = ((g.cy * (k-1)) + pt.y) / k;
@@ -1869,13 +1877,13 @@ async def mapbox_html(token: str, style: str = "geobeats"):
 
     // Stable signature for diffing (so we update in-place when contents unchanged)
     const desired = {{}};
-    for (const u of selfUsers) {{
-      desired['self:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat, offset: [0, 0] }};
-    }}
     for (const g of groups) {{
       if (g.users.length === 1) {{
         const u = g.users[0];
-        desired['solo:' + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat, offset: [0, 0] }};
+        // Self user (when alone) keeps the cyan/purple solo-bubble look;
+        // other users get the standard purple bubble. Both are solo.
+        const prefix = (u.isSelf || u.user_id === meIdRef.id) ? 'self:' : 'solo:';
+        desired[prefix + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat, offset: [0, 0] }};
       }} else {{
         // 2+ users: unified Life360-style white-pill cluster.
         // makeClusterEl renders side-by-side for n=2 and triangular for n=3+.
