@@ -2032,6 +2032,8 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   // resize re-derives bounds (some Android WebViews over-eager pinch).
   try {{ map.setMinZoom(0.5); }} catch(e) {{}}
   try {{ map.setMaxZoom(19); }} catch(e) {{}}
+  // Expose globally for debug + testing harness
+  window.map = map;
 
   // Auto-recenter to Earth's geometric center when zoomed out so the
   // globe sits perfectly centered in the viewport instead of being
