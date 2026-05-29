@@ -1824,17 +1824,23 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   // Holds the most recent flat user list so we can re-cluster on zoom
   // (pixel-distance between fixed lng/lat pairs changes with zoom level).
   let latestUsers = [];
-  // Re-cluster threshold in screen pixels. 70px ≈ 1.6x avatar width — generous
-  // enough to absorb normal GPS jitter without breaking the cluster apart.
-  const CLUSTER_PX = 70;
+  // Re-cluster threshold in screen pixels. Generous initial pull so that
+  // typical GPS noise (10-30m → up to ~80px at z=16) doesn't prevent
+  // clustering in the first place.
+  const CLUSTER_PX = 100;
   // HYSTERESIS: once two users are clustered together, require them to be
-  // SEPARATED by this larger distance before un-clustering. Prevents flicker
-  // when GPS jitter pushes the pixel distance back and forth across the
-  // CLUSTER_PX boundary.
-  const CLUSTER_PX_STICKY = 110;
-  // Set of "user_id|user_id" pairs that were grouped in the last recluster
-  // pass — used to apply the sticky threshold on the next pass.
-  let stickyPairs = new Set();
+  // SEPARATED by this larger distance before un-clustering. Combined with
+  // the TTL below, this absorbs both GPS jitter AND brief WebSocket
+  // reconnects (where the other user momentarily drops from the frame).
+  const CLUSTER_PX_STICKY = 180;
+  // Sticky-pair TTL: number of recluster passes a pair stays "sticky"
+  // after it was last actually grouped. 5 passes ≈ 25s at typical update
+  // rates. If a user briefly disappears from the WS frame (Cloudflare
+  // disconnect / token refresh / etc.), the pair remains sticky and
+  // re-forms instantly when the user comes back.
+  const STICKY_TTL = 5;
+  // Map<"a|b", remainingPasses>
+  let stickyPairAges = new Map();
 
   // Per-user content signature — fingerprints everything the marker can
   // visually express. Used to detect when a friend's avatar / track / play
@@ -1880,16 +1886,15 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       for (const g of groups) {{
         const dx = g.cx - pt.x, dy = g.cy - pt.y;
         const distSq = dx*dx + dy*dy;
-        // HYSTERESIS: if this user was clustered with ANY existing user in
-        // g.users last pass, use the larger sticky threshold to keep them
-        // together — prevents flicker from GPS jitter / pixel-projection
-        // wobble around the boundary. Otherwise use the normal threshold.
+        // HYSTERESIS: if this user has any sticky-pair history with any
+        // existing member of g.users, use the larger sticky threshold to
+        // keep them together (resists GPS jitter AND brief WS dropouts).
         let wasStickyToThisGroup = false;
         for (const peer of g.users) {{
           const pair = u.user_id < peer.user_id
             ? (u.user_id + '|' + peer.user_id)
             : (peer.user_id + '|' + u.user_id);
-          if (stickyPairs.has(pair)) {{ wasStickyToThisGroup = true; break; }}
+          if (stickyPairAges.has(pair)) {{ wasStickyToThisGroup = true; break; }}
         }}
         const thresh = wasStickyToThisGroup ? CLUSTER_PX_STICKY : CLUSTER_PX;
         if (distSq <= thresh * thresh) {{
@@ -1904,18 +1909,29 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       }}
       if (!placed) groups.push({{ cx: pt.x, cy: pt.y, lng: u.lng, lat: u.lat, users: [u] }});
     }}
-    // Record this pass's pairs for next-pass hysteresis check
-    const nextSticky = new Set();
+    // Refresh sticky pairs with TTL decay. Pairs that were grouped THIS
+    // pass get their age reset to STICKY_TTL. Pairs that weren't grouped
+    // this pass have their age decremented; when it hits 0 the pair is
+    // forgotten. This means a momentary WS dropout or GPS spike won't
+    // immediately break the cluster relationship.
+    const groupedThisPass = new Set();
     for (const g of groups) {{
       if (g.users.length < 2) continue;
       for (let i = 0; i < g.users.length; i++) {{
         for (let j = i+1; j < g.users.length; j++) {{
           const a = g.users[i].user_id, b = g.users[j].user_id;
-          nextSticky.add(a < b ? (a + '|' + b) : (b + '|' + a));
+          const key = a < b ? (a + '|' + b) : (b + '|' + a);
+          groupedThisPass.add(key);
+          stickyPairAges.set(key, STICKY_TTL);
         }}
       }}
     }}
-    stickyPairs = nextSticky;
+    // Decay non-grouped sticky pairs
+    for (const [pair, age] of Array.from(stickyPairAges.entries())) {{
+      if (groupedThisPass.has(pair)) continue;
+      if (age <= 1) stickyPairAges.delete(pair);
+      else stickyPairAges.set(pair, age - 1);
+    }}
 
     // Stable signature for diffing (so we update in-place when contents unchanged)
     const desired = {{}};
@@ -2010,7 +2026,10 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       // passes 8 — at that point the marker projection is already near
       // its final screen position so there's no visible "float up".
       document.body.classList.add('cinematic-pending');
+      let guardLifted = false;
       const liftGuard = () => {{
+        if (guardLifted) return;
+        guardLifted = true;
         document.body.classList.remove('cinematic-pending');
         try {{ recluster(); }} catch(e) {{}}
       }};
@@ -2019,7 +2038,18 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       }};
       map.on('zoom', onZoomLift);
       map.once('moveend', () => {{ map.off('zoom', onZoomLift); liftGuard(); }});
-      map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
+      // HARD SAFETY NET: if for ANY reason flyTo doesn't fire (map not
+      // ready, tile-fetch hung, network hiccup), force-lift the guard
+      // after 5 seconds so markers always show up. Without this the
+      // cinematic-pending class can stick forever and the user sees a
+      // map with no avatars at all.
+      setTimeout(liftGuard, 5000);
+      try {{
+        map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
+      }} catch(e) {{
+        // flyTo failed synchronously — lift immediately so markers render.
+        liftGuard();
+      }}
     }}
     // Merge into latestUsers (replace by user_id) then re-cluster.
     const idx = latestUsers.findIndex(x => x && x.user_id === u.user_id);
