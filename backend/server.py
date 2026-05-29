@@ -1837,6 +1837,24 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   // the point at which two solo bubbles start visibly overlapping.
   const CLUSTER_PX = 56;
 
+  // Per-user content signature — fingerprints everything the marker can
+  // visually express. Used to detect when a friend's avatar / track / play
+  // state has changed so we can refresh the marker element in place
+  // (without removing & recreating the marker, which would flicker).
+  function userSig(u){{
+    if (!u) return '';
+    const t = u.current_track || u.track || {{}};
+    const trackName = t.item ? (t.item.name || '') : (t.name || '');
+    return [
+      u.user_id, u.display_name || '', u.profile_image || '',
+      u.is_playing ? '1' : '0', u.host_session ? 'h' : '',
+      trackName,
+    ].join('|');
+  }}
+  function clusterSig(users){{
+    return (users || []).map(userSig).sort().join('::');
+  }}
+
   function recluster(){{
     if (!map || !map.loaded) return;
     // Greedy-cluster ALL users (self included) by pixel distance. Including
@@ -1883,12 +1901,18 @@ async def mapbox_html(token: str, style: str = "geobeats"):
         // Self user (when alone) keeps the cyan/purple solo-bubble look;
         // other users get the standard purple bubble. Both are solo.
         const prefix = (u.isSelf || u.user_id === meIdRef.id) ? 'self:' : 'solo:';
-        desired[prefix + u.user_id] = {{ kind: 'solo', user: u, lng: u.lng, lat: u.lat, offset: [0, 0] }};
+        desired[prefix + u.user_id] = {{
+          kind: 'solo', user: u, lng: u.lng, lat: u.lat,
+          offset: [0, 0], sig: userSig(u),
+        }};
       }} else {{
         // 2+ users: unified Life360-style white-pill cluster.
         // makeClusterEl renders side-by-side for n=2 and triangular for n=3+.
         const key = 'cl:' + g.users.map(x => x.user_id).sort().join('|');
-        desired[key] = {{ kind: 'cluster', users: g.users, lng: g.lng, lat: g.lat, offset: [0, 0] }};
+        desired[key] = {{
+          kind: 'cluster', users: g.users, lng: g.lng, lat: g.lat,
+          offset: [0, 0], sig: clusterSig(g.users),
+        }};
       }}
     }}
 
@@ -1901,14 +1925,50 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       const existing = markers[key];
       if (existing) {{
         existing.setLngLat([spec.lng, spec.lat]);
-        // Update vertical offset (n=2 stacking flips when zoomed in past
-        // the cluster threshold so users separate naturally).
         try {{ existing.setOffset(spec.offset || [0, 0]); }} catch(e) {{}}
+        // If the visual content of the user/cluster changed (new avatar
+        // URL, new track, play-state toggled, friend joined/left), refresh
+        // the element's innerHTML in place — preserves the Mapbox Marker
+        // (no flicker, no animation reset) while showing fresh data.
+        const prevSig = existing.__sig;
+        if (prevSig !== spec.sig) {{
+          try {{
+            const el = existing.getElement();
+            const fresh = spec.kind === 'solo' ? makeBubbleEl(spec.user) : makeClusterEl(spec.users);
+            // Match the wrapper class (e.g. swap .cluster.n2 <-> .cluster.n3
+            // if size changed inside an unchanged user_id set).
+            el.className = fresh.className;
+            el.innerHTML = fresh.innerHTML;
+            // The click handler is bound on the fresh element; rebind by
+            // copying its click listener data via cloning behaviour: we
+            // can't easily transfer JS listeners, so re-attach explicitly
+            // for clusters (solo bubbles delegate clicks via map events).
+            if (spec.kind === 'cluster') {{
+              // Rebuild click handler on the live element (mirrors makeClusterEl)
+              el.onclick = () => {{
+                try {{
+                  const b = new mapboxgl.LngLatBounds();
+                  spec.users.forEach(u => {{ b.extend([u.lng, u.lat]); }});
+                  const sw = b.getSouthWest(), ne = b.getNorthEast();
+                  const sameSpot = sw && ne && Math.abs(sw.lng - ne.lng) < 1e-5 && Math.abs(sw.lat - ne.lat) < 1e-5;
+                  if (sameSpot) {{
+                    map.flyTo({{ center: [spec.users[0].lng, spec.users[0].lat], zoom: Math.max(map.getZoom()+2.2, 16), speed: 1.1, curve: 1.5, essential: true }});
+                  }} else {{
+                    map.fitBounds(b, {{ padding: {{ top: 120, bottom: 220, left: 80, right: 80 }}, maxZoom: 16, duration: 900, essential: true }});
+                  }}
+                  post({{ type: 'cluster:click', user_ids: spec.users.map(u => u.user_id) }});
+                }} catch(e) {{}}
+              }};
+            }}
+            existing.__sig = spec.sig;
+          }} catch(e) {{}}
+        }}
         return;
       }}
       const el = spec.kind === 'solo' ? makeBubbleEl(spec.user) : makeClusterEl(spec.users);
       const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom', offset: spec.offset || [0, 0] }})
         .setLngLat([spec.lng, spec.lat]).addTo(map);
+      m.__sig = spec.sig;
       markers[key] = m;
     }});
     updateMarkerVisibility();
