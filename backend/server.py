@@ -1822,25 +1822,31 @@ async def mapbox_html(token: str, style: str = "geobeats"):
 
   // ===== Cluster engine =====
   // Holds the most recent flat user list so we can re-cluster on zoom
-  // (pixel-distance between fixed lng/lat pairs changes with zoom level).
+  // (kept for compat — clustering itself is now zoom-independent because
+  // we measure real-world distance in metres, not screen pixels).
   let latestUsers = [];
-  // Re-cluster threshold in screen pixels. Generous initial pull so that
-  // typical GPS noise (10-30m → up to ~80px at z=16) doesn't prevent
-  // clustering in the first place.
-  const CLUSTER_PX = 100;
-  // HYSTERESIS: once two users are clustered together, require them to be
-  // SEPARATED by this larger distance before un-clustering. Combined with
-  // the TTL below, this absorbs both GPS jitter AND brief WebSocket
-  // reconnects (where the other user momentarily drops from the frame).
-  const CLUSTER_PX_STICKY = 180;
-  // Sticky-pair TTL: number of recluster passes a pair stays "sticky"
-  // after it was last actually grouped. 5 passes ≈ 25s at typical update
-  // rates. If a user briefly disappears from the WS frame (Cloudflare
-  // disconnect / token refresh / etc.), the pair remains sticky and
-  // re-forms instantly when the user comes back.
+  // CLUSTER if two users are within this REAL-WORLD distance in metres.
+  // 150m ≈ "same building / same block" — matches user expectation for
+  // a Life360-style grouping (people in the same place cluster, people
+  // in different parts of town don't).
+  const CLUSTER_M = 150;
+  // HYSTERESIS: once two users are clustered, require them to be
+  // SEPARATED by this larger real-world distance before un-clustering.
+  // Combined with the TTL below, this absorbs GPS jitter AND brief WS
+  // disconnects without breaking the cluster apart.
+  const CLUSTER_M_STICKY = 300;
+  // Sticky-pair TTL: passes a pair stays "sticky" after it was last grouped.
+  // 5 passes ≈ 25s — survives a friend's momentary WS dropout.
   const STICKY_TTL = 5;
   // Map<"a|b", remainingPasses>
   let stickyPairAges = new Map();
+
+  // Equirectangular approximation — fast & accurate for small distances.
+  function metersBetween(lat1, lng1, lat2, lng2){{
+    const dLat = (lat2 - lat1) * 111000;
+    const dLng = (lng2 - lng1) * 111000 * Math.cos(lat1 * Math.PI / 180);
+    return Math.sqrt(dLat*dLat + dLng*dLng);
+  }}
 
   // Per-user content signature — fingerprints everything the marker can
   // visually express. Used to detect when a friend's avatar / track / play
@@ -1872,23 +1878,21 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       if (!u || typeof u.lat !== 'number' || typeof u.lng !== 'number') continue;
       valid.push(u);
     }}
-    const groups = []; // each: cx, cy (px) + lng, lat (centroid) + users[]
-    // Process self FIRST so it always becomes the cluster's anchor avatar
-    // (renders in the top/lead position of n2 and n3 layouts).
+    const groups = []; // each: lng, lat (centroid) + users[]
+    // Process self FIRST so it always anchors the cluster (renders first).
     valid.sort((a, b) => {{
       const sa = (a.isSelf || a.user_id === meIdRef.id) ? 0 : 1;
       const sb = (b.isSelf || b.user_id === meIdRef.id) ? 0 : 1;
       return sa - sb;
     }});
     for (const u of valid) {{
-      let pt; try {{ pt = map.project([u.lng, u.lat]); }} catch(e) {{ continue; }}
       let placed = false;
       for (const g of groups) {{
-        const dx = g.cx - pt.x, dy = g.cy - pt.y;
-        const distSq = dx*dx + dy*dy;
-        // HYSTERESIS: if this user has any sticky-pair history with any
-        // existing member of g.users, use the larger sticky threshold to
-        // keep them together (resists GPS jitter AND brief WS dropouts).
+        const distM = metersBetween(g.lat, g.lng, u.lat, u.lng);
+        // HYSTERESIS: if this user was clustered with ANY existing member
+        // of g.users in the recent past (sticky TTL), use the larger
+        // sticky threshold to keep them together. Otherwise use the
+        // normal threshold.
         let wasStickyToThisGroup = false;
         for (const peer of g.users) {{
           const pair = u.user_id < peer.user_id
@@ -1896,24 +1900,18 @@ async def mapbox_html(token: str, style: str = "geobeats"):
             : (peer.user_id + '|' + u.user_id);
           if (stickyPairAges.has(pair)) {{ wasStickyToThisGroup = true; break; }}
         }}
-        const thresh = wasStickyToThisGroup ? CLUSTER_PX_STICKY : CLUSTER_PX;
-        if (distSq <= thresh * thresh) {{
+        const thresh = wasStickyToThisGroup ? CLUSTER_M_STICKY : CLUSTER_M;
+        if (distM <= thresh) {{
           g.users.push(u);
           const k = g.users.length;
-          g.cx = ((g.cx * (k-1)) + pt.x) / k;
-          g.cy = ((g.cy * (k-1)) + pt.y) / k;
           g.lng = ((g.lng * (k-1)) + u.lng) / k;
           g.lat = ((g.lat * (k-1)) + u.lat) / k;
           placed = true; break;
         }}
       }}
-      if (!placed) groups.push({{ cx: pt.x, cy: pt.y, lng: u.lng, lat: u.lat, users: [u] }});
+      if (!placed) groups.push({{ lng: u.lng, lat: u.lat, users: [u] }});
     }}
-    // Refresh sticky pairs with TTL decay. Pairs that were grouped THIS
-    // pass get their age reset to STICKY_TTL. Pairs that weren't grouped
-    // this pass have their age decremented; when it hits 0 the pair is
-    // forgotten. This means a momentary WS dropout or GPS spike won't
-    // immediately break the cluster relationship.
+    // Refresh sticky pairs with TTL decay
     const groupedThisPass = new Set();
     for (const g of groups) {{
       if (g.users.length < 2) continue;
@@ -1926,7 +1924,6 @@ async def mapbox_html(token: str, style: str = "geobeats"):
         }}
       }}
     }}
-    // Decay non-grouped sticky pairs
     for (const [pair, age] of Array.from(stickyPairAges.entries())) {{
       if (groupedThisPass.has(pair)) continue;
       if (age <= 1) stickyPairAges.delete(pair);
