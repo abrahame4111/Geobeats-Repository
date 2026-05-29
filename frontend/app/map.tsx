@@ -328,10 +328,32 @@ export default function MapScreen() {
             setMyLocation({ lat, lng });
             sendLocation(lat, lng);
           } else {
-            const pos = await Location.getCurrentPositionAsync({});
-            const la = pos.coords.latitude, ln = pos.coords.longitude;
-            setMyLocation({ lat: la, lng: ln });
-            sendLocation(la, ln);
+            // Try the cached last-known location FIRST so we can give the
+            // map something to anchor on instantly (avoids the "bubble
+            // floats from below" effect during the cinematic flyTo).
+            try {
+              const last = await Location.getLastKnownPositionAsync({
+                maxAge: 60_000,       // 1 minute is fresh enough for first paint
+                requiredAccuracy: 1000, // 1 km is fine for first paint
+              });
+              if (last) {
+                setMyLocation({ lat: last.coords.latitude, lng: last.coords.longitude });
+                sendLocation(last.coords.latitude, last.coords.longitude);
+              }
+            } catch {}
+            // Then in parallel/after — get a fresh high-accuracy fix
+            try {
+              const pos = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.Balanced,
+              });
+              const la = pos.coords.latitude, ln = pos.coords.longitude;
+              setMyLocation({ lat: la, lng: ln });
+              sendLocation(la, ln);
+            } catch (e) {
+              // If fresh fix fails AND no cached fallback fired, use the hardcoded fallback
+              setMyLocation((prev) => prev ?? { lat, lng });
+              sendLocation(lat, lng);
+            }
           }
         }
 
@@ -458,7 +480,12 @@ export default function MapScreen() {
           try {
             const dev: any = await getDevices(auth);
             const list = dev?.devices || [];
-            setHasSpotify(list.length > 0);
+            // Mark Spotify "open" if ANY signal of activity is present:
+            // a device is registered OR there's any playback context (cp) at
+            // all — even a paused track means Spotify Connect knows about
+            // the user. Android's Spotify Connect often drops idle phones
+            // from the devices list, so cp is the more reliable signal.
+            setHasSpotify(list.length > 0 || !!cp);
           } catch {}
           return;
         }
@@ -466,12 +493,15 @@ export default function MapScreen() {
         setMyTrack(item ? { item } : null);
         setMyIsPlaying(playing);
 
-        // Update Spotify-active-device flag — Spotify being "open" means at least
-        // one device is registered/available, even if not currently playing.
+        // Update Spotify-active-device flag — Spotify being "open" means
+        // ANY of: at least one device registered, currently playing, OR
+        // a playback context exists (paused/idle track — still means the
+        // Spotify app is alive). The cp signal catches phones that have
+        // Spotify in the background without an active device entry.
         try {
           const dev: any = await getDevices(auth);
           const list = dev?.devices || [];
-          setHasSpotify(list.length > 0 || playing);
+          setHasSpotify(list.length > 0 || playing || !!cp);
         } catch {}
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(

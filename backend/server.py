@@ -1750,6 +1750,16 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   /* Tap feedback */
   .cluster:active {{ transform: scale(calc(var(--marker-scale, 1) * 0.95)); }}
 
+  /* Cinematic intro guard — completely hide markers (no fade, no transition)
+     during the first fly-from-globe so they don't visibly slide up from
+     off-screen into their final lat/lng pin positions. Removed on moveend. */
+  body.cinematic-pending .cluster,
+  body.cinematic-pending .bubble {{
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: none !important;
+  }}
+
   /* Hide Mapbox attribution for cleaner UI (still link in console per Mapbox ToS for free tier) */
   .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-bottom-left {{ display: none !important; }}
 </style>
@@ -1979,8 +1989,16 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     if (u.isSelf && !window.__flown) {{
       window.__flown = true;
       spinEnabled = false;
-      // Cinematic fly from globe to user location
+      // Hide all markers during the cinematic intro fly-in so they don't
+      // appear to "float up" from the wrong screen position as the camera
+      // animates from globe view down to user's lat/lng. We unblock as
+      // soon as the flyTo's moveend fires.
+      document.body.classList.add('cinematic-pending');
       map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
+      map.once('moveend', () => {{
+        document.body.classList.remove('cinematic-pending');
+        try {{ recluster(); }} catch(e) {{}}
+      }});
     }}
     // Merge into latestUsers (replace by user_id) then re-cluster.
     const idx = latestUsers.findIndex(x => x && x.user_id === u.user_id);
