@@ -1667,88 +1667,71 @@ async def mapbox_html(token: str, style: str = "geobeats"):
      A unified white rounded pill that holds 2 (side-by-side, touching)
      OR 3+ (triangular, touching) avatars. Avatars overlap with no gap
      — their white borders form the cluster's visual cohesion. */
+  /* ===== Profile Cluster (compact horizontal pill) =====
+     One white pill containing 2, 3, or 3+"…" avatars side-by-side with
+     overlap. Width auto-shrinks via inline-flex — no fixed box, no whitespace.
+     Tail points down at the actual lat/lng pin. */
   .cluster {{
     position: relative;
+    display: inline-flex;
+    align-items: center;
     pointer-events: auto;
     cursor: pointer;
-    transform-origin: 50% 100%;
+    background: #ffffff;
+    border-radius: 999px;
+    padding: 5px;
+    margin-bottom: 12px;
+    box-shadow: 0 10px 26px rgba(20, 0, 40, 0.4),
+                0 2px 6px rgba(0, 0, 0, 0.18),
+                inset 0 0 0 1px rgba(176, 38, 255, 0.10);
+    transform-origin: 50% calc(100% + 12px);
     transform: scale(var(--marker-scale, 1)) translateY(var(--marker-lift, 0px));
     transition: transform 0.55s cubic-bezier(0.2, 0.65, 0.2, 1), opacity 0.35s ease;
     will-change: transform;
   }}
-  /* Variant sizes — wider for n=2 (horizontal pair), squarer for n=3+ (triangle) */
-  .cluster.n2 {{ width: 130px; height: 90px; }}
-  .cluster.n3 {{ width: 130px; height: 100px; }}
-
-  /* White rounded pill background, room left for the tail at the bottom */
-  .cluster .pill-bg {{
-    position: absolute;
-    inset: 4px 4px 18px 4px;
-    background: #ffffff;
-    border-radius: 999px;       /* fully rounded; works for both 2 & 3 avatars */
-    box-shadow: 0 10px 28px rgba(20, 0, 40, 0.38),
-                0 2px 8px rgba(0, 0, 0, 0.2),
-                inset 0 0 0 1px rgba(176, 38, 255, 0.10);
-  }}
-  /* Small white tail pointing down at the actual pin location */
+  /* Tail/triangle pointing down at the pin location. Sits BELOW the pill. */
   .cluster .tail {{
     position: absolute;
-    bottom: 6px;
+    bottom: -8px;
     left: 50%;
     width: 18px; height: 18px;
     background: #ffffff;
     transform: translateX(-50%) rotate(45deg);
     border-bottom-right-radius: 4px;
-    box-shadow: 4px 4px 10px rgba(20, 0, 40, 0.2);
-    z-index: 1;
-  }}
-  .cluster .stack {{
-    position: absolute;
-    inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    z-index: 2;
+    box-shadow: 6px 6px 12px rgba(20, 0, 40, 0.2);
+    z-index: 0;
   }}
   .cluster .av {{
-    position: absolute;
-    width: 50px; height: 50px;
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
     border-radius: 50%;
     overflow: hidden;
     border: 3px solid #fff;
     background: #1a0a24;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+    margin-left: -12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 2;
   }}
+  .cluster .av:first-child {{ margin-left: 0; }}
   .cluster .av img {{
     width: 100%; height: 100%; object-fit: cover; display: block;
   }}
-
-  /* 2-user arrangement: side-by-side, slightly overlapping (white borders
-     visibly touch / overlap — exactly the Life360 pair layout). */
-  .cluster.n2 .av:nth-child(1) {{ transform: translate(-16px, -4px); z-index: 3; }}
-  .cluster.n2 .av:nth-child(2) {{ transform: translate( 16px, -4px); z-index: 2; }}
-
-  /* 3+ user arrangement: triangular (top + bottom-left + bottom-right),
-     all touching / slightly overlapping inside the pill. */
-  .cluster.n3 .av:nth-child(1) {{ transform: translate(0,  -18px); z-index: 4; }}
-  .cluster.n3 .av:nth-child(2) {{ transform: translate(-22px, 12px); z-index: 2; }}
-  .cluster.n3 .av:nth-child(3) {{ transform: translate( 22px, 12px); z-index: 3; }}
-
-  /* Overflow "+N" badge for clusters of 4+ users */
-  .cluster .overflow {{
-    position: absolute;
-    top: 0; right: -2px;
-    min-width: 24px; height: 24px; padding: 0 7px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #A259FF, #C026FF);
-    color: #fff;
-    font-size: 11.5px; font-weight: 800; letter-spacing: 0.2px;
-    font-family: -apple-system, sans-serif;
-    display: flex; align-items: center; justify-content: center;
-    border: 2px solid #fff;
-    box-shadow: 0 2px 10px rgba(192, 38, 255, 0.55);
-    z-index: 10;
+  /* "..." indicator for clusters of 4+ users */
+  .cluster .ellipsis {{
+    flex: 0 0 auto;
+    margin-left: 4px;
+    padding: 0 10px 0 4px;
+    color: #4a3a5e;
+    font-weight: 800;
+    font-size: 22px;
+    line-height: 0.4;
+    letter-spacing: 1.5px;
+    user-select: none;
+    z-index: 2;
   }}
   /* Tap feedback */
-  .cluster:active {{ transform: scale(calc(var(--marker-scale, 1) * 0.95)); }}
+  .cluster:active {{ transform: scale(calc(var(--marker-scale, 1) * 0.94)); }}
 
   /* Cinematic intro guard — completely hide markers (no fade, no transition)
      during the first fly-from-globe so they don't visibly slide up from
@@ -1804,24 +1787,22 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     return el;
   }}
   function makeClusterEl(usersInCluster){{
-    // Unified Life360-style: white rounded pill with 2 (side-by-side) or
-    // 3 (triangular) overlapping avatars + tail pointing down at pin.
+    // Compact horizontal pill: 2 or 3 overlapping avatars side-by-side.
+    // For 4+ users we still show 3 avatars but append a "..." indicator
+    // next to the last one (per user spec). The wrapper uses inline-flex
+    // so the pill auto-shrinks to fit content exactly (no whitespace).
     const el = document.createElement('div');
-    const n = usersInCluster.length;
-    el.className = 'cluster ' + (n === 2 ? 'n2' : 'n3');
+    el.className = 'cluster';
     const shown = usersInCluster.slice(0, 3);
-    const overflow = Math.max(0, n - 3);
-    const parts = ['<div class="pill-bg"></div>', '<div class="tail"></div>', '<div class="stack">'];
+    const hasMore = usersInCluster.length > 3;
+    const parts = [];
     for (const u of shown) {{
       const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
       parts.push('<div class="av"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>');
     }}
-    parts.push('</div>');
-    if (overflow > 0) {{
-      parts.push('<div class="overflow">+'+overflow+'</div>');
-    }}
+    if (hasMore) parts.push('<div class="ellipsis">…</div>');
+    parts.push('<div class="tail"></div>');
     el.innerHTML = parts.join('');
-    // Tap → fitBounds of all users so the cluster explodes apart on zoom-in
     el.addEventListener('click', () => {{
       try {{
         const b = new mapboxgl.LngLatBounds();
@@ -1843,9 +1824,17 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   // Holds the most recent flat user list so we can re-cluster on zoom
   // (pixel-distance between fixed lng/lat pairs changes with zoom level).
   let latestUsers = [];
-  // Re-cluster threshold in screen pixels. 56px ≈ 1.3x avatar width, which is
-  // the point at which two solo bubbles start visibly overlapping.
-  const CLUSTER_PX = 56;
+  // Re-cluster threshold in screen pixels. 70px ≈ 1.6x avatar width — generous
+  // enough to absorb normal GPS jitter without breaking the cluster apart.
+  const CLUSTER_PX = 70;
+  // HYSTERESIS: once two users are clustered together, require them to be
+  // SEPARATED by this larger distance before un-clustering. Prevents flicker
+  // when GPS jitter pushes the pixel distance back and forth across the
+  // CLUSTER_PX boundary.
+  const CLUSTER_PX_STICKY = 110;
+  // Set of "user_id|user_id" pairs that were grouped in the last recluster
+  // pass — used to apply the sticky threshold on the next pass.
+  let stickyPairs = new Set();
 
   // Per-user content signature — fingerprints everything the marker can
   // visually express. Used to detect when a friend's avatar / track / play
@@ -1890,7 +1879,20 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       let placed = false;
       for (const g of groups) {{
         const dx = g.cx - pt.x, dy = g.cy - pt.y;
-        if (dx*dx + dy*dy <= CLUSTER_PX*CLUSTER_PX) {{
+        const distSq = dx*dx + dy*dy;
+        // HYSTERESIS: if this user was clustered with ANY existing user in
+        // g.users last pass, use the larger sticky threshold to keep them
+        // together — prevents flicker from GPS jitter / pixel-projection
+        // wobble around the boundary. Otherwise use the normal threshold.
+        let wasStickyToThisGroup = false;
+        for (const peer of g.users) {{
+          const pair = u.user_id < peer.user_id
+            ? (u.user_id + '|' + peer.user_id)
+            : (peer.user_id + '|' + u.user_id);
+          if (stickyPairs.has(pair)) {{ wasStickyToThisGroup = true; break; }}
+        }}
+        const thresh = wasStickyToThisGroup ? CLUSTER_PX_STICKY : CLUSTER_PX;
+        if (distSq <= thresh * thresh) {{
           g.users.push(u);
           const k = g.users.length;
           g.cx = ((g.cx * (k-1)) + pt.x) / k;
@@ -1902,6 +1904,18 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       }}
       if (!placed) groups.push({{ cx: pt.x, cy: pt.y, lng: u.lng, lat: u.lat, users: [u] }});
     }}
+    // Record this pass's pairs for next-pass hysteresis check
+    const nextSticky = new Set();
+    for (const g of groups) {{
+      if (g.users.length < 2) continue;
+      for (let i = 0; i < g.users.length; i++) {{
+        for (let j = i+1; j < g.users.length; j++) {{
+          const a = g.users[i].user_id, b = g.users[j].user_id;
+          nextSticky.add(a < b ? (a + '|' + b) : (b + '|' + a));
+        }}
+      }}
+    }}
+    stickyPairs = nextSticky;
 
     // Stable signature for diffing (so we update in-place when contents unchanged)
     const desired = {{}};
@@ -1992,13 +2006,20 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       // Hide all markers during the cinematic intro fly-in so they don't
       // appear to "float up" from the wrong screen position as the camera
       // animates from globe view down to user's lat/lng. We unblock as
-      // soon as the flyTo's moveend fires.
+      // soon as moveend fires OR (whichever comes first) as soon as zoom
+      // passes 8 — at that point the marker projection is already near
+      // its final screen position so there's no visible "float up".
       document.body.classList.add('cinematic-pending');
-      map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
-      map.once('moveend', () => {{
+      const liftGuard = () => {{
         document.body.classList.remove('cinematic-pending');
         try {{ recluster(); }} catch(e) {{}}
-      }});
+      }};
+      const onZoomLift = () => {{
+        if (map.getZoom() >= 8) {{ map.off('zoom', onZoomLift); liftGuard(); }}
+      }};
+      map.on('zoom', onZoomLift);
+      map.once('moveend', () => {{ map.off('zoom', onZoomLift); liftGuard(); }});
+      map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
     }}
     // Merge into latestUsers (replace by user_id) then re-cluster.
     const idx = latestUsers.findIndex(x => x && x.user_id === u.user_id);
