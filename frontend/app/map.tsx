@@ -423,6 +423,24 @@ export default function MapScreen() {
   // polling closure can read the latest state without re-subscribing.
   const myTrackRef = useRef<any>(null);
   useEffect(() => { myTrackRef.current = myTrack; }, [myTrack]);
+  // Spotify "closed" streak counter: idle Spotify clients can take 10–15s
+  // to register with Spotify Connect after the app launches. We only flip
+  // the "Open Spotify" button on AFTER 3 consecutive empty polls (≈15s
+  // grace) — prevents the green button from flashing on at launch when
+  // Spotify is actually already open in the background.
+  const spotifyClosedStreakRef = useRef(0);
+  const SPOTIFY_CLOSED_STREAK_THRESHOLD = 3;
+  const updateSpotifyDetected = (open: boolean) => {
+    if (open) {
+      spotifyClosedStreakRef.current = 0;
+      setHasSpotify(true);
+    } else {
+      spotifyClosedStreakRef.current += 1;
+      if (spotifyClosedStreakRef.current >= SPOTIFY_CLOSED_STREAK_THRESHOLD) {
+        setHasSpotify(false);
+      }
+    }
+  };
   useEffect(() => {
     if (!auth) return;
     const pull = async () => {
@@ -485,7 +503,7 @@ export default function MapScreen() {
             // all — even a paused track means Spotify Connect knows about
             // the user. Android's Spotify Connect often drops idle phones
             // from the devices list, so cp is the more reliable signal.
-            setHasSpotify(list.length > 0 || !!cp);
+            updateSpotifyDetected(list.length > 0 || !!cp);
           } catch {}
           return;
         }
@@ -501,7 +519,7 @@ export default function MapScreen() {
         try {
           const dev: any = await getDevices(auth);
           const list = dev?.devices || [];
-          setHasSpotify(list.length > 0 || playing || !!cp);
+          updateSpotifyDetected(list.length > 0 || playing || !!cp);
         } catch {}
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(
