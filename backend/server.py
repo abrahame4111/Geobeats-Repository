@@ -1419,6 +1419,26 @@ async def privacy_policy():
     return HTMLResponse(content=html, status_code=200)
 
 
+@api_router.get("/support", response_class=HTMLResponse)
+@api_router.get("/support.html", response_class=HTMLResponse)
+async def support_page():
+    """Serves the GeoBeats support page as a standalone HTML page.
+
+    This URL (e.g. https://geobeats.live/api/support) is the one you
+    paste into:
+      - App Store Connect → App Information → Support URL
+      - Google Play Console → Store settings → Support
+    """
+    import os as _os
+    tpl_path = _os.path.join(_os.path.dirname(__file__), "templates", "support.html")
+    try:
+        with open(tpl_path, "r", encoding="utf-8") as f:
+            html = f.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="support template missing")
+    return HTMLResponse(content=html, status_code=200)
+
+
 @api_router.get("/geobeats-style.json")
 async def geobeats_style_json():
     """Serves the NFS Neon map style JSON for pasting into Google Cloud
