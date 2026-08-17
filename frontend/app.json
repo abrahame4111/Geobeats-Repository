@@ -17,7 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "live.geobeats.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Identify songs playing around you"
+        "NSMicrophoneUsageDescription": "Identify songs playing around you",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
