@@ -386,8 +386,51 @@ export default function MapScreen() {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "location:update", lat, lng }));
+    } else if (auth) {
+      // WS not open — push location directly to REST so cross-pod visibility works
+      fetch(`${BACKEND_URL}/api/location/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: auth.user_id,
+          display_name: auth.display_name,
+          profile_image: auth.profile_image || "",
+          lat,
+          lng,
+        }),
+      }).catch(() => {});
     }
   };
+
+  // ---- Cross-pod polling: fetch all active users from MongoDB every 5s ----
+  // This ensures users on different backend pods can still see each other.
+  const pollIntervalRef = useRef<any>(null);
+  useEffect(() => {
+    if (!auth) return;
+    const pollActiveUsers = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/users/active`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const users: any[] = data.users || [];
+        if (users.length === 0) return;
+        setUsersMap((prev) => {
+          const next = { ...prev };
+          users.forEach((u: any) => {
+            if (u.user_id === auth.user_id) return; // skip self
+            next[u.user_id] = {
+              ...next[u.user_id],
+              ...u,
+            };
+          });
+          return next;
+        });
+      } catch {}
+    };
+    pollActiveUsers();
+    pollIntervalRef.current = setInterval(pollActiveUsers, 5000);
+    return () => clearInterval(pollIntervalRef.current);
+  }, [auth?.user_id]);
 
   const showToast = (title: string, subtitle: string, tone: "live" | "ghost") => {
     setToast({ title, subtitle, tone });

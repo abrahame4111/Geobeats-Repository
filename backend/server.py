@@ -1398,6 +1398,61 @@ async def geobeats_store_screenshot(filename: str):
     return FileResponse(path, media_type="image/png", filename=filename)
 
 
+@api_router.get("/users/active")
+async def get_active_users():
+    """Returns all users who sent a location update in the last 2 minutes.
+    Works across multiple pods since it reads from shared MongoDB state.
+    Used by the frontend as the authoritative source for map markers.
+    """
+    cutoff = time.time() - 120  # 2-minute window
+    try:
+        docs = await db.active_sessions.find(
+            {"last_seen": {"$gt": cutoff}, "visible": True, "lat": {"$exists": True}, "lng": {"$exists": True}},
+            {"_id": 0}
+        ).to_list(length=500)
+        return {"users": docs}
+    except Exception as e:
+        logger.exception("active_users error")
+        return {"users": []}
+
+
+class LocationUpdateRequest(BaseModel):
+    user_id: str
+    display_name: str = "Guest"
+    profile_image: str = ""
+    lat: float
+    lng: float
+
+
+@api_router.post("/location/update")
+async def rest_location_update(body: LocationUpdateRequest):
+    """REST fallback for location updates when WebSocket is unavailable.
+    Stores location in MongoDB so all pods can read it.
+    Also syncs in-memory state on this pod.
+    """
+    state.upsert_user(
+        body.user_id,
+        display_name=body.display_name,
+        profile_image=body.profile_image,
+        lat=body.lat,
+        lng=body.lng,
+    )
+    await db.active_sessions.update_one(
+        {"user_id": body.user_id},
+        {"$set": {
+            "user_id": body.user_id,
+            "display_name": body.display_name,
+            "profile_image": body.profile_image,
+            "lat": body.lat,
+            "lng": body.lng,
+            "last_seen": time.time(),
+            "visible": True,
+        }},
+        upsert=True,
+    )
+    return {"status": "ok"}
+
+
 @api_router.get("/privacy", response_class=HTMLResponse)
 @api_router.get("/privacy.html", response_class=HTMLResponse)
 async def privacy_policy():
@@ -2737,6 +2792,22 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
                 lng = float(data.get("lng"))
                 state.upsert_user(user_id, lat=lat, lng=lng)
                 u = state.users.get(user_id)
+                # Persist to MongoDB so all pods share the same location state
+                await db.active_sessions.update_one(
+                    {"user_id": user_id},
+                    {"$set": {
+                        "user_id": user_id,
+                        "display_name": u.display_name if u else display_name,
+                        "profile_image": u.profile_image if u else profile_image,
+                        "lat": lat,
+                        "lng": lng,
+                        "current_track": u.current_track if u else None,
+                        "is_playing": u.is_playing if u else False,
+                        "last_seen": time.time(),
+                        "visible": True,
+                    }},
+                    upsert=True,
+                )
                 # Broadcast full user payload so late-joiners (who only got a
                 # lightweight user:online) can populate the avatar on their map.
                 await broadcast({
@@ -2754,6 +2825,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str = Query(...), di
                 track = data.get("track")
                 is_playing = bool(data.get("is_playing", False))
                 state.upsert_user(user_id, current_track=track, is_playing=is_playing)
+                # Persist track to MongoDB too
+                await db.active_sessions.update_one(
+                    {"user_id": user_id},
+                    {"$set": {
+                        "current_track": track,
+                        "is_playing": is_playing,
+                        "last_seen": time.time(),
+                    }},
+                    upsert=True,
+                )
                 await broadcast({
                     "type": "user:active_track",
                     "user_id": user_id,
