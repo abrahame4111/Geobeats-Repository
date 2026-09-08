@@ -150,11 +150,7 @@ export default function MapScreen() {
 
     const connect = () => {
       if (!wsShouldRunRef.current) return;
-      const wsUrl = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws?user_id=${encodeURIComponent(
-        auth.user_id
-      )}&display_name=${encodeURIComponent(auth.display_name)}&profile_image=${encodeURIComponent(
-        auth.profile_image || ""
-      )}`;
+      const wsUrl = `${BACKEND_URL.replace(/^http/, "ws")}/api/ws/${encodeURIComponent(auth.user_id)}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -162,12 +158,20 @@ export default function MapScreen() {
         console.log("[ws] connected");
         reconnectAttemptsRef.current = 0;
         setWsConnected(true);
-        // Immediately re-send our current location + track so peers see us
+        // Immediately send our location + track so peers see us right away
         if (myLocation) {
-          ws.send(JSON.stringify({ type: "location:update", lat: myLocation.lat, lng: myLocation.lng }));
-        }
-        if (myTrack) {
-          ws.send(JSON.stringify({ type: "user:active_track", track: myTrack, is_playing: myIsPlaying }));
+          ws.send(JSON.stringify({
+            type: "location_update",
+            latitude: myLocation.lat,
+            longitude: myLocation.lng,
+            user_name: auth.display_name,
+            profile_image: auth.profile_image || "",
+            current_song: myTrack?.item?.name || null,
+            artist: myTrack?.item?.artists?.[0]?.name || null,
+            album_cover: myTrack?.item?.album?.images?.[0]?.url || null,
+            track_uri: myTrack?.item?.uri || null,
+            is_premium: auth.product === "premium",
+          }));
         }
         // Keepalive ping every 25s
         if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -205,6 +209,74 @@ export default function MapScreen() {
   const handleWsMessage = (raw: any) => {
     try {
       const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+
+      // ---- New server v2 message types ----
+      if (data.type === "initial_state") {
+        // locations is a map of user_id → location object
+        const next: UsersMap = {};
+        Object.entries(data.locations || {}).forEach(([uid, loc]: [string, any]) => {
+          if (!loc || !loc.lat || !loc.lng) return;
+          next[uid] = {
+            user_id: uid,
+            lat: loc.lat,
+            lng: loc.lng,
+            display_name: loc.user_name || uid,
+            profile_image: loc.profile_image || "",
+            current_track: loc.current_song ? {
+              item: {
+                name: loc.current_song,
+                artists: loc.artist ? [{ name: loc.artist }] : [],
+                album: { images: loc.album_cover ? [{ url: loc.album_cover }] : [] },
+                uri: loc.track_uri,
+              },
+            } : null,
+            is_playing: !!loc.current_song,
+          };
+        });
+        setUsersMap(next);
+        return;
+      }
+
+      if (data.type === "location_update") {
+        const loc = data.location || {};
+        const uid = data.user_id || loc.user_id;
+        if (!uid || !loc.lat || !loc.lng) return;
+        setUsersMap((p) => ({
+          ...p,
+          [uid]: {
+            ...p[uid],
+            user_id: uid,
+            lat: loc.lat,
+            lng: loc.lng,
+            display_name: loc.user_name || p[uid]?.display_name || uid,
+            profile_image: loc.profile_image || p[uid]?.profile_image || "",
+            current_track: loc.current_song ? {
+              item: {
+                name: loc.current_song,
+                artists: loc.artist ? [{ name: loc.artist }] : [],
+                album: { images: loc.album_cover ? [{ url: loc.album_cover }] : [] },
+                uri: loc.track_uri,
+              },
+            } : null,
+            is_playing: !!loc.current_song,
+          },
+        }));
+        return;
+      }
+
+      if (data.type === "online_count_update") {
+        const liveIds: string[] = data.online_users || [];
+        setUsersMap((p) => {
+          const next = { ...p };
+          Object.keys(next).forEach((uid) => {
+            if (!liveIds.includes(uid)) delete next[uid];
+          });
+          return next;
+        });
+        return;
+      }
+
+      // ---- Legacy server message types (backward compat) ----
       if (data.type === "users:snapshot") {
         const next: UsersMap = {};
         (data.users || []).forEach((u: any) => (next[u.user_id] = u));
@@ -225,8 +297,6 @@ export default function MapScreen() {
             user_id: data.user_id,
             lat: data.lat,
             lng: data.lng,
-            // Server now includes display_name/profile_image/current_track so
-            // late-joining peers get a fully-rendered avatar immediately.
             display_name: data.display_name || p[data.user_id]?.display_name,
             profile_image: data.profile_image || p[data.user_id]?.profile_image,
             current_track: data.current_track || p[data.user_id]?.current_track,
