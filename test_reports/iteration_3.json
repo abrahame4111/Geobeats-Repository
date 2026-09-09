@@ -1,0 +1,37 @@
+{
+  "summary": "Verified the map-visibility regression fix (location_update message-type mismatch + restored REST fallback endpoints). 9/10 backend tests passed. Confirmed at the code level, directly against localhost:8001, that two WS-connected users sending periodic 'location_update' resends every 5s remain visible in each other's state for 200+ seconds (past the 180s STALE_USER_SECONDS threshold) - this is the exact regression the fix addresses and it IS fixed. GET /api/users/active and POST /api/location/update REST fallbacks both work correctly (200, correct fields, no _id leakage). Static HTML asset endpoints (mapbox.html, map.html, starborder.html, pixelblast.html, asciitext.html, tiltedcard.html) all return 200 with expected query params. Spotify OAuth login redirect correctly points to accounts.spotify.com with a dynamic redirect_uri matching the request's own host.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/ws/{user_id} (via public tunnel URL only)", "issue": "When driving the WS test through the public tunnel domain (globe-tune.preview.emergentagent.com) with a raw python websocket-client, the connection was closed by the client side with code 1000 at exactly the 60s mark on two separate runs, before the 180s stale-threshold could be validated end-to-end over the tunnel. The SAME test against localhost:8001 (bypassing the tunnel) ran cleanly for 200+s with zero drops, proving the backend logic itself (location_update handling, last_location_update refresh, stale-sweep, EventBus) is correct. This looks like a tunnel/proxy-level WS timeout or a python-websocket-client-over-tunnel quirk rather than an app bug - real browsers (which is what actual users use) handle WS ping/pong at a lower layer than this raw test client does, and frontend/app/map.tsx already has (a) auto-reconnect-with-backoff on ws.onclose and (b) a 5s-interval REST fallback poll of /api/users/active plus POST /api/location/update, so even if the tunnel does have a ~60s idle/duration cap, real users would not perceive it as the original 3-minute disappearance bug. Recommend main agent spot-check with an actual browser session left open for 4+ minutes to be 100% sure, but this is not the same bug reported by the user."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ws_map_visibility.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Main agent: consider a real-browser (Playwright, 2 tabs) 4+ minute soak test of /map to get a fully end-to-end (not raw-socket) confirmation, since the raw python websocket-client hit an unrelated tunnel quirk at 60s.",
+    "No code changes required - the location_update message-type fix and /api/users/active + /api/location/update restorations are verified correct."
+  ],
+  "critical_code_review_comments": [
+    "ConnectionManager.update_location/_expire_stale_loop/EventBus logic all correctly keyed on 'location_update' string, matching frontend fix - verified by direct backend test.",
+    "REST /api/location/update correctly delegates to the same manager.update_location() used by WS, so it publishes to the EventBus too - good for cross-pod consistency.",
+    "GET /api/users/active correctly excludes _id and filters out users without lat/lng."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ws_map_visibility.py (new)"
+  ],
+  "success_rate": {"backend": "90% (9/10 automated; core regression separately confirmed 100% via direct localhost long-run script)", "frontend": "not tested (out of scope per request)"},
+  "seed_data_creation": "TEST_ prefixed user_ids created in live_users Mongo collection during testing; cleaned up after test run via direct Mongo delete_many on '^TEST_' regex.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The core bug (location:update vs location_update mismatch causing 3-min disappearance) is FIXED and verified via a 200+s direct-backend WS test with periodic resends every 5s (see /tmp evidence in this run's tool history). The one open question is a 60s WS close observed ONLY when testing through the public tunnel URL with raw python websocket-client + threaded recv - did not reproduce against localhost:8001. Given frontend already has auto-reconnect + REST polling fallback, this is unlikely to be user-visible, but a real-browser soak test would be the definitive check.",
+  "rca_of_issue": "Original bug: frontend sent WS type 'location:update' (colon) but backend only handled 'location_update' (underscore), so periodic resends after the first were silently ignored -> last_location_update never refreshed -> STALE_USER_SECONDS(180s) sweep dropped users from live_users after ~3 min, making them invisible to each other. Fix (already applied before this test cycle): corrected frontend message type to 'location_update' with full payload, and restored /api/users/active + /api/location/update REST fallbacks on the same ConnectionManager.update_location() path. Verified via direct-backend long-run script (200s+, periodic 5s sends, both users stayed present, matching schema)."
+}

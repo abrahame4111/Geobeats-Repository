@@ -455,7 +455,25 @@ export default function MapScreen() {
     if (!broadcastOnRef.current) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "location:update", lat, lng }));
+      // NOTE: must be "location_update" (underscore) — the backend WS
+      // handler only recognizes this exact type. A previous "location:update"
+      // (colon) typo here meant every periodic re-send was silently ignored,
+      // so `last_location_update` never refreshed and the stale-expiry sweep
+      // auto-dropped users ~3 minutes after connecting (STALE_USER_SECONDS).
+      // Send the full snapshot each time (not just lat/lng) so an in-progress
+      // now-playing track isn't wiped out on every periodic ping.
+      ws.send(JSON.stringify({
+        type: "location_update",
+        latitude: lat,
+        longitude: lng,
+        user_name: auth?.display_name,
+        profile_image: auth?.profile_image || "",
+        current_song: myTrack?.item?.name || null,
+        artist: myTrack?.item?.artists?.[0]?.name || null,
+        album_cover: myTrack?.item?.album?.images?.[0]?.url || null,
+        track_uri: myTrack?.item?.uri || null,
+        is_premium: auth?.product === "premium",
+      }));
     } else if (auth) {
       // WS not open — push location directly to REST so cross-pod visibility works
       fetch(`${BACKEND_URL}/api/location/update`, {
@@ -521,7 +539,7 @@ export default function MapScreen() {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "user:set_visibility", visible: next }));
       if (next && myLocation) {
-        ws.send(JSON.stringify({ type: "location:update", lat: myLocation.lat, lng: myLocation.lng }));
+        sendLocation(myLocation.lat, myLocation.lng);
       }
     }
     if (next) {

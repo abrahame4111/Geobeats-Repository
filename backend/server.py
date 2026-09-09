@@ -489,6 +489,13 @@ class LocationUpdate(BaseModel):
     current_track: Optional[Dict] = None
     timestamp: Optional[str] = None
 
+class RestLocationUpdate(BaseModel):
+    user_id: str
+    display_name: Optional[str] = None
+    profile_image: Optional[str] = None
+    lat: float
+    lng: float
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
@@ -1350,6 +1357,59 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except Exception as e:
         logger.error(f"[{INSTANCE_ID}] ❌ WebSocket error for user {user_id}: {e}")
         await manager.disconnect(user_id)
+
+
+# ---------------------------------------------------------------------------
+# Cross-pod REST fallbacks for location sharing
+# ---------------------------------------------------------------------------
+# The primary path is the WebSocket (/api/ws/{user_id}) + Mongo EventBus.
+# These two REST endpoints are an explicit safety net the frontend uses:
+#   - GET  /api/users/active   polled every 5s so peers still appear even if
+#     a WS event was missed (reconnect gap, brief network hiccup).
+#   - POST /api/location/update  used when the WS isn't open yet, so a user
+#     is still visible to others immediately rather than waiting to reconnect.
+# Both were dropped in the v2 rewrite; restored here on the v2 schema.
+
+@api_router.get("/users/active")
+async def get_active_users():
+    users = []
+    cursor = manager.live_users.find({"location.lat": {"$ne": None}, "location.lng": {"$ne": None}})
+    async for doc in cursor:
+        loc = doc.get("location") or {}
+        if loc.get("lat") is None or loc.get("lng") is None:
+            continue
+        current_song = loc.get("current_song")
+        users.append({
+            "user_id": doc["user_id"],
+            "lat": loc.get("lat"),
+            "lng": loc.get("lng"),
+            "display_name": loc.get("user_name") or doc["user_id"],
+            "profile_image": loc.get("profile_image") or "",
+            "current_track": ({
+                "item": {
+                    "name": current_song,
+                    "artists": [{"name": loc.get("artist")}] if loc.get("artist") else [],
+                    "album": {"images": [{"url": loc.get("album_cover")}] if loc.get("album_cover") else []},
+                    "uri": loc.get("track_uri"),
+                }
+            } if current_song else None),
+            "is_playing": bool(current_song),
+        })
+    return {"users": users}
+
+
+@api_router.post("/location/update")
+async def rest_location_update(body: RestLocationUpdate):
+    """Delegates to the same ConnectionManager.update_location() the WS
+    handler uses, so REST-driven updates also publish to the EventBus and
+    reach already-connected peers in real time, not just on their next poll."""
+    await manager.update_location(body.user_id, {
+        "latitude": body.lat,
+        "longitude": body.lng,
+        "user_name": body.display_name,
+        "profile_image": body.profile_image,
+    })
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------

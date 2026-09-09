@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="57.037" timestamp="2026-09-09T04:48:37.873409+00:00" hostname="agent-env-0efe5ec8-cbab-464b-be49-8542edd0b5d0"><testcase classname="backend.tests.test_ws_map_visibility.TestWebSocketLongRunVisibility" name="test_two_users_remain_visible_past_stale_threshold" time="56.907"><failure message="websocket._exceptions.WebSocketConnectionClosedException: socket is already closed.">def _send() -&gt; int:
+        try:
+&gt;           return sock.send(data)
+                   ^^^^^^^^^^^^^^^
+
+/root/.venv/lib/python3.11/site-packages/websocket/_socket.py:167: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;ssl.SSLSocket [closed] fd=-1, family=2, type=1, proto=6&gt;
+data = b"\x81\xfe\x00\xd6\xe8)I\xa6\x93\x0b=\xdf\x98Lk\x9c\xc8\x0b%\xc9\x8bH=\xcf\x87G\x16\xd3\x98M(\xd2\x8d\x0be\x86\xcaE(\x...ca\x84\x05i\x84\x9c[(\xc5\x83v&lt;\xd4\x81\x0bs\x86\x86\\%\xca\xc4\tk\xcf\x9bv9\xd4\x8dD \xd3\x85\x0bs\x86\x8eH%\xd5\x8dT"
+flags = 0
+
+    def send(self, data, flags=0):
+        self._checkClosed()
+        if self._sslobj is not None:
+            if flags != 0:
+                raise ValueError(
+                    "non-zero flags not allowed in calls to send() on %s" %
+                    self.__class__)
+&gt;           return self._sslobj.write(data)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^
+E           ssl.SSLEOFError: EOF occurred in violation of protocol (_ssl.c:2437)
+
+/usr/local/lib/python3.11/ssl.py:1242: SSLEOFError
+
+During handling of the above exception, another exception occurred:
+
+self = &lt;test_ws_map_visibility.TestWebSocketLongRunVisibility object at 0xf8fd33d43d10&gt;
+cleanup_users = None
+
+    def test_two_users_remain_visible_past_stale_threshold(self, cleanup_users):
+        ws_a = websocket.create_connection(f"{WS_BASE}/api/ws/{USER_A}", timeout=15)
+        ws_b = websocket.create_connection(f"{WS_BASE}/api/ws/{USER_B}", timeout=15)
+        try:
+            # consume initial_state from both
+            init_a = json.loads(ws_a.recv())
+            init_b = json.loads(ws_b.recv())
+            assert init_a["type"] == "initial_state"
+            assert init_b["type"] == "initial_state"
+    
+            # Send first location for A, then B
+            ws_a.send(json.dumps(_loc_payload(LAT_A, LNG_A, "User A")))
+            ws_b.send(json.dumps(_loc_payload(LAT_B, LNG_B, "User B")))
+    
+            time.sleep(1)
+    
+            # Both should now appear in GET /api/users/active
+            resp = requests.get(f"{BASE_URL}/api/users/active", timeout=10)
+            users = {u["user_id"] for u in resp.json()["users"]}
+            assert USER_A in users and USER_B in users, f"Initial visibility failed: {users}"
+    
+            TOTAL_SECONDS = 200  # &gt; STALE_USER_SECONDS(180)
+            INTERVAL = 5
+            elapsed = 0
+            while elapsed &lt; TOTAL_SECONDS:
+                time.sleep(INTERVAL)
+                elapsed += INTERVAL
+                ws_a.send(json.dumps(_loc_payload(LAT_A, LNG_A, "User A")))
+&gt;               ws_b.send(json.dumps(_loc_payload(LAT_B, LNG_B, "User B")))
+
+backend/tests/test_ws_map_visibility.py:108: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;websocket._core.WebSocket object at 0xf8fd3440b790&gt;
+payload = '{"type": "location_update", "latitude": 37.775, "longitude": -122.4195, "user_name": "User B", "profile_image": "", "current_song": null, "artist": null, "album_cover": null, "track_uri": null, "is_premium": false}'
+opcode = 1
+
+    def send(self, payload: Union[bytes, str], opcode: int = ABNF.OPCODE_TEXT) -&gt; int:
+        """
+        Send the data as string.
+    
+        Parameters
+        ----------
+        payload: str
+            Payload must be utf-8 string or unicode,
+            If the opcode is OPCODE_TEXT.
+            Otherwise, it must be string(byte array).
+        opcode: int
+            Operation code (opcode) to send.
+        """
+    
+        frame = ABNF.create_frame(payload, opcode)
+&gt;       return self.send_frame(frame)
+               ^^^^^^^^^^^^^^^^^^^^^^
+
+/root/.venv/lib/python3.11/site-packages/websocket/_core.py:338: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;websocket._core.WebSocket object at 0xf8fd3440b790&gt;
+frame = &lt;websocket._abnf.ABNF object at 0xf8fd341d2950&gt;
+
+    def send_frame(self, frame: ABNF) -&gt; int:
+        """
+        Send the data frame.
+    
+        &gt;&gt;&gt; ws = create_connection("ws://websockets.chilkat.io/wsChilkatEcho.ashx")
+        &gt;&gt;&gt; frame = ABNF.create_frame("Hello", ABNF.OPCODE_TEXT)
+        &gt;&gt;&gt; ws.send_frame(frame)
+        &gt;&gt;&gt; cont_frame = ABNF.create_frame("My name is ", ABNF.OPCODE_CONT, 0)
+        &gt;&gt;&gt; ws.send_frame(frame)
+        &gt;&gt;&gt; cont_frame = ABNF.create_frame("Foo Bar", ABNF.OPCODE_CONT, 1)
+        &gt;&gt;&gt; ws.send_frame(frame)
+    
+        Parameters
+        ----------
+        frame: ABNF frame
+            frame data created by ABNF.create_frame
+        """
+        if self.get_mask_key:
+            frame.get_mask_key = self.get_mask_key
+        data = frame.format()
+        length = len(data)
+        if isEnabledForTrace():
+            trace(f"++Sent raw: {repr(data)}")
+            trace(f"++Sent decoded: {frame.__str__()}")
+        with self.lock:
+            while data:
+&gt;               bytes_sent = self._send(data)
+                             ^^^^^^^^^^^^^^^^
+
+/root/.venv/lib/python3.11/site-packages/websocket/_core.py:378: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;websocket._core.WebSocket object at 0xf8fd3440b790&gt;
+data = b"\x81\xfe\x00\xd6\xe8)I\xa6\x93\x0b=\xdf\x98Lk\x9c\xc8\x0b%\xc9\x8bH=\xcf\x87G\x16\xd3\x98M(\xd2\x8d\x0be\x86\xcaE(\x...ca\x84\x05i\x84\x9c[(\xc5\x83v&lt;\xd4\x81\x0bs\x86\x86\\%\xca\xc4\tk\xcf\x9bv9\xd4\x8dD \xd3\x85\x0bs\x86\x8eH%\xd5\x8dT"
+
+    def _send(self, data: Union[str, bytes]) -&gt; int:
+        if self.sock is None:
+            raise WebSocketConnectionClosedException("socket is already closed.")
+        if self.dispatcher:
+            return self.dispatcher.send(self.sock, data)
+&gt;       return send(self.sock, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+
+/root/.venv/lib/python3.11/site-packages/websocket/_core.py:639: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+sock = &lt;ssl.SSLSocket [closed] fd=-1, family=2, type=1, proto=6&gt;
+data = b"\x81\xfe\x00\xd6\xe8)I\xa6\x93\x0b=\xdf\x98Lk\x9c\xc8\x0b%\xc9\x8bH=\xcf\x87G\x16\xd3\x98M(\xd2\x8d\x0be\x86\xcaE(\x...ca\x84\x05i\x84\x9c[(\xc5\x83v&lt;\xd4\x81\x0bs\x86\x86\\%\xca\xc4\tk\xcf\x9bv9\xd4\x8dD \xd3\x85\x0bs\x86\x8eH%\xd5\x8dT"
+
+    def send(sock: socket.socket, data: Union[bytes, str]) -&gt; int:
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+    
+        if not sock:
+            raise WebSocketConnectionClosedException("socket is already closed.")
+    
+        def _send() -&gt; int:
+            try:
+                return sock.send(data)
+            except SSLEOFError:
+                raise WebSocketConnectionClosedException("socket is already closed.")
+            except SSLWantWriteError:
+                pass
+            except socket.error as exc:
+                error_code = extract_error_code(exc)
+                if error_code is None:
+                    raise
+                if error_code not in [errno.EAGAIN, errno.EWOULDBLOCK]:
+                    raise
+    
+            sel = selectors.DefaultSelector()
+            sel.register(sock, selectors.EVENT_WRITE)
+    
+            w = sel.select(sock.gettimeout())
+            sel.close()
+    
+            if w:
+                return sock.send(data)
+            return 0
+    
+        try:
+            if sock.gettimeout() == 0:
+                return sock.send(data)
+            else:
+&gt;               return _send()
+                       ^^^^^^^
+
+/root/.venv/lib/python3.11/site-packages/websocket/_socket.py:193: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def _send() -&gt; int:
+        try:
+            return sock.send(data)
+        except SSLEOFError:
+&gt;           raise WebSocketConnectionClosedException("socket is already closed.")
+E           websocket._exceptions.WebSocketConnectionClosedException: socket is already closed.
+
+/root/.venv/lib/python3.11/site-packages/websocket/_socket.py:169: WebSocketConnectionClosedException</failure></testcase></testsuite></testsuites>
