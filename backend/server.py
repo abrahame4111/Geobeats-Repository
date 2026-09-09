@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query, Header
+from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Query, Header, Request
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse, Response, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -497,8 +497,38 @@ class RefreshTokenRequest(BaseModel):
 # Spotify OAuth endpoints
 # ---------------------------------------------------------------------------
 
+def _resolve_public_base(request: Request) -> str:
+    """Reconstruct the public https://host base URL from the incoming request.
+
+    Honors reverse-proxy headers (X-Forwarded-Proto / X-Forwarded-Host) set
+    by Emergent's Cloudflare ingress so this works identically on the preview
+    domain AND the deployed/production domain — no env-var swap needed on
+    publish. The redirect_uri sent to Spotify (and used again during the
+    token exchange) is derived from this, so OAuth "just works" regardless
+    of which environment the request originated from — as long as that
+    domain's callback URL is registered in the Spotify Dashboard.
+    """
+    proto = (
+        request.headers.get("x-forwarded-proto")
+        or request.url.scheme
+        or "https"
+    )
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.netloc
+    )
+    return f"{proto}://{host}"
+
+
+def _resolve_redirect_uri(request: Request) -> str:
+    # Uses the /api/spotify/callback path since that's what's registered
+    # in the Spotify Developer Dashboard today.
+    return f"{_resolve_public_base(request)}/api/spotify/callback"
+
+
 @api_router.get("/auth/login")
-async def spotify_login(mobile_redirect: Optional[str] = Query(None)):
+async def spotify_login(request: Request, mobile_redirect: Optional[str] = Query(None)):
     """
     Initiate Spotify OAuth flow.
     - If mobile_redirect is provided, encodes it in the OAuth state so the
@@ -512,11 +542,13 @@ async def spotify_login(mobile_redirect: Optional[str] = Query(None)):
     if mobile_redirect:
         state = base64.urlsafe_b64encode(mobile_redirect.encode()).decode()
 
+    redirect_uri = _resolve_redirect_uri(request)
+
     from urllib.parse import urlencode
     params = {
         "client_id": SPOTIFY_CLIENT_ID,
         "response_type": "code",
-        "redirect_uri": SPOTIFY_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "scope": scope,
     }
     if state:
@@ -534,21 +566,24 @@ async def spotify_login(mobile_redirect: Optional[str] = Query(None)):
 
 # Keep legacy path so existing TestFlight builds still work
 @api_router.get("/spotify/login")
-async def spotify_login_legacy(mobile_redirect: Optional[str] = Query(None)):
-    return await spotify_login(mobile_redirect=mobile_redirect)
+async def spotify_login_legacy(request: Request, mobile_redirect: Optional[str] = Query(None)):
+    return await spotify_login(request, mobile_redirect=mobile_redirect)
 
 
 @api_router.get("/auth/callback")
-async def spotify_callback(code: str = Query(...), state: Optional[str] = Query(None)):
+async def spotify_callback(request: Request, code: str = Query(...), state: Optional[str] = Query(None)):
     """Handle Spotify OAuth callback"""
     try:
+        # Must be the exact same redirect_uri sent during /auth/login —
+        # Spotify rejects the token exchange otherwise.
+        redirect_uri = _resolve_redirect_uri(request)
         async with httpx.AsyncClient() as http_client:
             response = await http_client.post(
                 "https://accounts.spotify.com/api/token",
                 data={
                     "grant_type": "authorization_code",
                     "code": code,
-                    "redirect_uri": SPOTIFY_REDIRECT_URI,
+                    "redirect_uri": redirect_uri,
                     "client_id": SPOTIFY_CLIENT_ID,
                     "client_secret": SPOTIFY_CLIENT_SECRET,
                 },
@@ -590,27 +625,33 @@ async def spotify_callback(code: str = Query(...), state: Optional[str] = Query(
 
             from urllib.parse import urlencode as ue
 
+            images = profile.get("images") or []
+            profile_image = images[0]["url"] if images else ""
+
             auth_params = {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "expires_in": str(expires_in),
                 "user_id": profile["id"],
-                "user_name": profile.get("display_name", ""),
-                "user_email": profile.get("email", "")
+                "display_name": profile.get("display_name", "") or profile["id"],
+                "profile_image": profile_image,
+                "product": profile.get("product", "free"),
             }
 
             # If state encodes a mobile deep link, redirect there
             if state:
                 try:
                     mobile_redirect = base64.urlsafe_b64decode(state.encode()).decode()
-                    redirect_url = f"{mobile_redirect}?{ue(auth_params)}"
+                    sep = "&" if "?" in mobile_redirect else "?"
+                    redirect_url = f"{mobile_redirect}{sep}{ue(auth_params)}"
                     logger.info(f"Mobile OAuth redirect → {mobile_redirect}")
                     return RedirectResponse(url=redirect_url)
                 except Exception:
                     pass
 
-            # Web fallback
-            redirect_url = f"/#callback?{ue(auth_params)}"
+            # Web fallback — route to /auth-success (handles both popup
+            # postMessage-to-opener and top-level redirect flows).
+            redirect_url = f"{_resolve_public_base(request)}/auth-success?{ue(auth_params)}"
             logger.info(f"Web OAuth redirect → {redirect_url}")
             return RedirectResponse(url=redirect_url)
 
@@ -621,8 +662,8 @@ async def spotify_callback(code: str = Query(...), state: Optional[str] = Query(
 
 # Keep legacy path so existing TestFlight builds still work
 @api_router.get("/spotify/callback")
-async def spotify_callback_legacy(code: str = Query(...), state: Optional[str] = Query(None)):
-    return await spotify_callback(code=code, state=state)
+async def spotify_callback_legacy(request: Request, code: str = Query(...), state: Optional[str] = Query(None)):
+    return await spotify_callback(request, code=code, state=state)
 
 
 @api_router.post("/auth/refresh")
@@ -2143,6 +2184,1082 @@ TILTEDCARD_HTML = r"""<!doctype html>
 </script>
 </body></html>
 """
+
+
+
+# ---------------------------------------------------------------------------
+# Map WebView routes (Mapbox GL JS globe + Google Maps fallback). Required by
+# SoundMapView.tsx which loads /api/mapbox.html or /api/map.html in a WebView.
+# ---------------------------------------------------------------------------
+
+@api_router.get("/mapbox.html")
+async def mapbox_html(token: str, style: str = "geobeats"):
+    """Mapbox GL JS globe view — Snapchat-style 3D Earth with atmosphere,
+    stars, and configurable terrain style (custom GeoBeats neon or
+    Mapbox satellite-streets). The marker/message protocol matches
+    /api/map.html so the SoundMapView WebView swap is drop-in.
+
+    style param:
+      - "geobeats" (default): custom dark-v11 base with NFS neon paint overrides
+      - "satellite": Mapbox satellite-streets-v12 (photorealistic terrain)
+    """
+    is_satellite = style == "satellite"
+    base_style = "mapbox://styles/mapbox/satellite-streets-v12" if is_satellite else "mapbox://styles/mapbox/dark-v11"
+    apply_paint = "false" if is_satellite else "true"
+    html = f"""<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8" />
+<meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+<style>
+  html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#000; overflow: hidden; }}
+  #status {{ position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; pointer-events:none; z-index:5; }}
+  .bubble {{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: auto;
+    cursor: pointer;
+    /* Smooth opacity fade for the cross-zoom transition */
+    transition: opacity 0.35s ease;
+  }}
+  /* Inner wrapper that we scale based on zoom. transform-origin at the
+     bottom means as we shrink, the avatar collapses *down* onto the pill
+     (which is anchored at the lat/lng), so the marker visually rests on
+     the user's actual location at low zoom. */
+  .bubble-inner {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform-origin: 50% 100%;
+    transform: scale(var(--marker-scale, 1)) translateY(var(--marker-lift, 0px));
+    transition: transform 0.55s cubic-bezier(0.2, 0.65, 0.2, 1);
+    will-change: transform;
+  }}
+  .avatar-wrap {{
+    width: 56px; height: 56px; border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, #B026FF, #7E1FB8);
+    box-shadow: 0 6px 20px rgba(176,38,255,0.45), 0 0 0 1px rgba(255,255,255,0.08);
+  }}
+  .avatar-wrap img {{
+    width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block;
+    background: #1a0a24;
+  }}
+  .pill {{
+    margin-top: 4px;
+    background: rgba(0,0,0,0.78);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: -apple-system, sans-serif;
+    max-width: 160px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    border: 1px solid rgba(176,38,255,0.6);
+    display: flex; align-items: center; gap: 6px;
+  }}
+  .pill .dot {{ width: 6px; height: 6px; border-radius: 50%; background:#B026FF; box-shadow: 0 0 6px #B026FF; flex-shrink: 0; }}
+  .self .avatar-wrap {{ background: linear-gradient(135deg, #00E5FF, #B026FF); box-shadow: 0 6px 24px rgba(0,229,255,0.55); }}
+  .host .avatar-wrap {{ background: linear-gradient(135deg, #FF1493, #B026FF); box-shadow: 0 6px 24px rgba(255,20,147,0.6); }}
+
+  /* ===== Profile Cluster (Life360-style for both 2 AND 3+ users) =====
+     A unified white rounded pill that holds 2 (side-by-side, touching)
+     OR 3+ (triangular, touching) avatars. Avatars overlap with no gap
+     — their white borders form the cluster's visual cohesion. */
+  /* ===== Profile Cluster (compact horizontal pill) =====
+     One white pill containing 2, 3, or 3+"…" avatars side-by-side with
+     overlap. Width auto-shrinks via inline-flex — no fixed box, no whitespace.
+     Tail points down at the actual lat/lng pin. */
+  .cluster {{
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    pointer-events: auto;
+    cursor: pointer;
+    background: #ffffff;
+    border-radius: 999px;
+    padding: 5px;
+    margin-bottom: 12px;
+    box-shadow: 0 10px 26px rgba(20, 0, 40, 0.4),
+                0 2px 6px rgba(0, 0, 0, 0.18),
+                inset 0 0 0 1px rgba(176, 38, 255, 0.10);
+    transform-origin: 50% calc(100% + 12px);
+    transform: scale(var(--marker-scale, 1)) translateY(var(--marker-lift, 0px));
+    transition: transform 0.55s cubic-bezier(0.2, 0.65, 0.2, 1), opacity 0.35s ease;
+    will-change: transform;
+  }}
+  /* Tail/triangle pointing down at the pin location. Sits BELOW the pill. */
+  .cluster .tail {{
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    width: 18px; height: 18px;
+    background: #ffffff;
+    transform: translateX(-50%) rotate(45deg);
+    border-bottom-right-radius: 4px;
+    box-shadow: 6px 6px 12px rgba(20, 0, 40, 0.2);
+    z-index: 0;
+  }}
+  .cluster .av {{
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 3px solid #fff;
+    background: #1a0a24;
+    margin-left: -12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 2;
+  }}
+  .cluster .av:first-child {{ margin-left: 0; }}
+  .cluster .av img {{
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }}
+  /* "..." indicator for clusters of 4+ users */
+  .cluster .ellipsis {{
+    flex: 0 0 auto;
+    margin-left: 4px;
+    padding: 0 10px 0 4px;
+    color: #4a3a5e;
+    font-weight: 800;
+    font-size: 22px;
+    line-height: 0.4;
+    letter-spacing: 1.5px;
+    user-select: none;
+    z-index: 2;
+  }}
+  /* Tap feedback */
+  .cluster:active {{ transform: scale(calc(var(--marker-scale, 1) * 0.94)); }}
+
+  /* Cinematic intro guard — completely hide markers (no fade, no transition)
+     during the first fly-from-globe so they don't visibly slide up from
+     off-screen into their final lat/lng pin positions. Removed on moveend. */
+  body.cinematic-pending .cluster,
+  body.cinematic-pending .bubble {{
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: none !important;
+  }}
+
+  /* Hide Mapbox attribution for cleaner UI (still link in console per Mapbox ToS for free tier) */
+  .mapboxgl-ctrl-bottom-right, .mapboxgl-ctrl-bottom-left {{ display: none !important; }}
+</style>
+</head><body>
+<div id="map"></div>
+<div id="status">Initializing globe…</div>
+<script>
+(function(){{
+  mapboxgl.accessToken = {token!r};
+  const meIdRef = {{ id: null }};
+  const markers = {{}};
+  let map;
+  let userInteracting = false;
+  let spinEnabled = true;
+  function post(msg){{
+    try {{
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {{
+        window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+      }} else if (window.parent && window.parent !== window) {{
+        window.parent.postMessage(msg, '*');
+      }}
+    }} catch(e) {{}}
+  }}
+  function makeBubbleEl(u){{
+    const el = document.createElement('div');
+    el.className = 'bubble' + (u.isSelf ? ' self' : '') + (u.host_session ? ' host' : '');
+    const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
+    // current_track may arrive in two shapes:
+    //  1) From local Spotify poll (self):  {{ item: {{ name, artists }} }}
+    //  2) From server WS broadcast (others): {{ name, artists }} or {{ item: {{ name, artists }} }}
+    const ct = u.current_track || {{}};
+    const trackObj = ct.item || ct;
+    const trackName = trackObj && trackObj.name ? String(trackObj.name) : '';
+    const artistName = trackObj && Array.isArray(trackObj.artists) && trackObj.artists.length ? String(trackObj.artists[0].name || '') : '';
+    const trackLabel = artistName ? (trackName + ' — ' + artistName) : trackName;
+    const safeLabel = trackLabel.replace(/[<>&]/g, '');
+    el.innerHTML = '<div class="bubble-inner">' +
+                   '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
+                   (safeLabel ? '<div class="pill"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '') +
+                   '</div>';
+    el.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
+    return el;
+  }}
+  function makeClusterEl(usersInCluster){{
+    // Compact horizontal pill: 2 or 3 overlapping avatars side-by-side.
+    // For 4+ users we still show 3 avatars but append a "..." indicator
+    // next to the last one (per user spec). The wrapper uses inline-flex
+    // so the pill auto-shrinks to fit content exactly (no whitespace).
+    const el = document.createElement('div');
+    el.className = 'cluster';
+    const shown = usersInCluster.slice(0, 3);
+    const hasMore = usersInCluster.length > 3;
+    const parts = [];
+    for (const u of shown) {{
+      const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
+      parts.push('<div class="av"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>');
+    }}
+    if (hasMore) parts.push('<div class="ellipsis">…</div>');
+    parts.push('<div class="tail"></div>');
+    el.innerHTML = parts.join('');
+    el.addEventListener('click', () => {{
+      try {{
+        const b = new mapboxgl.LngLatBounds();
+        usersInCluster.forEach(u => {{ b.extend([u.lng, u.lat]); }});
+        const sw = b.getSouthWest(), ne = b.getNorthEast();
+        const sameSpot = sw && ne && Math.abs(sw.lng - ne.lng) < 1e-5 && Math.abs(sw.lat - ne.lat) < 1e-5;
+        if (sameSpot) {{
+          map.flyTo({{ center: [usersInCluster[0].lng, usersInCluster[0].lat], zoom: Math.max(map.getZoom()+2.2, 16), speed: 1.1, curve: 1.5, essential: true }});
+        }} else {{
+          map.fitBounds(b, {{ padding: {{ top: 120, bottom: 220, left: 80, right: 80 }}, maxZoom: 16, duration: 900, essential: true }});
+        }}
+        post({{ type: 'cluster:click', user_ids: usersInCluster.map(u => u.user_id) }});
+      }} catch(e) {{}}
+    }});
+    return el;
+  }}
+
+  // ===== Cluster engine =====
+  // Holds the most recent flat user list so we can re-cluster on zoom
+  // (kept for compat — clustering itself is now zoom-independent because
+  // we measure real-world distance in metres, not screen pixels).
+  let latestUsers = [];
+  // CLUSTER if two users are within this REAL-WORLD distance in metres.
+  // 150m ≈ "same building / same block" — matches user expectation for
+  // a Life360-style grouping (people in the same place cluster, people
+  // in different parts of town don't).
+  const CLUSTER_M = 150;
+  // HYSTERESIS: once two users are clustered, require them to be
+  // SEPARATED by this larger real-world distance before un-clustering.
+  // Combined with the TTL below, this absorbs GPS jitter AND brief WS
+  // disconnects without breaking the cluster apart.
+  const CLUSTER_M_STICKY = 300;
+  // Sticky-pair TTL: passes a pair stays "sticky" after it was last grouped.
+  // 5 passes ≈ 25s — survives a friend's momentary WS dropout.
+  const STICKY_TTL = 5;
+  // Map<"a|b", remainingPasses>
+  let stickyPairAges = new Map();
+
+  // Equirectangular approximation — fast & accurate for small distances.
+  function metersBetween(lat1, lng1, lat2, lng2){{
+    const dLat = (lat2 - lat1) * 111000;
+    const dLng = (lng2 - lng1) * 111000 * Math.cos(lat1 * Math.PI / 180);
+    return Math.sqrt(dLat*dLat + dLng*dLng);
+  }}
+
+  // Per-user content signature — fingerprints everything the marker can
+  // visually express. Used to detect when a friend's avatar / track / play
+  // state has changed so we can refresh the marker element in place
+  // (without removing & recreating the marker, which would flicker).
+  function userSig(u){{
+    if (!u) return '';
+    const t = u.current_track || u.track || {{}};
+    const trackName = t.item ? (t.item.name || '') : (t.name || '');
+    return [
+      u.user_id, u.display_name || '', u.profile_image || '',
+      u.is_playing ? '1' : '0', u.host_session ? 'h' : '',
+      trackName,
+    ].join('|');
+  }}
+  function clusterSig(users){{
+    return (users || []).map(userSig).sort().join('::');
+  }}
+
+  function recluster(){{
+    if (!map || !map.loaded) return;
+    // Greedy-cluster ALL users (self included) by pixel distance. Including
+    // self in clustering means when another user is near you, you and them
+    // merge into a single Life360-style pill that stays visually unified at
+    // every zoom level (instead of drifting apart at low zoom because each
+    // bubble was anchored to its own slightly-different lat/lng pin).
+    const valid = [];
+    for (const u of latestUsers) {{
+      if (!u || typeof u.lat !== 'number' || typeof u.lng !== 'number') continue;
+      valid.push(u);
+    }}
+    const groups = []; // each: lng, lat (centroid) + users[]
+    // Process self FIRST so it always anchors the cluster (renders first).
+    valid.sort((a, b) => {{
+      const sa = (a.isSelf || a.user_id === meIdRef.id) ? 0 : 1;
+      const sb = (b.isSelf || b.user_id === meIdRef.id) ? 0 : 1;
+      return sa - sb;
+    }});
+    for (const u of valid) {{
+      let placed = false;
+      for (const g of groups) {{
+        const distM = metersBetween(g.lat, g.lng, u.lat, u.lng);
+        // HYSTERESIS: if this user was clustered with ANY existing member
+        // of g.users in the recent past (sticky TTL), use the larger
+        // sticky threshold to keep them together. Otherwise use the
+        // normal threshold.
+        let wasStickyToThisGroup = false;
+        for (const peer of g.users) {{
+          const pair = u.user_id < peer.user_id
+            ? (u.user_id + '|' + peer.user_id)
+            : (peer.user_id + '|' + u.user_id);
+          if (stickyPairAges.has(pair)) {{ wasStickyToThisGroup = true; break; }}
+        }}
+        const thresh = wasStickyToThisGroup ? CLUSTER_M_STICKY : CLUSTER_M;
+        if (distM <= thresh) {{
+          g.users.push(u);
+          const k = g.users.length;
+          g.lng = ((g.lng * (k-1)) + u.lng) / k;
+          g.lat = ((g.lat * (k-1)) + u.lat) / k;
+          placed = true; break;
+        }}
+      }}
+      if (!placed) groups.push({{ lng: u.lng, lat: u.lat, users: [u] }});
+    }}
+    // Refresh sticky pairs with TTL decay
+    const groupedThisPass = new Set();
+    for (const g of groups) {{
+      if (g.users.length < 2) continue;
+      for (let i = 0; i < g.users.length; i++) {{
+        for (let j = i+1; j < g.users.length; j++) {{
+          const a = g.users[i].user_id, b = g.users[j].user_id;
+          const key = a < b ? (a + '|' + b) : (b + '|' + a);
+          groupedThisPass.add(key);
+          stickyPairAges.set(key, STICKY_TTL);
+        }}
+      }}
+    }}
+    for (const [pair, age] of Array.from(stickyPairAges.entries())) {{
+      if (groupedThisPass.has(pair)) continue;
+      if (age <= 1) stickyPairAges.delete(pair);
+      else stickyPairAges.set(pair, age - 1);
+    }}
+
+    // Stable signature for diffing (so we update in-place when contents unchanged)
+    const desired = {{}};
+    for (const g of groups) {{
+      if (g.users.length === 1) {{
+        const u = g.users[0];
+        // Self user (when alone) keeps the cyan/purple solo-bubble look;
+        // other users get the standard purple bubble. Both are solo.
+        const prefix = (u.isSelf || u.user_id === meIdRef.id) ? 'self:' : 'solo:';
+        desired[prefix + u.user_id] = {{
+          kind: 'solo', user: u, lng: u.lng, lat: u.lat,
+          offset: [0, 0], sig: userSig(u),
+        }};
+      }} else {{
+        // 2+ users: unified Life360-style white-pill cluster.
+        // makeClusterEl renders side-by-side for n=2 and triangular for n=3+.
+        const key = 'cl:' + g.users.map(x => x.user_id).sort().join('|');
+        desired[key] = {{
+          kind: 'cluster', users: g.users, lng: g.lng, lat: g.lat,
+          offset: [0, 0], sig: clusterSig(g.users),
+        }};
+      }}
+    }}
+
+    // Remove markers that are no longer needed
+    Object.keys(markers).forEach(key => {{
+      if (!desired[key]) {{ markers[key].remove(); delete markers[key]; }}
+    }});
+    // Add / update remaining
+    Object.entries(desired).forEach(([key, spec]) => {{
+      const existing = markers[key];
+      if (existing) {{
+        existing.setLngLat([spec.lng, spec.lat]);
+        try {{ existing.setOffset(spec.offset || [0, 0]); }} catch(e) {{}}
+        // If the visual content of the user/cluster changed (new avatar
+        // URL, new track, play-state toggled, friend joined/left), refresh
+        // the element's innerHTML in place — preserves the Mapbox Marker
+        // (no flicker, no animation reset) while showing fresh data.
+        const prevSig = existing.__sig;
+        if (prevSig !== spec.sig) {{
+          try {{
+            const el = existing.getElement();
+            const fresh = spec.kind === 'solo' ? makeBubbleEl(spec.user) : makeClusterEl(spec.users);
+            // Match the wrapper class (e.g. swap .cluster.n2 <-> .cluster.n3
+            // if size changed inside an unchanged user_id set).
+            el.className = fresh.className;
+            el.innerHTML = fresh.innerHTML;
+            // The click handler is bound on the fresh element; rebind by
+            // copying its click listener data via cloning behaviour: we
+            // can't easily transfer JS listeners, so re-attach explicitly
+            // for clusters (solo bubbles delegate clicks via map events).
+            if (spec.kind === 'cluster') {{
+              // Rebuild click handler on the live element (mirrors makeClusterEl)
+              el.onclick = () => {{
+                try {{
+                  const b = new mapboxgl.LngLatBounds();
+                  spec.users.forEach(u => {{ b.extend([u.lng, u.lat]); }});
+                  const sw = b.getSouthWest(), ne = b.getNorthEast();
+                  const sameSpot = sw && ne && Math.abs(sw.lng - ne.lng) < 1e-5 && Math.abs(sw.lat - ne.lat) < 1e-5;
+                  if (sameSpot) {{
+                    map.flyTo({{ center: [spec.users[0].lng, spec.users[0].lat], zoom: Math.max(map.getZoom()+2.2, 16), speed: 1.1, curve: 1.5, essential: true }});
+                  }} else {{
+                    map.fitBounds(b, {{ padding: {{ top: 120, bottom: 220, left: 80, right: 80 }}, maxZoom: 16, duration: 900, essential: true }});
+                  }}
+                  post({{ type: 'cluster:click', user_ids: spec.users.map(u => u.user_id) }});
+                }} catch(e) {{}}
+              }};
+            }}
+            existing.__sig = spec.sig;
+          }} catch(e) {{}}
+        }}
+        return;
+      }}
+      const el = spec.kind === 'solo' ? makeBubbleEl(spec.user) : makeClusterEl(spec.users);
+      const m = new mapboxgl.Marker({{ element: el, anchor: 'bottom', offset: spec.offset || [0, 0] }})
+        .setLngLat([spec.lng, spec.lat]).addTo(map);
+      m.__sig = spec.sig;
+      markers[key] = m;
+    }});
+    updateMarkerVisibility();
+  }}
+
+  function upsertMarker(u){{
+    if (!u.lat || !u.lng) return;
+    if (u.isSelf && !window.__flown) {{
+      window.__flown = true;
+      spinEnabled = false;
+      // Hide all markers during the cinematic intro fly-in so they don't
+      // appear to "float up" from the wrong screen position as the camera
+      // animates from globe view down to user's lat/lng. We unblock as
+      // soon as moveend fires OR (whichever comes first) as soon as zoom
+      // passes 8 — at that point the marker projection is already near
+      // its final screen position so there's no visible "float up".
+      document.body.classList.add('cinematic-pending');
+      let guardLifted = false;
+      const liftGuard = () => {{
+        if (guardLifted) return;
+        guardLifted = true;
+        document.body.classList.remove('cinematic-pending');
+        try {{ recluster(); }} catch(e) {{}}
+      }};
+      const onZoomLift = () => {{
+        if (map.getZoom() >= 8) {{ map.off('zoom', onZoomLift); liftGuard(); }}
+      }};
+      map.on('zoom', onZoomLift);
+      map.once('moveend', () => {{ map.off('zoom', onZoomLift); liftGuard(); }});
+      // HARD SAFETY NET: if for ANY reason flyTo doesn't fire (map not
+      // ready, tile-fetch hung, network hiccup), force-lift the guard
+      // after 5 seconds so markers always show up. Without this the
+      // cinematic-pending class can stick forever and the user sees a
+      // map with no avatars at all.
+      setTimeout(liftGuard, 5000);
+      try {{
+        map.flyTo({{ center: [u.lng, u.lat], zoom: 13.5, pitch: 45, speed: 0.7, curve: 1.6, essential: true }});
+      }} catch(e) {{
+        // flyTo failed synchronously — lift immediately so markers render.
+        liftGuard();
+      }}
+    }}
+    // Merge into latestUsers (replace by user_id) then re-cluster.
+    const idx = latestUsers.findIndex(x => x && x.user_id === u.user_id);
+    if (idx >= 0) latestUsers[idx] = u; else latestUsers.push(u);
+    recluster();
+  }}
+  function setMarkersBulk(list){{
+    latestUsers = (list || []).filter(u => u && u.user_id);
+    recluster();
+    updateHeatmap(latestUsers);
+  }}
+  function updateHeatmap(list){{
+    const features = (list || [])
+      .filter(u => u && typeof u.lat === 'number' && typeof u.lng === 'number')
+      .map(u => ({{
+        type: 'Feature',
+        geometry: {{ type: 'Point', coordinates: [u.lng, u.lat] }},
+        // Active listeners contribute more "warmth" than idle/ghost users.
+        properties: {{ weight: u.is_playing ? 1 : 0.35 }}
+      }}));
+    const src = map && map.getSource && map.getSource('listeners-heat-src');
+    if (src) src.setData({{ type: 'FeatureCollection', features }});
+  }}
+  // ---- Zoom-driven marker scale ----
+  // Returns the scale factor (0..1) for the bubble-inner element based on
+  // current zoom. At low zoom the marker shrinks down toward its bottom
+  // anchor (which is the user's actual lat/lng), eliminating the visual
+  // "drift" where the avatar appeared far from the user's pin location.
+  function zoomToMarkerScale(z){{
+    if (z >= 12) return 1;        // high zoom: full size, full hover
+    if (z >= 9)  return 0.65 + (z - 9) * (0.35 / 3);  // 9→0.65, 12→1.0
+    if (z >= 6)  return 0.35 + (z - 6) * (0.30 / 3);  // 6→0.35, 9→0.65
+    if (z >= 4)  return 0.18 + (z - 4) * (0.17 / 2);  // 4→0.18, 6→0.35
+    return 0;                      // <4: invisible (heatmap takes over)
+  }}
+  function updateMarkerVisibility(){{
+    if (!map) return;
+    const z = map.getZoom();
+    const scale = zoomToMarkerScale(z);
+    Object.values(markers).forEach(m => {{
+      try {{
+        const el = m.getElement();
+        el.style.setProperty('--marker-scale', String(scale));
+        el.style.opacity = scale > 0.05 ? '1' : '0';
+      }} catch(e) {{}}
+    }});
+  }}
+  function removeMarker(uid){{
+    // Remove the user from latestUsers and re-cluster.
+    const idx = latestUsers.findIndex(u => u && u.user_id === uid);
+    if (idx >= 0) latestUsers.splice(idx, 1);
+    recluster();
+  }}
+  // RN -> map message bridge
+  function handle(msg){{
+    if (typeof msg === 'string') {{ try {{ msg = JSON.parse(msg); }} catch(e) {{ return; }} }}
+    if (!msg || !msg.type) return;
+    if (msg.type === 'me:set') meIdRef.id = msg.user_id;
+    else if (msg.type === 'set_markers') setMarkersBulk(msg.markers);
+    else if (msg.type === 'markers:bulk') setMarkersBulk(msg.users || msg.markers);
+    else if (msg.type === 'marker:upsert') upsertMarker(msg.user);
+    else if (msg.type === 'marker:remove') removeMarker(msg.user_id);
+    else if (msg.type === 'center') {{
+      if (!map) return;
+      // Suppress auto-recenter for the duration of the user-initiated flight
+      // so it doesn't yank the camera back to [20,20] mid-animation.
+      window.__suppressRecenter = true;
+      if (window.__recenterTimer) {{ clearTimeout(window.__recenterTimer); window.__recenterTimer = null; }}
+      // Reset bearing to 0 (north up) and pitch to a tasteful 45° tilt so
+      // the user re-orients no matter how badly they rotated the globe.
+      // This makes "Locate Me" function as a true reset button.
+      map.flyTo({{
+        center: [msg.lng, msg.lat],
+        zoom: msg.zoom || 14,
+        pitch: 45,
+        bearing: 0,
+        speed: 1.2,
+        curve: 1.5,
+        essential: true
+      }});
+      // Lift suppression once the flight ends.
+      map.once('moveend', () => {{ window.__suppressRecenter = false; }});
+    }}
+  }}
+  window.__handle = handle;
+  document.addEventListener('message', e => handle(e.data));
+  window.addEventListener('message', e => handle(e.data));
+  // Init globe — base style is configurable; we recolor layers to GeoBeats
+  // theme on style.load when apply_paint is true (otherwise we keep the
+  // satellite-streets photo terrain as-is).
+  map = new mapboxgl.Map({{
+    container: 'map',
+    style: '{base_style}',
+    center: [20, 20],
+    zoom: 1.4,
+    minZoom: 0.5,   // allow zoom-out to see whole Earth on tall phone viewports
+    maxZoom: 19,
+    projection: 'globe',
+    pitch: 0,
+    bearing: 0,
+    attributionControl: false,
+    antialias: true,
+    renderWorldCopies: false,  // keep single Earth, no horizontal repeat
+    dragRotate: true,
+    touchZoomRotate: true,
+    pitchWithRotate: false,
+  }});
+  // Belt-and-suspenders: also enforce after init in case style-load or
+  // resize re-derives bounds (some Android WebViews over-eager pinch).
+  try {{ map.setMinZoom(0.5); }} catch(e) {{}}
+  try {{ map.setMaxZoom(19); }} catch(e) {{}}
+  // Expose globally for debug + testing harness
+  window.map = map;
+
+  // Auto-recenter to Earth's geometric center when zoomed out so the
+  // globe sits perfectly centered in the viewport instead of being
+  // anchored to the user's lat/lng (which would push it off-screen on
+  // tall phone viewports). When zoomed in, the user's marker stays put.
+  // The __suppressRecenter flag (set by the 'center' message handler) lets
+  // explicit user-initiated flights to a location skip the auto-recenter.
+  window.__suppressRecenter = false;
+  window.__recenterTimer = null;
+  map.on('zoomend', () => {{
+    try {{
+      if (window.__suppressRecenter) return;
+      const z = map.getZoom();
+      if (z < 2.2) {{
+        // Throttle so consecutive pinch-zoom-out events don't fight.
+        if (window.__recenterTimer) clearTimeout(window.__recenterTimer);
+        window.__recenterTimer = setTimeout(() => {{
+          if (window.__suppressRecenter) return;
+          try {{
+            map.easeTo({{
+              center: [20, 20],
+              duration: 700,
+              essential: true,
+            }});
+          }} catch(e) {{}}
+        }}, 60);
+      }}
+      // Re-cluster on every zoom-end since pixel distances between fixed
+      // lng/lat pairs change with zoom — clusters should split when you
+      // zoom in and re-form when you zoom out.
+      try {{ recluster(); }} catch(e) {{}}
+    }} catch(e) {{}}
+  }});
+  // GeoBeats neon palette (mirrors the NFS aesthetic from the rest of the app)
+  const PALETTE = {{
+    bg:           '#05010f', // outer space / void behind the globe
+    land:         '#1a0a2e', // continent base — visible at all zooms
+    landAccent:   '#231038', // urban/man-made tint
+    park:         '#0c1f12', // dim green-purple parks
+    water:        '#02060f', // deep ocean — near black with cyan undertone
+    waterDeep:    '#03081a', // intracoastal water
+    road:         '#1a0e2c', // local streets
+    roadCase:     '#000000', // road outlines
+    roadArterial: '#321648', // bigger streets
+    roadStroke:   '#7a1ec2', // glow stroke for arterials
+    highway:      '#FF00AA', // magenta highway body
+    highwayCase:  '#00E5FF', // cyan highway glow
+    interstate:   '#FF1493', // pink interstate
+    interstateCase: '#00FFE5',
+    label:        '#00E5FF', // city / general labels (cyan)
+    labelCountry: '#FF66E0', // country labels (hot pink)
+    labelStroke:  '#000000',
+    labelDim:     '#B026FF', // smaller / neighborhood labels
+    border:       '#FF00AA',
+    borderCountry:'#FF1493',
+    building:     '#180a25', // extruded building base
+    buildingTop:  '#2a1145', // building top accent (taller = lighter)
+  }};
+  function paintGeoBeats(){{
+    if (!map || !map.getStyle()) return;
+    const layers = map.getStyle().layers || [];
+    const set = (id, prop, val) => {{ try {{ if (map.getLayer(id)) map.setPaintProperty(id, prop, val); }} catch(e) {{}} }};
+    const setLayout = (id, prop, val) => {{ try {{ if (map.getLayer(id)) map.setLayoutProperty(id, prop, val); }} catch(e) {{}} }};
+    // Background / land base
+    set('background', 'background-color', PALETTE.bg);
+    set('land', 'background-color', PALETTE.land);
+    // Iterate through every layer and apply rules by id pattern + type
+    layers.forEach(L => {{
+      const id = L.id, type = L.type;
+      // ----- WATER -----
+      if (id.includes('water') && type === 'fill') {{
+        set(id, 'fill-color', PALETTE.water);
+      }}
+      if (id === 'waterway' || id.includes('waterway')) {{
+        set(id, 'line-color', PALETTE.waterDeep);
+      }}
+      // ----- LANDCOVER / LAND -----
+      if (type === 'fill' && (id.includes('land') || id.includes('landcover'))) {{
+        if (id.includes('park') || id.includes('grass') || id.includes('wood') || id.includes('crop')) {{
+          set(id, 'fill-color', PALETTE.park);
+        }} else if (id.includes('sand') || id.includes('rock') || id.includes('snow')) {{
+          set(id, 'fill-color', PALETTE.landAccent);
+        }} else {{
+          set(id, 'fill-color', PALETTE.land);
+        }}
+      }}
+      if (id.includes('park') && type === 'fill') {{
+        set(id, 'fill-color', PALETTE.park);
+      }}
+      // ----- ROADS (lowest -> highest priority) -----
+      // Local / minor streets
+      if ((id.includes('road-street') || id.includes('road-minor') || id.includes('road-path') || id.includes('road-pedestrian')) && type === 'line') {{
+        set(id, 'line-color', PALETTE.road);
+      }}
+      // Arterial / secondary / tertiary
+      if ((id.includes('road-secondary') || id.includes('road-tertiary') || id.includes('road-primary')) && type === 'line') {{
+        if (id.endsWith('-case')) {{
+          set(id, 'line-color', PALETTE.roadStroke);
+        }} else {{
+          set(id, 'line-color', PALETTE.roadArterial);
+        }}
+      }}
+      // Trunk / motorway case = cyan glow rim
+      if ((id.includes('road-trunk') || id.includes('road-motorway')) && type === 'line') {{
+        if (id.endsWith('-case')) {{
+          set(id, 'line-color', PALETTE.highwayCase);
+        }} else if (id.includes('motorway')) {{
+          set(id, 'line-color', PALETTE.highway);
+        }} else {{
+          set(id, 'line-color', PALETTE.interstate);
+        }}
+      }}
+      // Bridges / tunnels reuse same patterns (already covered above)
+      // ----- BUILDINGS -----
+      if (id === 'building' && type === 'fill') {{
+        set(id, 'fill-color', PALETTE.building);
+        set(id, 'fill-outline-color', PALETTE.roadStroke);
+      }}
+      if (id === 'building-extrusion' && type === 'fill-extrusion') {{
+        set(id, 'fill-extrusion-color', PALETTE.building);
+        // Taller buildings glow purple at the top via interpolation on height
+        set(id, 'fill-extrusion-opacity', 0.85);
+      }}
+      // ----- BORDERS -----
+      if (id.includes('admin-0') && type === 'line') {{
+        set(id, 'line-color', PALETTE.borderCountry);
+        set(id, 'line-width', ['interpolate', ['linear'], ['zoom'], 1, 0.6, 6, 1.4]);
+      }}
+      if (id.includes('admin-1') && type === 'line') {{
+        set(id, 'line-color', PALETTE.border);
+      }}
+      // ----- LABELS -----
+      if (type === 'symbol') {{
+        if (id.includes('country')) {{
+          set(id, 'text-color', PALETTE.labelCountry);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+          set(id, 'text-halo-width', 2);
+        }} else if (id.includes('settlement') || id.includes('place') || id.includes('state') || id.includes('continent')) {{
+          set(id, 'text-color', PALETTE.label);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+          set(id, 'text-halo-width', 2);
+        }} else if (id.includes('road')) {{
+          set(id, 'text-color', PALETTE.labelCountry);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+        }} else if (id.includes('poi') || id.includes('transit') || id.includes('airport')) {{
+          // Hide POI labels for cleaner Snap-style look
+          setLayout(id, 'visibility', 'none');
+        }} else {{
+          set(id, 'text-color', PALETTE.labelDim);
+          set(id, 'text-halo-color', PALETTE.labelStroke);
+        }}
+      }}
+      // Hide POI dots / icons
+      if (type === 'circle' && id.includes('poi')) {{
+        setLayout(id, 'visibility', 'none');
+      }}
+    }});
+    // Extra: ensure building-extrusion has subtle glow gradient by height
+    try {{
+      if (map.getLayer('building-extrusion')) {{
+        map.setPaintProperty('building-extrusion', 'fill-extrusion-color', [
+          'interpolate', ['linear'], ['get', 'height'],
+          0, PALETTE.building,
+          50, PALETTE.building,
+          150, '#2a1145',
+          300, '#3a1660'
+        ]);
+      }}
+    }} catch(e) {{}}
+  }}
+  map.on('style.load', () => {{
+    // Atmospheric fog (Snapchat-style cyan halo + space backdrop)
+    map.setFog({{
+      color: 'rgb(186, 210, 235)',
+      'high-color': 'rgb(36, 92, 223)',
+      'horizon-blend': 0.05,
+      'space-color': 'rgb(8, 4, 18)',
+      'star-intensity': 0.85
+    }});
+    // Apply our GeoBeats neon palette only when configured (not for satellite)
+    if ({apply_paint}) paintGeoBeats();
+    // Snap-style listener heatmap source + layer. Seeded empty; populated
+    // from setMarkersBulk every time marker data arrives.
+    if (!map.getSource('listeners-heat-src')) {{
+      map.addSource('listeners-heat-src', {{
+        type: 'geojson',
+        data: {{ type: 'FeatureCollection', features: [] }}
+      }});
+    }}
+    if (!map.getLayer('listeners-heat')) {{
+      map.addLayer({{
+        id: 'listeners-heat',
+        type: 'heatmap',
+        source: 'listeners-heat-src',
+        maxzoom: 13,
+        paint: {{
+          // Active listeners weighted higher than idle ones (set per-feature)
+          'heatmap-weight': ['interpolate', ['linear'], ['get', 'weight'], 0, 0.3, 1, 1],
+          // Intensity ramps up with zoom so single users still produce a
+          // visible bloom at globe scale.
+          'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.8, 4, 1.4, 9, 2.0],
+          // Snap-style cyan -> purple -> yellow -> orange -> red gradient
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0,   'rgba(0, 0, 0, 0)',
+            0.1, 'rgba(0, 229, 255, 0.55)',
+            0.3, 'rgba(176, 38, 255, 0.7)',
+            0.5, 'rgba(255, 196, 0, 0.85)',
+            0.7, 'rgba(255, 100, 0, 0.92)',
+            1,   'rgba(255, 0, 50, 0.96)'
+          ],
+          // Halo grows with zoom so individual users have presence at every scale
+          'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 0, 18, 4, 38, 9, 70, 13, 110],
+          // Heatmap fully opaque while zoomed out, fades out as user zooms in
+          // (avatars take over for street-level detail).
+          'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.95, 9, 0.75, 12, 0.25, 13, 0]
+        }}
+      }});
+    }}
+    // Re-emit any previously-set markers so the new heatmap source gets data
+    // even if set_markers arrived before style.load.
+    if (Object.keys(markers).length > 0) {{
+      const list = Object.values(markers).map(m => {{
+        const ll = m.getLngLat();
+        return {{ lat: ll.lat, lng: ll.lng, is_playing: true }};
+      }});
+      updateHeatmap(list);
+    }}
+    document.getElementById('status').style.display = 'none';
+    post({{ type: 'map:ready' }});
+  }});
+  // Hide individual avatars at globe scale, fade them in as user zooms toward city level
+  map.on('zoom', () => updateMarkerVisibility());
+  map.on('error', (e) => {{
+    const s = document.getElementById('status');
+    s.textContent = 'Map error: ' + (e && e.error && e.error.message || 'unknown');
+    s.style.color = '#FF4500';
+  }});
+  // Slow auto-rotation when idle and zoomed out (Snapchat-style ambient spin)
+  function spinGlobe(){{
+    if (!spinEnabled || userInteracting) return;
+    const z = map.getZoom();
+    if (z > 3) return; // stop spinning when user zoomed in
+    const c = map.getCenter();
+    c.lng = ((c.lng + 540) % 360) - 180; // normalize
+    c.lng -= 6; // step
+    map.easeTo({{ center: c, duration: 1500, easing: t => t }});
+  }}
+  map.on('moveend', spinGlobe);
+  map.on('mousedown', () => {{ userInteracting = true; }});
+  map.on('touchstart', () => {{ userInteracting = true; }});
+  map.on('dragstart', () => {{ userInteracting = true; spinEnabled = false; }});
+  map.on('zoomstart', () => {{ userInteracting = true; }});
+  map.on('moveend', () => {{ userInteracting = false; }});
+  // Kick off first spin once loaded
+  map.once('load', () => setTimeout(spinGlobe, 800));
+}})();
+</script>
+</body></html>"""
+    return Response(content=html, media_type="text/html")
+
+
+@api_router.get("/map.html")
+async def map_html(key: str):
+    """Serve the map HTML so the WebView gets a proper HTTPS origin
+    (raw HTML strings get a `null` origin which Google Maps rejects)."""
+    html = f"""<!DOCTYPE html>
+<html><head>
+<meta name="viewport" content="initial-scale=1.0, width=device-width, user-scalable=no" />
+<style>
+  html, body, #map {{ height: 100vh; width: 100vw; margin: 0; padding: 0; background:#05050A; overflow: hidden; }}
+  /* PixelBlast pattern sits behind the map. With water layer set to
+     visibility:off in the cloud-based map style, the map canvas is
+     transparent over the oceans/lakes/rivers so the pulsing purple
+     pattern shows through ONLY the water — land keeps its NFS palette. */
+  #bg-pixels {{ position: fixed; inset: 0; width: 100vw; height: 100vh; border: 0; z-index: 0; pointer-events: none; opacity: 1; }}
+  #map-wrap {{ position: relative; z-index: 1; width: 100vw; height: 100vh; }}
+  #map {{ position: absolute; inset: 0; background: transparent !important; }}
+  /* Markers / overlays should stay fully opaque, so we re-overlay them
+     on a non-blended layer via Google Maps' floatPane. */
+  #status {{ position: absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; color:#fff; font-family:-apple-system,sans-serif; font-size:14px; text-align:center; padding:20px; pointer-events:none; z-index:2; }}
+  #status .err {{ color:#FF4500; max-width: 80vw; word-break: break-word; }}
+  .bubble {{ position: relative; display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; }}
+  .cluster {{ position: relative; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer; }}
+  .cluster-circle {{ width: 52px; height: 52px; border-radius: 50%; background: rgba(176,38,255,0.92); color:#05050A; font: 800 17px -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; box-shadow: 0 0 14px rgba(176,38,255,0.5), inset 0 0 0 2px rgba(255,255,255,0.18); }}
+  .cluster-circle.lg {{ width: 62px; height: 62px; font-size: 19px; }}
+  .avatar-wrap {{ width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #B026FF, #7E1FB8); box-sizing: border-box; }}
+  .avatar-wrap.self {{ background: linear-gradient(135deg, #FF4500, #FF8A00); }}
+  .avatar-wrap.hosting {{ background: linear-gradient(135deg, #B026FF, #00FFE0); }}
+  .avatar-wrap.paused {{ background: rgba(255,255,255,0.25); }}
+  .avatar {{ width: 50px; height: 50px; border-radius: 50%; background-size: cover; background-position: center; background-color: #12121A; box-sizing: border-box; }}
+  .pill {{ margin-top: 6px; max-width: 160px; padding: 4px 10px; background: rgba(0,0,0,0.75); border: 1px solid rgba(255,255,255,0.1); border-radius: 999px; color: #fff; font: 600 11px -apple-system, BlinkMacSystemFont, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }}
+  .pill .dot {{ width:6px; height:6px; border-radius:50%; background:#B026FF; box-shadow:0 0 6px #B026FF;}}
+  .pill.paused .dot {{ background: rgba(255,255,255,0.35); box-shadow:none; }}
+  @keyframes pulse {{ 0%,100% {{ transform: scale(1); }} 50% {{ transform: scale(1.08); }} }}
+</style>
+</head><body>
+<iframe id="bg-pixels" src="/api/pixelblast.html?variant=circle&pixelSize=2&color=%23B026FF&patternScale=1.2&patternDensity=1.6&pixelSizeJitter=0.4&enableRipples=0&liquid=0&speed=0.25&edgeFade=0" frameborder="0" scrolling="no"></iframe>
+<div id="map-wrap"><div id="map"></div></div>
+<div id="status">Initializing…</div>
+<script>
+  let map; let markers = {{}}; let meId = null;
+  let clusterOverlays = [];
+  const CLUSTER_PX = 80; // pixel proximity for clustering
+  const CLUSTER_DISABLE_ZOOM = 13; // at >= this zoom, never cluster
+  const statusEl = document.getElementById('status');
+  function setStatus(t, isError){{ if(!statusEl) return; statusEl.style.display='flex'; statusEl.innerHTML = isError ? '<div class="err">'+t+'</div>' : t; }}
+  function post(msg){{
+    try {{ window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }} catch(e) {{}}
+    try {{ window.parent && window.parent.postMessage(JSON.stringify(msg), '*'); }} catch(e) {{}}
+  }}
+  post({{ type: 'map:html_loaded' }});
+  setStatus('Loading Google Maps…');
+  const mapsTimeout = setTimeout(function(){{
+    if (!map) {{
+      setStatus('Google Maps did not load within 10s. Enable Maps JavaScript API in Google Cloud Console, and remove HTTP referrer restrictions on the API key.', true);
+      post({{ type: 'map:timeout' }});
+    }}
+  }}, 10000);
+  window.gm_authFailure = function(){{
+    clearTimeout(mapsTimeout);
+    setStatus('Google Maps key blocked this request. Enable Maps JavaScript API or remove restrictions on the key.', true);
+    post({{ type: 'map:auth_failure' }});
+  }};
+  window.addEventListener('error', function(e){{
+    if (!map) {{
+      const msg = (e && (e.message || (e.error && e.error.message))) || 'unknown';
+      setStatus('Script error: ' + msg, true);
+      post({{ type: 'map:script_error', message: String(msg) }});
+    }}
+  }});
+  window.initMap = function() {{
+    clearTimeout(mapsTimeout);
+    if (statusEl) statusEl.style.display = 'none';
+    AdvancedBubble.prototype = new google.maps.OverlayView();
+    AdvancedBubble.prototype.onAdd = function(){{ const panes = this.getPanes(); this.el.style.position = 'absolute'; panes.overlayMouseTarget.appendChild(this.el); }};
+    AdvancedBubble.prototype.draw = function(){{ const proj = this.getProjection(); if (!proj) return; const p = proj.fromLatLngToDivPixel(this.position); this.el.style.left = p.x + 'px'; this.el.style.top = p.y + 'px'; }};
+    AdvancedBubble.prototype.onRemove = function(){{ if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el); }};
+    AdvancedBubble.prototype.setPosition = function(latLng){{ this.position = latLng; this.draw(); }};
+    map = new google.maps.Map(document.getElementById('map'), {{
+      // Cinematic intro: open at globe-in-space view; we auto-fly to the
+      // user's location when their first WS location update arrives.
+      center: {{ lat: 20, lng: 0 }},
+      zoom: 1.5,
+      mapId: '2c42daaa74a7741732d7690f', // Vector map — enables globe view + tilt + heading
+      mapTypeId: 'roadmap',  // CRITICAL: globe view only works with roadmap, not hybrid/satellite
+      // Force LIGHT color scheme so the user's "NFS Neon" map style (saved
+      // as Light mode in Cloud Console) is always applied, regardless of
+      // device dark-mode preference. Without this, the device's system theme
+      // would pick the Dark slot which is still Google's default.
+      colorScheme: 'LIGHT',
+      tilt: 0,
+      heading: 0,
+      disableDefaultUI: true,
+      gestureHandling: 'greedy',
+      backgroundColor: 'transparent', // canvas clear is transparent so PixelBlast iframe shows through hidden water layer
+      isFractionalZoomEnabled: true,
+      minZoom: 1,
+      maxZoom: 20,
+    }});
+    map.addListener('idle', recomputeClusters);
+    // Cinematic auto-fly to user once their location arrives. We trigger this
+    // from upsertMarker the first time we see the self-marker.
+    window.__flyToUser = function(lat, lng){{
+      if (window.__flown) return;
+      window.__flown = true;
+      // Two-stage flight: zoom from 2 → 5 → 14 with smooth easing + tilt.
+      try {{ map.panTo({{ lat: lat, lng: lng }}); }} catch(e) {{}}
+      setTimeout(function(){{ try {{ map.setZoom(5); }} catch(e) {{}} }}, 700);
+      setTimeout(function(){{ try {{ map.setZoom(10); map.setTilt(45); }} catch(e) {{}} }}, 1500);
+      setTimeout(function(){{ try {{ map.setZoom(14); }} catch(e) {{}} }}, 2300);
+    }};
+    post({{ type: 'map:ready' }});
+  }};
+  function recomputeClusters(){{
+    if (!map) return;
+    const proj = map.getProjection();
+    if (!proj) return;
+    // Tear down previous cluster overlays
+    clusterOverlays.forEach(c => c.setMap(null));
+    clusterOverlays = [];
+    const bubbles = Object.values(markers);
+    const z = map.getZoom();
+    if (z >= CLUSTER_DISABLE_ZOOM || bubbles.length < 2) {{
+      bubbles.forEach(b => b.setMap(map));
+      return;
+    }}
+    const scale = Math.pow(2, z);
+    const points = bubbles.map(b => {{
+      const w = proj.fromLatLngToPoint(b.position);
+      return {{ b: b, x: w.x * scale, y: w.y * scale, used: false }};
+    }});
+    // Hide all individual bubbles; we'll re-add singletons below
+    bubbles.forEach(b => b.setMap(null));
+    for (let i = 0; i < points.length; i++) {{
+      if (points[i].used) continue;
+      const grp = [points[i]];
+      points[i].used = true;
+      for (let j = i + 1; j < points.length; j++) {{
+        if (points[j].used) continue;
+        const dx = points[i].x - points[j].x;
+        const dy = points[i].y - points[j].y;
+        if (Math.sqrt(dx*dx + dy*dy) < CLUSTER_PX) {{
+          grp.push(points[j]);
+          points[j].used = true;
+        }}
+      }}
+      if (grp.length === 1) {{
+        grp[0].b.setMap(map);
+      }} else {{
+        let lat = 0, lng = 0;
+        grp.forEach(p => {{ lat += p.b.position.lat(); lng += p.b.position.lng(); }});
+        lat /= grp.length; lng /= grp.length;
+        const div = document.createElement('div');
+        div.className = 'cluster';
+        const sz = grp.length >= 5 ? 'lg' : '';
+        div.innerHTML = '<div class="cluster-circle '+sz+'">'+grp.length+'</div>';
+        div.addEventListener('click', () => {{
+          map.panTo({{ lat: lat, lng: lng }});
+          map.setZoom(Math.min((map.getZoom() || 12) + 2, 18));
+        }});
+        const cm = new AdvancedBubble(new google.maps.LatLng(lat, lng), map, div);
+        clusterOverlays.push(cm);
+      }}
+    }}
+  }}
+  function upsertMarker(u) {{
+    if (!u.lat || !u.lng) return;
+    // Cinematic auto-fly: when our own (self) location arrives for the first
+    // time, smoothly transition from globe-in-space → user's location.
+    if (u.user_id && meId && u.user_id === meId && window.__flyToUser) {{
+      window.__flyToUser(u.lat, u.lng);
+    }}
+    const existing = markers[u.user_id];
+    if (existing) {{
+      existing.setPosition(new google.maps.LatLng(u.lat, u.lng));
+      existing.__data = u; refreshContent(existing); return;
+    }}
+    const div = document.createElement('div');
+    div.className = 'bubble';
+    div.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
+    const marker = new AdvancedBubble(new google.maps.LatLng(u.lat, u.lng), map, div);
+    marker.__el = div; marker.__data = u; refreshContent(marker);
+    markers[u.user_id] = marker;
+  }}
+  function refreshContent(marker) {{
+    const u = marker.__data;
+    const self = u.user_id === meId;
+    const hosting = !!u.host_session;
+    const playing = !!u.is_playing;
+    const track = u.current_track;
+    const title = track && track.item ? track.item.name : (track && track.name ? track.name : '');
+    const img = u.profile_image || '';
+    const classes = ['avatar-wrap'];
+    if (self) classes.push('self'); else if (hosting) classes.push('hosting'); else if (!playing) classes.push('paused');
+    marker.__el.innerHTML = '<div class="'+classes.join(' ')+'"><div class="avatar" style="background-image:url('+img+')"></div></div>' + (title && playing ? '<div class="pill"><span class="dot"></span><span>'+escapeHtml(title)+'</span></div>' : '');
+  }}
+  function escapeHtml(s){{ return (s||'').replace(/[&<>"']/g,c=>({{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}}[c])); }}
+  function removeMarker(uid){{ if(markers[uid]){{ markers[uid].setMap(null); delete markers[uid]; }} }}
+  function handle(data) {{
+    if (data.type === 'set_self') {{ meId = data.user_id; }}
+    else if (data.type === 'set_markers') {{
+      const keep = new Set();
+      (data.markers || []).forEach(m => {{ upsertMarker(m); keep.add(m.user_id); }});
+      Object.keys(markers).forEach(id => {{ if (!keep.has(id)) removeMarker(id); }});
+      recomputeClusters();
+    }} else if (data.type === 'center') {{
+      if (map) {{
+        map.panTo({{ lat: data.lat, lng: data.lng }});
+        if (typeof data.zoom === 'number') map.setZoom(data.zoom);
+      }}
+    }}
+  }}
+  window.__handle = handle;
+  window.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
+  document.addEventListener('message', (e) => {{ try {{ const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; handle(d); }} catch(_){{}} }});
+  function AdvancedBubble(position, map, el){{ this.position = position; this.el = el; this.setMap(map); }}
+  const DARK_STYLE = [
+    {{elementType:'geometry',stylers:[{{color:'#0a0414'}}]}},
+    {{elementType:'labels.text.stroke',stylers:[{{color:'#0a0414'}}]}},
+    {{elementType:'labels.text.fill',stylers:[{{color:'#8a6fb3'}}]}},
+    {{featureType:'administrative',elementType:'geometry.stroke',stylers:[{{color:'#3a1a52'}}]}},
+    {{featureType:'poi',elementType:'labels',stylers:[{{visibility:'off'}}]}},
+    {{featureType:'poi.park',elementType:'geometry',stylers:[{{color:'#1a0a24'}}]}},
+    {{featureType:'road',elementType:'geometry',stylers:[{{color:'#1c0e2c'}}]}},
+    {{featureType:'road',elementType:'labels.text.fill',stylers:[{{color:'#a78bd1'}}]}},
+    {{featureType:'road.highway',elementType:'geometry',stylers:[{{color:'#321647'}}]}},
+    {{featureType:'road.highway',elementType:'geometry.stroke',stylers:[{{color:'#5a2a85'}}]}},
+    {{featureType:'transit',elementType:'geometry',stylers:[{{color:'#190a25'}}]}},
+    {{featureType:'water',elementType:'geometry',stylers:[{{color:'#03000a'}}]}},
+    {{featureType:'water',elementType:'labels.text.fill',stylers:[{{color:'#5a3d80'}}]}},
+  ];
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key={key}&callback=initMap" async defer></script>
+</body></html>"""
+    return HTMLResponse(html)
+
 
 
 @api_router.get("/tiltedcard.html")
