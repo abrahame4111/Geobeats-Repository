@@ -307,6 +307,12 @@ class ConnectionManager:
         existing_location = existing.get("location", {})
 
         has_song = bool(message.get("current_song"))
+        # is_playing lets peers distinguish an actively-playing track from a
+        # paused one (shows "PAUSED" vs "NOW PLAYING"). If the client didn't
+        # send it explicitly, fall back to "playing == has a song".
+        is_playing = message.get("is_playing")
+        if is_playing is None:
+            is_playing = has_song
 
         location_data = {
             "lat": message.get("latitude") or message.get("lat"),
@@ -318,6 +324,7 @@ class ConnectionManager:
             "album_cover": message.get("album_cover") if has_song else None,
             "profile_image": message.get("profile_image", existing_location.get("profile_image")),
             "track_uri": message.get("track_uri") if has_song else None,
+            "is_playing": bool(is_playing) if has_song else False,
             "is_premium": message.get("is_premium", False),
             "listen_session_id": (await listen_together_manager.get_user_session(user_id) or {}).get("session_id"),
             "last_updated": now_iso(),
@@ -356,6 +363,7 @@ class ConnectionManager:
             "artist": None,
             "album_cover": None,
             "track_uri": None,
+            "is_playing": False,
             "last_updated": now_iso(),
         })
         await self.live_users.update_one(
@@ -1393,7 +1401,7 @@ async def get_active_users():
                     "uri": loc.get("track_uri"),
                 }
             } if current_song else None),
-            "is_playing": bool(current_song),
+            "is_playing": bool(loc.get("is_playing")) if current_song else False,
         })
     return {"users": users}
 
@@ -2323,6 +2331,8 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     display: flex; align-items: center; gap: 6px;
   }}
   .pill .dot {{ width: 6px; height: 6px; border-radius: 50%; background:#B026FF; box-shadow: 0 0 6px #B026FF; flex-shrink: 0; }}
+  .pill.paused {{ border-color: rgba(255,255,255,0.18); color: rgba(255,255,255,0.72); }}
+  .pill.paused .dot {{ background: rgba(255,255,255,0.4); box-shadow: none; }}
   .self .avatar-wrap {{ background: linear-gradient(135deg, #00E5FF, #B026FF); box-shadow: 0 6px 24px rgba(0,229,255,0.55); }}
   .host .avatar-wrap {{ background: linear-gradient(135deg, #FF1493, #B026FF); box-shadow: 0 6px 24px rgba(255,20,147,0.6); }}
 
@@ -2442,9 +2452,10 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     const artistName = trackObj && Array.isArray(trackObj.artists) && trackObj.artists.length ? String(trackObj.artists[0].name || '') : '';
     const trackLabel = artistName ? (trackName + ' — ' + artistName) : trackName;
     const safeLabel = trackLabel.replace(/[<>&]/g, '');
+    const isPaused = !!safeLabel && u.is_playing === false;
     el.innerHTML = '<div class="bubble-inner">' +
                    '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
-                   (safeLabel ? '<div class="pill"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '') +
+                   (safeLabel ? '<div class="pill'+(isPaused?' paused':'')+'"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '') +
                    '</div>';
     el.addEventListener('click', () => post({{ type: 'marker:click', user_id: u.user_id }}));
     return el;
@@ -2521,7 +2532,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     const trackName = t.item ? (t.item.name || '') : (t.name || '');
     return [
       u.user_id, u.display_name || '', u.profile_image || '',
-      u.is_playing ? '1' : '0', u.host_session ? 'h' : '',
+      String(u.is_playing), u.host_session ? 'h' : '',
       trackName,
     ].join('|');
   }}

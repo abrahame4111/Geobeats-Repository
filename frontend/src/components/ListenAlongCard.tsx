@@ -97,7 +97,10 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
   const t = displayed;
   const isPlaying = !!user.is_playing && !!t;
   const isRadar = !!t?.isRadar;
-  const showTrack = isPlaying;
+  // Show the track row whenever we have a track — even when PAUSED — so the
+  // card reflects both states. It only disappears once the now-playing is
+  // fully cleared (t === null after the 15s playback-stop grace).
+  const showTrack = !!t;
   // Radar broadcasts have no synced playback — suppress the Listen Along CTA.
   const showButton = isPlaying && !isActiveSession && !isSelf && !isRadar;
   const showReactions = isPlaying && !isSelf && !!onReact;

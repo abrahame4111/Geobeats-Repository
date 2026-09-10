@@ -23,6 +23,8 @@ type Props = {
   markers: MapMarker[];
   myLocation?: { lat: number; lng: number } | null;
   onMarkerPress?: (userId: string) => void;
+  /** Fired when a Life360-style shared bubble (2+ people) is tapped. */
+  onClusterPress?: (userIds: string[]) => void;
   /** Mapbox base style: "geobeats" (NFS neon overrides) or "satellite" (photo terrain). */
   mapStyle?: "geobeats" | "satellite";
 };
@@ -241,7 +243,7 @@ function buildHtml(apiKey: string): string {
 </html>`;
 }
 
-function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, mapStyle = "geobeats" }: Props, ref: React.Ref<SoundMapHandle>) {
+function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, onClusterPress, mapStyle = "geobeats" }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
     const mbxToken = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "";
@@ -295,6 +297,8 @@ function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, mapStyl
         if (myLocation) postToMap({ type: "center", ...myLocation });
       } else if (d.type === "marker:click" && onMarkerPress) {
         onMarkerPress(d.user_id);
+      } else if (d.type === "cluster:click" && onClusterPress) {
+        onClusterPress(Array.isArray(d.user_ids) ? d.user_ids : []);
       } else if (d.type === "map:auth_failure") {
         setMapError("Google Maps key restrictions are blocking this domain. Open the Google Cloud Console → Credentials → your API key, and either remove HTTP referrer restrictions or add the deployment hostname (e.g. https://*.your-domain.com/*) and exp://* as allowed referrers.");
       } else if (d.type === "map:timeout") {

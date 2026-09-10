@@ -29,3 +29,8 @@ Real-time social music app (Expo mobile + web) where users see each other on a l
 - In [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), add this Redirect URI to the app:
   `https://globe-tune.preview.emergentagent.com/api/spotify/callback`
 - Testing requires at least one **Spotify Premium** account (playback control is Premium-only per Spotify API). Free accounts can still appear on the map with their currently-playing track.
+
+## Recent Fixes (June 2026)
+- **Shared-bubble (cluster) stability + tap-to-list**: Co-located users always stay in one Life360-style shared bubble regardless of who is playing (no song pill on clusters). Tapping a shared bubble now opens the Listeners sheet scoped to just the people in that bubble (`cluster:click` → `onClusterPress` → filtered `ListenersSheet`).
+- **Playback-stop observer + PAUSED/PLAYING states**: `pull()` tracks how long playback has been not-playing. Paused tracks show a PAUSED state on the card (and a dimmed pill on the map); if playback stays stopped for >15s the now-playing is fully cleared locally and for peers (`now_playing_stopped` WS → `clear_now_playing`), removing the song name from the map pill everywhere.
+- **Fresh broadcasts**: `sendLocation` now reads live values from refs (not a stale interval closure) and sends `is_playing`. Backend `update_location`/`/users/active` persist & return `is_playing` so peers distinguish paused vs playing.

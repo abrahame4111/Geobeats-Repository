@@ -91,6 +91,9 @@ export default function MapScreen() {
   const toastTimerRef = useRef<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [listenersOpen, setListenersOpen] = useState(false);
+  // When a shared bubble (cluster) is tapped, we scope the Listeners sheet to
+  // just those people so the user sees "who's here". null = show everyone.
+  const [focusedClusterIds, setFocusedClusterIds] = useState<string[] | null>(null);
   const mapRef = useRef<SoundMapHandle>(null);
   const [floatingReactions, setFloatingReactions] = useState<FloatingReaction[]>([]);
   const [hasSpotify, setHasSpotify] = useState(true); // optimistic — assume open until proven otherwise
@@ -103,6 +106,18 @@ export default function MapScreen() {
   const approvedUrisRef = useRef<Set<string>>(new Set());
   const autoStopArmedRef = useRef(false);
   const lastUriRef = useRef<string | null>(null);
+
+  // ---- Refs mirroring latest state (avoid stale-closure broadcasts) ----
+  // sendLocation runs inside a long-lived setInterval; reading component
+  // state directly there would capture the FIRST render's values forever.
+  // We mirror the live values into refs and read those instead.
+  const authRef = useRef<StoredAuth | null>(null);
+  const myLocationRef = useRef<{ lat: number; lng: number } | null>(null);
+  const myIsPlayingRef = useRef(false);
+  // Timestamp (ms) when playback first went not-playing while a track was
+  // still loaded. Drives the 15s "stop completely" clear (bug #2).
+  const notPlayingSinceRef = useRef<number | null>(null);
+  const PLAYBACK_STOP_GRACE_MS = 15000;
 
   const approveUri = (uri?: string) => {
     if (!uri) return;
@@ -159,17 +174,21 @@ export default function MapScreen() {
         reconnectAttemptsRef.current = 0;
         setWsConnected(true);
         // Immediately send our location + track so peers see us right away
-        if (myLocation) {
+        const loc0 = myLocationRef.current;
+        const track0 = myTrackRef.current;
+        const song0 = track0?.item?.name || null;
+        if (loc0) {
           ws.send(JSON.stringify({
             type: "location_update",
-            latitude: myLocation.lat,
-            longitude: myLocation.lng,
+            latitude: loc0.lat,
+            longitude: loc0.lng,
             user_name: auth.display_name,
             profile_image: auth.profile_image || "",
-            current_song: myTrack?.item?.name || null,
-            artist: myTrack?.item?.artists?.[0]?.name || null,
-            album_cover: myTrack?.item?.album?.images?.[0]?.url || null,
-            track_uri: myTrack?.item?.uri || null,
+            current_song: song0,
+            artist: track0?.item?.artists?.[0]?.name || null,
+            album_cover: track0?.item?.album?.images?.[0]?.url || null,
+            track_uri: track0?.item?.uri || null,
+            is_playing: !!song0 && myIsPlayingRef.current,
             is_premium: auth.product === "premium",
           }));
         }
@@ -230,7 +249,7 @@ export default function MapScreen() {
                 uri: loc.track_uri,
               },
             } : null,
-            is_playing: !!loc.current_song,
+            is_playing: typeof loc.is_playing === "boolean" ? loc.is_playing : !!loc.current_song,
           };
         });
         setUsersMap(next);
@@ -258,7 +277,7 @@ export default function MapScreen() {
                 uri: loc.track_uri,
               },
             } : null,
-            is_playing: !!loc.current_song,
+            is_playing: typeof loc.is_playing === "boolean" ? loc.is_playing : !!loc.current_song,
           },
         }));
         return;
@@ -453,36 +472,38 @@ export default function MapScreen() {
 
   const sendLocation = (lat: number, lng: number) => {
     if (!broadcastOnRef.current) return;
+    const a = authRef.current;
+    const track = myTrackRef.current;
+    const playing = myIsPlayingRef.current;
+    const songName = track?.item?.name || null;
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       // NOTE: must be "location_update" (underscore) — the backend WS
-      // handler only recognizes this exact type. A previous "location:update"
-      // (colon) typo here meant every periodic re-send was silently ignored,
-      // so `last_location_update` never refreshed and the stale-expiry sweep
-      // auto-dropped users ~3 minutes after connecting (STALE_USER_SECONDS).
-      // Send the full snapshot each time (not just lat/lng) so an in-progress
-      // now-playing track isn't wiped out on every periodic ping.
+      // handler only recognizes this exact type. Read the CURRENT track /
+      // play-state from refs (not stale closure state) so the now-playing
+      // song stays fresh and clears the moment playback stops.
       ws.send(JSON.stringify({
         type: "location_update",
         latitude: lat,
         longitude: lng,
-        user_name: auth?.display_name,
-        profile_image: auth?.profile_image || "",
-        current_song: myTrack?.item?.name || null,
-        artist: myTrack?.item?.artists?.[0]?.name || null,
-        album_cover: myTrack?.item?.album?.images?.[0]?.url || null,
-        track_uri: myTrack?.item?.uri || null,
-        is_premium: auth?.product === "premium",
+        user_name: a?.display_name,
+        profile_image: a?.profile_image || "",
+        current_song: songName,
+        artist: track?.item?.artists?.[0]?.name || null,
+        album_cover: track?.item?.album?.images?.[0]?.url || null,
+        track_uri: track?.item?.uri || null,
+        is_playing: !!songName && !!playing,
+        is_premium: a?.product === "premium",
       }));
-    } else if (auth) {
+    } else if (a) {
       // WS not open — push location directly to REST so cross-pod visibility works
       fetch(`${BACKEND_URL}/api/location/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: auth.user_id,
-          display_name: auth.display_name,
-          profile_image: auth.profile_image || "",
+          user_id: a.user_id,
+          display_name: a.display_name,
+          profile_image: a.profile_image || "",
           lat,
           lng,
         }),
@@ -554,6 +575,9 @@ export default function MapScreen() {
   // polling closure can read the latest state without re-subscribing.
   const myTrackRef = useRef<any>(null);
   useEffect(() => { myTrackRef.current = myTrack; }, [myTrack]);
+  useEffect(() => { authRef.current = auth; }, [auth]);
+  useEffect(() => { myLocationRef.current = myLocation; }, [myLocation]);
+  useEffect(() => { myIsPlayingRef.current = myIsPlaying; }, [myIsPlaying]);
   // Spotify "closed" streak counter: idle Spotify clients can take 10–15s
   // to register with Spotify Connect after the app launches. We only flip
   // the "Open Spotify" button on AFTER 3 consecutive empty polls (≈15s
@@ -639,8 +663,39 @@ export default function MapScreen() {
           return;
         }
 
-        setMyTrack(item ? { item } : null);
-        setMyIsPlaying(playing);
+        // ----- Playback-stop observer (bug #2) -----
+        // Two states drive the UI: PLAYING and PAUSED. While actively
+        // playing we keep the track fresh. When playback goes not-playing
+        // (paused, stopped, or no active device) we keep showing it as
+        // PAUSED for a grace window, but if it stays stopped for >15s we
+        // fully clear the now-playing — locally AND for peers (so the song
+        // name disappears from the map pill everywhere).
+        if (playing && item) {
+          notPlayingSinceRef.current = null;
+          setMyTrack({ item });
+          setMyIsPlaying(true);
+        } else {
+          setMyIsPlaying(false);
+          if (notPlayingSinceRef.current == null) notPlayingSinceRef.current = Date.now();
+          const stoppedMs = Date.now() - notPlayingSinceRef.current;
+          if (stoppedMs >= PLAYBACK_STOP_GRACE_MS) {
+            // Stopped for 15s+ → remove now-playing entirely.
+            if (myTrackRef.current) {
+              setMyTrack(null);
+              try {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                  ws.send(JSON.stringify({ type: "now_playing_stopped" }));
+                }
+              } catch {}
+            }
+          } else if (item) {
+            // Within grace and Spotify still has a (paused) track loaded —
+            // keep it visible so the card can show the PAUSED state.
+            setMyTrack({ item });
+          }
+          // Within grace with no track from Spotify: leave the last known
+          // track in place so the card shows PAUSED until the grace lapses.
+        }
 
         // Update Spotify-active-device flag — Spotify being "open" means
         // ANY of: at least one device registered, currently playing, OR
@@ -802,13 +857,13 @@ export default function MapScreen() {
     : null;
 
   // Auto-close the card and leave any active listen-along session when the
-  // user (self) stops playing music — covers Spotify pause, queue end with
-  // autoplay-block kicking in, app being backgrounded, or device disconnect.
-  // Without this the card would linger showing a stale track.
+  // user (self) fully stops playing music (track cleared after the 15s
+  // playback-stop grace). A mere PAUSE keeps the card open showing the
+  // PAUSED state — we only tear down once the now-playing is gone.
   useEffect(() => {
     if (!auth) return;
-    const selfHasMusic = !!myTrack && !!myIsPlaying;
-    if (!selfHasMusic) {
+    const selfHasTrack = !!myTrack;
+    if (!selfHasTrack) {
       // 1) Close the self-card if it's open
       if (selectedUserId === auth.user_id) {
         setSelectedUserId(null);
@@ -825,7 +880,7 @@ export default function MapScreen() {
       //    is too aggressive (guests by definition stop playing during sync);
       //    so we do NOT auto-leave guest sessions here.
     }
-  }, [myTrack, myIsPlaying, selectedUserId, auth?.user_id, syncStatus]);
+  }, [myTrack, selectedUserId, auth?.user_id, syncStatus]);
 
   const handleMarker = (uid: string) => setSelectedUserId(uid);
 
@@ -969,6 +1024,10 @@ export default function MapScreen() {
         markers={mapMarkers}
         myLocation={myLocation}
         onMarkerPress={handleMarker}
+        onClusterPress={(ids) => {
+          setFocusedClusterIds(ids && ids.length ? ids : null);
+          setListenersOpen(true);
+        }}
         mapStyle={mapStyle}
       />
 
@@ -1160,10 +1219,15 @@ export default function MapScreen() {
       <ListenersSheet
         visible={listenersOpen}
         auth={auth}
-        listeners={markers as any}
+        listeners={(focusedClusterIds
+          ? (markers as any[]).filter((m) => focusedClusterIds.includes(m.user_id))
+          : markers) as any}
         hostId={hostId}
         selfId={auth.user_id}
-        onClose={() => setListenersOpen(false)}
+        onClose={() => {
+          setListenersOpen(false);
+          setFocusedClusterIds(null);
+        }}
         onListenAlong={(uid) => {
           const ws = wsRef.current;
           if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -1173,15 +1237,18 @@ export default function MapScreen() {
           }
           ws.send(JSON.stringify({ type: "session:join", host_id: uid }));
           setListenersOpen(false);
+          setFocusedClusterIds(null);
         }}
         onLeaveSession={() => {
           leaveSession();
           setListenersOpen(false);
+          setFocusedClusterIds(null);
         }}
         onFlyTo={(_uid, lat, lng) => {
           // Smoothly fly to the selected user's pin and close the sheet
           mapRef.current?.centerOn(lat, lng, 14);
           setListenersOpen(false);
+          setFocusedClusterIds(null);
         }}
       />
 
