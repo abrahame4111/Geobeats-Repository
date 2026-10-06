@@ -1,0 +1,21 @@
+{
+  "short_name": "Music Navigator",
+  "name": "Music Navigator - Share Music & Location",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%231DB954'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white'>🎵</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%231DB954'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white'>🎵</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1DB954",
+  "background_color": "#121212",
+  "description": "Share your location and see what music your friends are listening to in real-time"
+}

@@ -1,0 +1,3 @@
+# Music Navigator - robots.txt
+User-agent: *
+Allow: /
