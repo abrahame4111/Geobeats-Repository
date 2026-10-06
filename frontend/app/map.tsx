@@ -23,18 +23,23 @@ import FloatingReactions, { FloatingReaction } from "../src/components/FloatingR
 import ListenersSheet from "../src/components/ListenersSheet";
 import {
   BACKEND_URL,
+  Friend,
+  FriendsData,
   StoredAuth,
   addToQueue,
   clearAuth,
   getActiveUsers,
   getCurrentlyPlaying,
   getDevices,
+  getFriends,
   loadAuth,
   playerAction,
   setRepeat,
 } from "../src/api";
+import { timeAgo } from "../src/timeAgo";
 
 const GOOGLE_MAPS_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string;
+const EMPTY_FRIENDS: FriendsData = { friends: [], incoming: [], outgoing: [] };
 
 type UsersMap = Record<string, any>;
 
@@ -90,6 +95,12 @@ export default function MapScreen() {
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastTimerRef = useRef<any>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTab, setSearchTab] = useState<"songs" | "people">("songs");
+  // ---- Friends (requests + last-known presence for offline friends) ----
+  const [friendsData, setFriendsData] = useState<FriendsData>(EMPTY_FRIENDS);
+  // Re-render every 60s so "5 min ago" labels stay fresh without refetching.
+  const [nowTick, setNowTick] = useState(Date.now());
+  const refreshFriendsRef = useRef<() => void>(() => {});
   const [listenersOpen, setListenersOpen] = useState(false);
   // When a shared bubble (cluster) is tapped, we scope the Listeners sheet to
   // just those people so the user sees "who's here". null = show everyone.
@@ -151,6 +162,29 @@ export default function MapScreen() {
       setLoading(false);
     })();
   }, []);
+
+  // ---- Friends: fetch on login, poll every 30s, refresh on WS friend events ----
+  useEffect(() => {
+    if (!auth) return;
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const d = await getFriends(auth);
+        if (alive) setFriendsData(d);
+      } catch (e) {
+        console.warn("[friends] fetch failed", e);
+      }
+    };
+    refreshFriendsRef.current = refresh;
+    refresh();
+    const poll = setInterval(refresh, 30000);
+    const tick = setInterval(() => setNowTick(Date.now()), 60000);
+    return () => {
+      alive = false;
+      clearInterval(poll);
+      clearInterval(tick);
+    };
+  }, [auth?.user_id]);
 
   // ---- WebSocket connection with auto-reconnect + keepalive ----
   const pingIntervalRef = useRef<any>(null);
@@ -377,6 +411,14 @@ export default function MapScreen() {
             fromName: data.from_display_name || "Someone",
           },
         ]);
+      } else if (data.type === "friend:request") {
+        refreshFriendsRef.current();
+        showToast("FRIEND REQUEST", `${data.from_display_name || "Someone"} wants to be friends`, "live");
+      } else if (data.type === "friend:accepted") {
+        refreshFriendsRef.current();
+        showToast("NEW FRIEND", `${data.display_name || "Someone"} accepted your request`, "live");
+      } else if (data.type === "friend:removed") {
+        refreshFriendsRef.current();
       }
     } catch (e) {
       console.warn("ws parse err", e);
@@ -840,9 +882,36 @@ export default function MapScreen() {
 
   // Send self identity to map so self-marker renders in secondary color
   const mapSelfId = auth?.user_id;
+  // Offline friends → dimmed grey bubbles at their last-known spot with a
+  // "5 min ago · Song" pill. Live friends are already in usersMap; ghosted
+  // friends come back with hidden=true / no coords and are skipped.
+  const offlineFriendMarkers: MapMarker[] = useMemo(() => {
+    return friendsData.friends
+      .filter((f) => !f.online && !f.hidden && f.lat != null && f.lng != null && !usersMap[f.user_id] && f.user_id !== mapSelfId)
+      .map((f) => ({
+        user_id: f.user_id,
+        display_name: f.display_name,
+        profile_image: f.profile_image,
+        lat: f.lat as number,
+        lng: f.lng as number,
+        offline: true,
+        is_playing: false,
+        last_seen_label: timeAgo(f.last_seen_at, nowTick),
+        current_track: f.last_song?.name
+          ? {
+              item: {
+                name: f.last_song.name,
+                artists: f.last_song.artist ? [{ name: f.last_song.artist }] : [],
+                album: { images: f.last_song.album_cover ? [{ url: f.last_song.album_cover }] : [] },
+                uri: f.last_song.track_uri,
+              },
+            }
+          : null,
+      }));
+  }, [friendsData.friends, usersMap, mapSelfId, nowTick]);
   const mapMarkers = useMemo(() => {
-    return markers.map((m) => ({ ...m, isSelf: m.user_id === mapSelfId }));
-  }, [markers, mapSelfId]);
+    return [...markers.map((m) => ({ ...m, isSelf: m.user_id === mapSelfId })), ...offlineFriendMarkers];
+  }, [markers, mapSelfId, offlineFriendMarkers]);
 
   // ---- Handlers ----
   // selectedUser:
@@ -850,10 +919,16 @@ export default function MapScreen() {
   //    immediately reflects pause / autopause / app-close, without waiting for
   //    a server WS roundtrip that might leave stale data in usersMap.
   //  - For OTHERS: read from usersMap (server-broadcast positions/tracks).
+  //  - For OFFLINE FRIENDS: last-known data from the friends list.
+  const selectedOfflineFriend = selectedUserId ? offlineFriendMarkers.find((m) => m.user_id === selectedUserId) : null;
+  const selectedFriendMeta = selectedOfflineFriend ? friendsData.friends.find((f) => f.user_id === selectedUserId) : null;
   const selectedUser = selectedUserId
     ? (selectedUserId === auth?.user_id
         ? (auth ? { user_id: auth.user_id, display_name: auth.display_name, profile_image: auth.profile_image, current_track: myTrack, is_playing: myIsPlaying } : null)
-        : (usersMap[selectedUserId] || null))
+        : (usersMap[selectedUserId]
+            || (selectedOfflineFriend
+                ? { ...selectedOfflineFriend, last_song_label: selectedFriendMeta?.last_song?.at ? timeAgo(selectedFriendMeta.last_song.at, nowTick) : undefined }
+                : null)))
     : null;
 
   // Auto-close the card and leave any active listen-along session when the
@@ -1037,13 +1112,18 @@ export default function MapScreen() {
           <View style={styles.sideSpacer}>
             <View style={styles.sideRow}>
               <TouchableOpacity
-                onPress={() => setSearchOpen(true)}
+                onPress={() => { setSearchTab("songs"); setSearchOpen(true); }}
                 style={styles.ghostBtn}
                 testID="search-toggle"
                 activeOpacity={0.8}
                 hitSlop={8}
               >
                 <Ionicons name="search" size={19} color="#B026FF" />
+                {friendsData.incoming.length > 0 ? (
+                  <View style={styles.usersBadge} testID="friend-request-badge">
+                    <Text style={styles.usersBadgeText}>{friendsData.incoming.length}</Text>
+                  </View>
+                ) : null}
               </TouchableOpacity>
               <SongRadarFab onResult={handleRadarResult} />
             </View>
@@ -1192,6 +1272,15 @@ export default function MapScreen() {
         isInSession={!!hostId && hostId !== auth.user_id}
         hostName={hostId ? usersMap[hostId]?.display_name : null}
         onClose={() => setSearchOpen(false)}
+        initialTab={searchTab}
+        friends={friendsData}
+        onFriendsChanged={() => refreshFriendsRef.current()}
+        onFlyToFriend={(f: Friend) => {
+          if (f.lat == null || f.lng == null) return;
+          setSearchOpen(false);
+          mapRef.current?.centerOn(f.lat, f.lng, 14);
+          setSelectedUserId(f.user_id);
+        }}
         onQueued={(uri) => approveUri(uri)}
         onPlayedNow={(track) => {
           // Optimistic update so the bottom player sheet swaps to the new

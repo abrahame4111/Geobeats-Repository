@@ -162,4 +162,67 @@ export async function playNow(auth: StoredAuth, trackUri: string, deviceId?: str
   });
 }
 
+// ---- Friends ----
+export type PersonLookup = {
+  user_id: string;
+  display_name: string;
+  profile_image: string;
+  on_geobeats: boolean;
+  relation: "self" | "friends" | "pending_out" | "pending_in" | "none";
+};
+
+export type PeopleLookupResult = { exact: PersonLookup; matches: PersonLookup[] };
+
+export type Friend = {
+  user_id: string;
+  display_name: string;
+  profile_image: string;
+  online: boolean;
+  hidden: boolean;
+  lat: number | null;
+  lng: number | null;
+  last_seen_at: number | null;
+  last_song: { name: string; artist?: string | null; album_cover?: string | null; track_uri?: string | null; at: number } | null;
+};
+
+export type FriendPerson = { user_id: string; display_name: string; profile_image: string; created_at?: string };
+
+export type FriendsData = { friends: Friend[]; incoming: FriendPerson[]; outgoing: FriendPerson[] };
+
+async function authed(auth: StoredAuth) {
+  const t = await ensureFreshToken(auth);
+  return { Authorization: `Bearer ${t}` };
+}
+
+export async function lookupPerson(auth: StoredAuth, q: string): Promise<PeopleLookupResult> {
+  return api(`/api/people/lookup?q=${encodeURIComponent(q)}`, { headers: await authed(auth) });
+}
+
+export async function getFriends(auth: StoredAuth): Promise<FriendsData> {
+  return api(`/api/friends`, { headers: await authed(auth) });
+}
+
+export async function sendFriendRequest(auth: StoredAuth, person: { user_id: string; display_name?: string; profile_image?: string }) {
+  return api<{ relation: PersonLookup["relation"] }>(`/api/friends/request`, {
+    method: "POST",
+    headers: await authed(auth),
+    body: JSON.stringify({ target_user_id: person.user_id, display_name: person.display_name, profile_image: person.profile_image }),
+  });
+}
+
+export async function respondFriendRequest(auth: StoredAuth, fromUserId: string, accept: boolean) {
+  return api<{ relation: PersonLookup["relation"] }>(`/api/friends/respond`, {
+    method: "POST",
+    headers: await authed(auth),
+    body: JSON.stringify({ from_user_id: fromUserId, accept }),
+  });
+}
+
+export async function removeFriend(auth: StoredAuth, otherId: string) {
+  return api<{ relation: PersonLookup["relation"] }>(`/api/friends/${encodeURIComponent(otherId)}`, {
+    method: "DELETE",
+    headers: await authed(auth),
+  });
+}
+
 export { BACKEND_URL };

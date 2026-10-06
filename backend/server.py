@@ -2,7 +2,6 @@ from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse, Response, FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import CursorType
 from pymongo.errors import CollectionInvalid
 import os
@@ -17,13 +16,13 @@ import uuid
 from datetime import datetime, timezone
 import httpx
 
+from database import client, db
+import friends as friends_module
+import recognize as recognize_module
+import spotify_player
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
 
 # Spotify Configuration
 SPOTIFY_CLIENT_ID = os.environ['SPOTIFY_CLIENT_ID']
@@ -134,6 +133,8 @@ class EventBus:
                 await cm._deliver_listen_together(payload)
             elif event_type == "direct_message":
                 await cm._deliver_direct_message(payload)
+            elif event_type == "user_offline":
+                await cm._send_to_all_local(json.dumps({"type": "user:offline", "user_id": payload["user_id"]}))
         except Exception as e:
             logger.error(f"[{INSTANCE_ID}] Failed dispatching event {event_type}: {e}")
 
@@ -287,6 +288,7 @@ class ConnectionManager:
             logger.info(f"[{INSTANCE_ID}] ❌ User {user_id} disconnected locally. Remaining local: {len(self.active_connections)}")
 
         await self.live_users.delete_one({"user_id": user_id})
+        await self.end_hosted_session(user_id)
         await listen_together_manager.leave_session(user_id)
 
         online_count = await self.live_users.count_documents({})
@@ -340,6 +342,29 @@ class ConnectionManager:
             upsert=True,
         )
 
+        # Persist last-known presence on the user's profile so friends can
+        # see "last seen 5 min ago · Song" after they go offline. Receiving a
+        # location update also means they're broadcasting → not ghosted.
+        if location_data["lat"] is not None and location_data["lng"] is not None:
+            presence = {
+                "last_location": {"lat": location_data["lat"], "lng": location_data["lng"]},
+                "last_seen_at": now_ts(),
+                "ghost": False,
+            }
+            if message.get("user_name"):
+                presence["display_name"] = message.get("user_name")
+            if location_data.get("profile_image"):
+                presence["profile_image"] = location_data["profile_image"]
+            if has_song:
+                presence["last_song"] = {
+                    "name": location_data["current_song"],
+                    "artist": location_data["artist"],
+                    "album_cover": location_data["album_cover"],
+                    "track_uri": location_data["track_uri"],
+                    "at": now_ts(),
+                }
+            await db.users.update_one({"spotify_id": user_id}, {"$set": presence}, upsert=True)
+
         online_count = await self.live_users.count_documents({})
         await self.event_bus.publish("location_update", {
             "user_id": user_id,
@@ -376,6 +401,76 @@ class ConnectionManager:
             "online_count": await self.live_users.count_documents({}),
             "timestamp": now_iso(),
         })
+
+    async def update_song(self, user_id: str, track: Optional[Dict], is_playing: bool):
+        """
+        `user:active_track` from the client: refresh just the song fields on
+        the user's live marker (location itself is unchanged). Only publishes
+        when something visible changed, to avoid doubling broadcast traffic
+        with the 5s location_update loop.
+        """
+        item = (track or {}).get("item") or track or {}
+        name = item.get("name") if isinstance(item, dict) else None
+        if not name:
+            return
+        doc = await self.live_users.find_one({"user_id": user_id})
+        if not doc or "location" not in doc:
+            return
+        loc = doc["location"]
+        artists = item.get("artists") or []
+        images = (item.get("album") or {}).get("images") or []
+        new_song = {
+            "current_song": name,
+            "artist": (artists[0].get("name") if artists and isinstance(artists[0], dict) else None),
+            "album_cover": (images[0].get("url") if images and isinstance(images[0], dict) else None),
+            "track_uri": item.get("uri"),
+            "is_playing": bool(is_playing),
+        }
+        changed = any(loc.get(k) != v for k, v in new_song.items())
+        loc.update(new_song)
+        loc["last_updated"] = now_iso()
+        await self.live_users.update_one(
+            {"user_id": user_id},
+            {"$set": {"location": loc, "last_song_update": now_ts()}},
+        )
+        if changed:
+            await self.event_bus.publish("location_update", {
+                "user_id": user_id,
+                "location": loc,
+                "online_count": await self.live_users.count_documents({}),
+                "timestamp": now_iso(),
+            })
+
+    async def touch(self, user_id: str):
+        """Keepalive: a ghosted user sends no location updates, so pings keep
+        them from being swept as stale (which would silently stop delivery)."""
+        await self.live_users.update_one(
+            {"user_id": user_id},
+            {"$set": {"last_location_update": now_ts()}},
+            upsert=True,
+        )
+
+    async def set_visibility(self, user_id: str, visible: bool):
+        """Ghost mode. Hidden users drop off everyone's map immediately and
+        their last-known spot is hidden from friends until they return."""
+        await db.users.update_one({"spotify_id": user_id}, {"$set": {"ghost": not visible}}, upsert=True)
+        if visible:
+            return  # client re-sends location_update right after, which re-adds them
+        await self.live_users.update_one(
+            {"user_id": user_id},
+            {"$unset": {"location": "", "last_song_update": ""}, "$set": {"last_location_update": now_ts()}},
+        )
+        await self.event_bus.publish("user_offline", {"user_id": user_id})
+
+    async def end_hosted_session(self, user_id: str):
+        """If `user_id` hosts a Listen Along session, tell guests and end it."""
+        session = await listen_together_manager.collection.find_one({"host_id": user_id})
+        if not session:
+            return
+        for guest in session.get("participants", []):
+            if guest != user_id:
+                await self.send_to_user(guest, {"type": "session:left", "host_id": user_id})
+        await listen_together_manager.collection.delete_one({"session_id": session["session_id"]})
 
     async def _expire_stale_loop(self):
         """
@@ -622,10 +717,14 @@ async def spotify_callback(request: Request, code: str = Query(...), state: Opti
 
             profile = profile_response.json()
 
+            images = profile.get("images") or []
+            profile_image = images[0]["url"] if images else ""
+
             user_data = {
                 "spotify_id": profile["id"],
                 "display_name": profile.get("display_name"),
                 "email": profile.get("email"),
+                "profile_image": profile_image,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_expires_at": now_ts() + expires_in,
@@ -639,9 +738,6 @@ async def spotify_callback(request: Request, code: str = Query(...), state: Opti
             )
 
             from urllib.parse import urlencode as ue
-
-            images = profile.get("images") or []
-            profile_image = images[0]["url"] if images else ""
 
             auth_params = {
                 "access_token": access_token,
@@ -876,118 +972,6 @@ async def get_queue(access_token: str = Query(...)):
             return response.json()
     except Exception as e:
         return {"queue": []}
-
-@api_router.put("/spotify/play")
-async def play_track(authorization: str = Header(...), uri: Optional[str] = None, position_ms: Optional[int] = 0):
-    try:
-        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        logger.info(f"🎵 Play request - URI: {uri}, position_ms: {position_ms}")
-        async with httpx.AsyncClient() as http_client:
-            devices_response = await http_client.get(
-                "https://api.spotify.com/v1/me/player/devices",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            devices_data = devices_response.json() if devices_response.status_code == 200 else {"devices": []}
-            active_devices = devices_data.get("devices", [])
-            logger.info(f"🔊 Available devices: {len(active_devices)}")
-
-            if not active_devices:
-                logger.warning("No active Spotify devices found")
-                return {"success": False, "error": "No active Spotify device found. Please open Spotify on your phone or computer."}
-
-            device_id = None
-            for device in active_devices:
-                if device.get("is_active"):
-                    device_id = device.get("id")
-                    break
-            if not device_id and active_devices:
-                device_id = active_devices[0].get("id")
-
-            body = {}
-            if uri:
-                body["uris"] = [uri]
-            if position_ms:
-                body["position_ms"] = position_ms
-
-            play_url = "https://api.spotify.com/v1/me/player/play"
-            if device_id:
-                play_url += f"?device_id={device_id}"
-
-            logger.info(f"🎵 Sending play request to {play_url} with body: {body}")
-
-            response = await http_client.put(
-                play_url,
-                headers={"Authorization": f"Bearer {access_token}"},
-                json=body if body else None
-            )
-
-            logger.info(f"🎵 Play response: {response.status_code}")
-
-            if response.status_code in [204, 200, 202]:
-                return {"success": True, "device_id": device_id}
-            elif response.status_code == 404:
-                return {"success": False, "error": "No active device found. Please open Spotify."}
-            elif response.status_code == 403:
-                return {"success": False, "error": "Premium required for playback control."}
-            else:
-                error_text = response.text
-                logger.error(f"Play failed: {response.status_code} - {error_text}")
-                return {"success": False, "error": f"Playback failed: {error_text}"}
-    except Exception as e:
-        logger.error(f"Play error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.put("/spotify/pause")
-async def pause_playback(authorization: str = Header(...)):
-    try:
-        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.put(
-                "https://api.spotify.com/v1/me/player/pause",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            return {"success": response.status_code in [204, 200]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/spotify/next")
-async def next_track(authorization: str = Header(...)):
-    try:
-        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.post(
-                "https://api.spotify.com/v1/me/player/next",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            return {"success": response.status_code in [204, 200]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.post("/spotify/previous")
-async def previous_track(authorization: str = Header(...)):
-    try:
-        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.post(
-                "https://api.spotify.com/v1/me/player/previous",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            return {"success": response.status_code in [204, 200]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.put("/spotify/seek")
-async def seek_to_position(authorization: str = Header(...), position_ms: int = Query(...)):
-    try:
-        access_token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-        async with httpx.AsyncClient() as http_client:
-            response = await http_client.put(
-                f"https://api.spotify.com/v1/me/player/seek?position_ms={position_ms}",
-                headers={"Authorization": f"Bearer {access_token}"}
-            )
-            return {"success": response.status_code in [204, 200]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/spotify/playlist/{playlist_id}/tracks")
 async def get_playlist_tracks(playlist_id: str, access_token: str = Query(...)):
@@ -1359,12 +1343,151 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                             "track_info": session["track_info"]
                         })
 
+            else:
+                await handle_app_ws_message(websocket, user_id, msg_type, message)
+
     except WebSocketDisconnect:
         logger.info(f"[{INSTANCE_ID}] 🔌 WebSocket disconnect detected for {user_id}")
         await manager.disconnect(user_id)
     except Exception as e:
         logger.error(f"[{INSTANCE_ID}] ❌ WebSocket error for user {user_id}: {e}")
         await manager.disconnect(user_id)
+
+
+# ---------------------------------------------------------------------------
+# App WebSocket protocol (what frontend/app/map.tsx actually speaks):
+#   session:join / session:leave / session:stop / session:sync /
+#   session:queue_add / user:active_track / reaction:send /
+#   user:set_visibility / ping
+# Everything goes through Mongo + the EventBus so it works across pods.
+# ---------------------------------------------------------------------------
+
+def _track_from_location(loc: Optional[Dict]) -> Optional[Dict]:
+    loc = loc or {}
+    if not loc.get("current_song"):
+        return None
+    return {"item": {
+        "name": loc.get("current_song"),
+        "artists": [{"name": loc.get("artist")}] if loc.get("artist") else [],
+        "album": {"images": [{"url": loc.get("album_cover")}] if loc.get("album_cover") else []},
+        "uri": loc.get("track_uri"),
+    }}
+
+
+async def _live_location(user_id: str) -> Dict:
+    doc = await manager.live_users.find_one({"user_id": user_id}) or {}
+    return doc.get("location") or {}
+
+
+async def _ws_send(websocket: WebSocket, payload: Dict):
+    try:
+        await websocket.send_text(json.dumps(payload))
+    except Exception as e:
+        logger.error(f"[{INSTANCE_ID}] ws send failed: {e}")
+
+
+async def handle_app_ws_message(websocket: WebSocket, user_id: str, msg_type: str, message: Dict):
+    if msg_type == "ping":
+        await manager.touch(user_id)
+        await _ws_send(websocket, {"type": "pong", "ts": now_ts()})
+
+    elif msg_type == "user:active_track":
+        track = message.get("track")
+        is_playing = bool(message.get("is_playing", False))
+        await manager.update_song(user_id, track, is_playing)
+        session = await listen_together_manager.collection.find_one({"host_id": user_id})
+        if session and track:
+            item = track.get("item") or track
+            await listen_together_manager.update_playback(
+                session["session_id"], item.get("uri"), item, message.get("position_ms", 0) or 0, is_playing)
+            for guest in session.get("participants", []):
+                if guest != user_id:
+                    await manager.send_to_user(guest, {
+                        "type": "session:update", "host_id": user_id, "track": track,
+                        "is_playing": is_playing, "position_ms": message.get("position_ms", 0),
+                        "timestamp": now_ts(),
+                    })
+
+    elif msg_type == "session:join":
+        host_id = message.get("host_id")
+        if not host_id or host_id == user_id:
+            return
+        # Leave whatever we were in first (and tell that host).
+        prev = await listen_together_manager.get_user_session(user_id)
+        if prev and prev["host_id"] != user_id and prev["host_id"] != host_id:
+            await listen_together_manager.leave_session(user_id)
+            await manager.send_to_user(prev["host_id"], {"type": "session:guest_left", "guest_id": user_id})
+        host_loc = await _live_location(host_id)
+        host_track = _track_from_location(host_loc)
+        session = await listen_together_manager.collection.find_one({"host_id": host_id})
+        if not session:
+            sid = await listen_together_manager.create_session(
+                host_id, host_loc.get("track_uri"), (host_track or {}).get("item") or {})
+            session = await listen_together_manager.get_session(sid)
+        await listen_together_manager.join_session(user_id, session["session_id"])
+        await _ws_send(websocket, {
+            "type": "session:joined", "host_id": host_id,
+            "track": host_track, "is_playing": bool(host_loc.get("is_playing")),
+        })
+        me_loc = await _live_location(user_id)
+        await manager.send_to_user(host_id, {
+            "type": "session:guest_joined", "guest_id": user_id,
+            "display_name": me_loc.get("user_name") or user_id,
+        })
+
+    elif msg_type == "session:leave":
+        session = await listen_together_manager.get_user_session(user_id)
+        if session and session["host_id"] != user_id:
+            await listen_together_manager.leave_session(user_id)
+            await manager.send_to_user(session["host_id"], {"type": "session:guest_left", "guest_id": user_id})
+        await _ws_send(websocket, {"type": "session:left"})
+
+    elif msg_type == "session:stop":
+        await manager.end_hosted_session(user_id)
+
+    elif msg_type == "session:sync":
+        session = await listen_together_manager.collection.find_one({"host_id": user_id})
+        if not session:
+            return
+        track = message.get("track") or {}
+        item = track.get("item") or track
+        await listen_together_manager.update_playback(
+            session["session_id"], item.get("uri"), item,
+            message.get("position_ms", 0) or 0, bool(message.get("is_playing", True)))
+        for guest in session.get("participants", []):
+            if guest != user_id:
+                await manager.send_to_user(guest, {
+                    "type": "session:sync", "host_id": user_id, "track": message.get("track"),
+                    "is_playing": message.get("is_playing"), "position_ms": message.get("position_ms"),
+                    "timestamp": now_ts(),
+                })
+
+    elif msg_type == "session:queue_add":
+        session = await listen_together_manager.get_user_session(user_id)
+        track_uri = message.get("track_uri")
+        if session and track_uri and session["host_id"] != user_id:
+            me_loc = await _live_location(user_id)
+            await manager.send_to_user(session["host_id"], {
+                "type": "session:queue_add", "track_uri": track_uri,
+                "track_name": message.get("track_name") or "",
+                "from_user_id": user_id,
+                "from_display_name": me_loc.get("user_name") or "Guest",
+                "from_profile_image": me_loc.get("profile_image"),
+            })
+
+    elif msg_type == "reaction:send":
+        target = message.get("target_user_id")
+        emoji = message.get("emoji")
+        if target and emoji:
+            me_loc = await _live_location(user_id)
+            await manager.send_to_user(target, {
+                "type": "reaction:incoming", "emoji": emoji, "from_user_id": user_id,
+                "from_display_name": me_loc.get("user_name") or "Someone",
+                "from_profile_image": me_loc.get("profile_image"),
+            })
+
+    elif msg_type == "user:set_visibility":
+        await manager.set_visibility(user_id, bool(message.get("visible", True)))
 
 
 # ---------------------------------------------------------------------------
@@ -2335,6 +2458,12 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   .pill.paused .dot {{ background: rgba(255,255,255,0.4); box-shadow: none; }}
   .self .avatar-wrap {{ background: linear-gradient(135deg, #00E5FF, #B026FF); box-shadow: 0 6px 24px rgba(0,229,255,0.55); }}
   .host .avatar-wrap {{ background: linear-gradient(135deg, #FF1493, #B026FF); box-shadow: 0 6px 24px rgba(255,20,147,0.6); }}
+  /* Offline friend: dimmed grey bubble showing their last-known spot */
+  .offline .bubble-inner {{ opacity: 0.78; }}
+  .offline .avatar-wrap {{ background: linear-gradient(135deg, #7a7a8c, #3a3a4a); box-shadow: 0 4px 14px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06); }}
+  .offline .avatar-wrap img {{ filter: grayscale(1) brightness(0.85); }}
+  .offline .pill {{ background: rgba(18,18,26,0.88); border-color: rgba(255,255,255,0.16); color: rgba(255,255,255,0.7); }}
+  .offline .pill .dot {{ background: rgba(255,255,255,0.35); box-shadow: none; }}
 
   /* ===== Profile Cluster (Life360-style for both 2 AND 3+ users) =====
      A unified white rounded pill that holds 2 (side-by-side, touching)
@@ -2441,7 +2570,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   }}
   function makeBubbleEl(u){{
     const el = document.createElement('div');
-    el.className = 'bubble' + (u.isSelf ? ' self' : '') + (u.host_session ? ' host' : '');
+    el.className = 'bubble' + (u.isSelf ? ' self' : '') + (u.host_session ? ' host' : '') + (u.offline ? ' offline' : '');
     const img = u.profile_image || ('https://placehold.co/100x100/1a0a24/B026FF?text=' + encodeURIComponent((u.display_name||'?').slice(0,1)));
     // current_track may arrive in two shapes:
     //  1) From local Spotify poll (self):  {{ item: {{ name, artists }} }}
@@ -2450,9 +2579,14 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     const trackObj = ct.item || ct;
     const trackName = trackObj && trackObj.name ? String(trackObj.name) : '';
     const artistName = trackObj && Array.isArray(trackObj.artists) && trackObj.artists.length ? String(trackObj.artists[0].name || '') : '';
-    const trackLabel = artistName ? (trackName + ' — ' + artistName) : trackName;
+    let trackLabel = artistName ? (trackName + ' — ' + artistName) : trackName;
+    if (u.offline) {{
+      // Offline friend: "5 min ago · Song Name"
+      const ago = u.last_seen_label ? String(u.last_seen_label) : 'offline';
+      trackLabel = trackName ? (ago + ' · ' + trackName) : ago;
+    }}
     const safeLabel = trackLabel.replace(/[<>&]/g, '');
-    const isPaused = !!safeLabel && u.is_playing === false;
+    const isPaused = !!safeLabel && u.is_playing === false && !u.offline;
     el.innerHTML = '<div class="bubble-inner">' +
                    '<div class="avatar-wrap"><img src="'+img+'" onerror="this.src=\\'https://placehold.co/100x100/1a0a24/B026FF?text=?\\'" /></div>' +
                    (safeLabel ? '<div class="pill'+(isPaused?' paused':'')+'"><span class="dot"></span><span>'+safeLabel+'</span></div>' : '') +
@@ -2533,6 +2667,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
     return [
       u.user_id, u.display_name || '', u.profile_image || '',
       String(u.is_playing), u.host_session ? 'h' : '',
+      u.offline ? ('off:' + (u.last_seen_label || '')) : '',
       trackName,
     ].join('|');
   }}
@@ -2560,8 +2695,11 @@ async def mapbox_html(token: str, style: str = "geobeats"):
       return sa - sb;
     }});
     for (const u of valid) {{
+      // Offline friends (last-known spot) never merge into shared bubbles.
+      if (u.offline) {{ groups.push({{ lng: u.lng, lat: u.lat, users: [u], offline: true }}); continue; }}
       let placed = false;
       for (const g of groups) {{
+        if (g.offline) continue;
         const distM = metersBetween(g.lat, g.lng, u.lat, u.lng);
         // HYSTERESIS: if this user was clustered with ANY existing member
         // of g.users in the recent past (sticky TTL), use the larger
@@ -2611,7 +2749,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
         const u = g.users[0];
         // Self user (when alone) keeps the cyan/purple solo-bubble look;
         // other users get the standard purple bubble. Both are solo.
-        const prefix = (u.isSelf || u.user_id === meIdRef.id) ? 'self:' : 'solo:';
+        const prefix = u.offline ? 'off:' : (u.isSelf || u.user_id === meIdRef.id) ? 'self:' : 'solo:';
         desired[prefix + u.user_id] = {{
           kind: 'solo', user: u, lng: u.lng, lat: u.lat,
           offset: [0, 0], sig: userSig(u),
@@ -2734,7 +2872,7 @@ async def mapbox_html(token: str, style: str = "geobeats"):
   }}
   function updateHeatmap(list){{
     const features = (list || [])
-      .filter(u => u && typeof u.lat === 'number' && typeof u.lng === 'number')
+      .filter(u => u && !u.offline && typeof u.lat === 'number' && typeof u.lng === 'number')
       .map(u => ({{
         type: 'Feature',
         geometry: {{ type: 'Point', coordinates: [u.lng, u.lat] }},
@@ -3438,6 +3576,10 @@ async def support_page():
 # App setup
 # ---------------------------------------------------------------------------
 
+api_router.include_router(spotify_player.router)
+api_router.include_router(friends_module.router)
+api_router.include_router(recognize_module.router)
+friends_module.configure(manager)
 app.include_router(api_router)
 
 app.add_middleware(

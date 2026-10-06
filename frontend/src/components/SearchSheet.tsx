@@ -14,7 +14,8 @@ import {
   Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { addToQueue, playNow, searchTracks, setRepeat, StoredAuth } from "../api";
+import { addToQueue, playNow, searchTracks, setRepeat, StoredAuth, Friend, FriendsData } from "../api";
+import PeopleSearch from "./PeopleSearch";
 
 type Track = {
   uri: string;
@@ -24,6 +25,8 @@ type Track = {
   album: { images: { url: string }[]; name?: string };
   duration_ms: number;
 };
+
+type Tab = "songs" | "people";
 
 type Props = {
   visible: boolean;
@@ -37,9 +40,21 @@ type Props = {
   onQueued?: (trackUri: string) => void;
   // Called immediately after a "play now" succeeds so parent can sync the player UI
   onPlayedNow?: (track: Track) => void;
+  // People tab
+  friends: FriendsData;
+  onFriendsChanged: () => void;
+  onFlyToFriend: (friend: Friend) => void;
+  /** Open directly on a tab (e.g. "people" when tapping a request alert). */
+  initialTab?: Tab;
 };
 
-export default function SearchSheet({ visible, auth, isInSession, hostName, onClose, onForwardToHost, onQueued, onPlayedNow }: Props) {
+const EMPTY_FRIENDS: FriendsData = { friends: [], incoming: [], outgoing: [] };
+
+export default function SearchSheet({
+  visible, auth, isInSession, hostName, onClose, onForwardToHost, onQueued, onPlayedNow,
+  friends = EMPTY_FRIENDS, onFriendsChanged, onFlyToFriend, initialTab = "songs",
+}: Props) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,6 +72,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
       useNativeDriver: true,
     }).start();
     if (visible) {
+      setTab(initialTab);
       // Auto-focus the input shortly after opening
       setTimeout(() => inputRef.current?.focus(), 320);
     } else {
@@ -75,7 +91,7 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
   // quickly and an older longer-query response arrives last).
   const reqIdRef = useRef(0);
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || tab !== "songs") return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const trimmed = query.trim();
     if (!trimmed) {
@@ -105,7 +121,15 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
       }
     }, 150);
     return () => clearTimeout(debounceRef.current);
-  }, [query, auth, visible]);
+  }, [query, auth, visible, tab]);
+
+  const switchTab = (t: Tab) => {
+    if (t === tab) return;
+    setTab(t);
+    setQuery("");
+    setResults([]);
+    setError(null);
+  };
 
   const handleQueue = async (track: Track) => {
     if (!auth) return;
@@ -175,22 +199,60 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
               </TouchableOpacity>
             </View>
           </View>
+          <View style={styles.tabs}>
+            <TouchableOpacity
+              style={[styles.tab, tab === "songs" && styles.tabActive]}
+              onPress={() => switchTab("songs")}
+              testID="search-tab-songs"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="musical-notes" size={14} color={tab === "songs" ? "#05050A" : "rgba(255,255,255,0.6)"} />
+              <Text style={[styles.tabText, tab === "songs" && styles.tabTextActive]}>SONGS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, tab === "people" && styles.tabActive]}
+              onPress={() => switchTab("people")}
+              testID="search-tab-people"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="people" size={14} color={tab === "people" ? "#05050A" : "rgba(255,255,255,0.6)"} />
+              <Text style={[styles.tabText, tab === "people" && styles.tabTextActive]}>PEOPLE</Text>
+              {friends.incoming.length > 0 ? (
+                <View style={[styles.tabBadge, tab === "people" && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, tab === "people" && styles.tabBadgeTextActive]}>
+                    {friends.incoming.length}
+                  </Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          </View>
           <View style={styles.searchRow}>
-            <Ionicons name="search" size={16} color="rgba(255,255,255,0.55)" />
+            <Ionicons name={tab === "songs" ? "search" : "at"} size={16} color="rgba(255,255,255,0.55)" />
             <TextInput
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
-              placeholder="Songs, artists, albums…"
+              placeholder={tab === "songs" ? "Songs, artists, albums…" : "Spotify username or profile link"}
               placeholderTextColor="rgba(255,255,255,0.4)"
               style={styles.input}
               autoCorrect={false}
               autoCapitalize="none"
               returnKeyType="search"
               clearButtonMode="while-editing"
+              testID="search-input"
             />
             {loading && <ActivityIndicator size="small" color="#B026FF" />}
           </View>
+          {tab === "people" ? (
+            <PeopleSearch
+              auth={auth}
+              query={query}
+              friends={friends}
+              onFriendsChanged={onFriendsChanged}
+              onFlyToFriend={onFlyToFriend}
+            />
+          ) : (
+          <>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <FlatList
             data={results}
@@ -201,7 +263,11 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
               !loading && query.trim().length > 0 ? (
                 <Text style={styles.emptyHint}>No results.</Text>
               ) : !query.trim() ? (
-                <Text style={styles.emptyHint}>Type to search Spotify…</Text>
+                <View style={styles.hintWrap}>
+                  <Ionicons name="musical-notes-outline" size={28} color="rgba(176,38,255,0.7)" />
+                  <Text style={styles.hintTitle}>Search for any Spotify song</Text>
+                  <Text style={styles.hintSub}>Tap a result to play it now, or hit + to add it to your queue.</Text>
+                </View>
               ) : null
             }
             renderItem={({ item }) => {
@@ -265,6 +331,8 @@ export default function SearchSheet({ visible, auth, isInSession, hostName, onCl
               );
             }}
           />
+          </>
+          )}
         </KeyboardAvoidingView>
       </Animated.View>
     </Animated.View>
@@ -336,6 +404,36 @@ const styles = StyleSheet.create({
   },
   hostBadgeText: { color: "#B026FF", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
   closeBtn: { padding: 4 },
+  tabs: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+    marginBottom: 10,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  tabActive: { backgroundColor: "#B026FF" },
+  tabText: { color: "rgba(255,255,255,0.6)", fontSize: 11, fontWeight: "900", letterSpacing: 0.8 },
+  tabTextActive: { color: "#05050A" },
+  tabBadge: {
+    minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
+    backgroundColor: "#B026FF", alignItems: "center", justifyContent: "center",
+  },
+  tabBadgeActive: { backgroundColor: "#05050A" },
+  tabBadgeText: { color: "#fff", fontSize: 9, fontWeight: "900" },
+  tabBadgeTextActive: { color: "#B026FF" },
+  hintWrap: { alignItems: "center", gap: 6, paddingVertical: 22, paddingHorizontal: 12 },
+  hintTitle: { color: "#fff", fontSize: 15, fontWeight: "800", textAlign: "center" },
+  hintSub: { color: "rgba(255,255,255,0.45)", fontSize: 12, textAlign: "center", lineHeight: 17 },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",

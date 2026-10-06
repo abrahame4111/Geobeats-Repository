@@ -12,6 +12,10 @@ export type MapMarker = {
   is_playing?: boolean;
   host_session?: boolean;
   isSelf?: boolean;
+  /** Offline friend: rendered as a dimmed grey bubble at their last-known spot. */
+  offline?: boolean;
+  /** e.g. "5 min ago" — shown in the pill for offline friends. */
+  last_seen_label?: string;
 };
 
 export type SoundMapHandle = {

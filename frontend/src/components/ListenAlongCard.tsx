@@ -9,6 +9,10 @@ export type UserCardData = {
   current_track?: any;
   is_playing?: boolean;
   host_session?: boolean;
+  /** Offline friend — show last-seen instead of live playback state. */
+  offline?: boolean;
+  last_seen_label?: string;
+  last_song_label?: string;
 };
 
 type Props = {
@@ -95,7 +99,8 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
   }, [incoming, displayed]);
 
   const t = displayed;
-  const isPlaying = !!user.is_playing && !!t;
+  const offline = !!user.offline;
+  const isPlaying = !!user.is_playing && !!t && !offline;
   const isRadar = !!t?.isRadar;
   // Show the track row whenever we have a track — even when PAUSED — so the
   // card reflects both states. It only disappears once the now-playing is
@@ -104,13 +109,16 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
   // Radar broadcasts have no synced playback — suppress the Listen Along CTA.
   const showButton = isPlaying && !isActiveSession && !isSelf && !isRadar;
   const showReactions = isPlaying && !isSelf && !!onReact;
+  const statusLabel = offline
+    ? `LAST SEEN ${(user.last_seen_label || "OFFLINE").toUpperCase()}`
+    : isPlaying ? (isActiveSession ? "LISTENING ALONG" : isRadar ? "RADAR" : "NOW PLAYING") : "PAUSED";
 
   return (
     <View style={styles.card} testID="listen-along-card">
       <View style={styles.header}>
         <Image
           source={{ uri: user.profile_image || "https://placehold.co/100x100/121218/B026FF?text=M" }}
-          style={styles.avatar}
+          style={[styles.avatar, offline && { opacity: 0.6 }]}
         />
         <View style={{ flex: 1 }}>
           <Text style={styles.name} numberOfLines={1}>
@@ -118,8 +126,8 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
           </Text>
           <View style={styles.liveRow}>
             <View style={[styles.dot, !isPlaying && styles.dotMuted]} />
-            <Text style={styles.liveLabel}>
-              {isPlaying ? (isActiveSession ? "LISTENING ALONG" : isRadar ? "RADAR" : "NOW PLAYING") : "PAUSED"}
+            <Text style={styles.liveLabel} testID="card-status-label">
+              {statusLabel}
             </Text>
           </View>
         </View>
@@ -146,6 +154,11 @@ export default function ListenAlongCard({ user, onClose, onListenAlong, onReact,
             {t!.artists ? (
               <Text style={styles.trackArtist} numberOfLines={1}>
                 {t!.artists}
+              </Text>
+            ) : null}
+            {offline && user.last_song_label ? (
+              <Text style={styles.trackArtist} numberOfLines={1}>
+                Listened {user.last_song_label}
               </Text>
             ) : null}
           </View>
