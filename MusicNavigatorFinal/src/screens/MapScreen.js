@@ -1376,7 +1376,7 @@ const MapScreen = ({ navigation }) => {
       {/* Map */}
       <MapView
         ref={mapRef}
-        provider={PROVIDER_GOOGLE}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         customMapStyle={MAP_STYLES[mapTheme]}
         style={styles.map}
         initialRegion={region}
