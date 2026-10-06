@@ -18,6 +18,7 @@
       "bundleIdentifier": "live.geobeats.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Identify songs playing around you",
+        "NSLocationWhenInUseUsageDescription": "GeoBeats uses your location to place you on the live map and share it with friends when sharing is enabled.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -64,6 +65,13 @@
         }
       ],
       "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "GeoBeats uses your location to place you on the live map and share it with friends when sharing is enabled."
+        }
+      ],
+      "./plugins/with-ios-xcode27",
       [
         "expo-font",
         {
