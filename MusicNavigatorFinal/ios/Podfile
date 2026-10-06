@@ -23,7 +23,22 @@ if File.exist?(boost_podspec)
   end
 end
 
-platform :ios, min_ios_version_supported
+# React Native 0.72's bundled Yoga uses a C++ literal-operator spelling that
+# Xcode 27 promotes to an error. The no-space spelling is equivalent C++ and
+# accepted by both the old and current compiler.
+yoga_value_header = File.join(
+  __dir__, '..', 'node_modules', 'react-native', 'ReactCommon', 'yoga', 'yoga', 'YGValue.h'
+)
+
+if File.exist?(yoga_value_header)
+  contents = File.read(yoga_value_header)
+  patched_contents = contents.gsub('operator"" _pt', 'operator""_pt')
+                            .gsub('operator"" _percent', 'operator""_percent')
+  File.write(yoga_value_header, patched_contents) if patched_contents != contents
+end
+
+# Xcode 27 no longer supports simulator targets below iOS 15.
+platform :ios, '15.0'
 prepare_react_native_project!
 
 # If you are using a `react-native-flipper` your iOS build will fail when `NO_FLIPPER=1` is set.
@@ -35,7 +50,9 @@ prepare_react_native_project!
 #   dependencies: {
 #     ...(process.env.NO_FLIPPER ? { 'react-native-flipper': { platforms: { ios: null } } } : {}),
 # ```
-flipper_config = ENV['NO_FLIPPER'] == "1" ? FlipperConfiguration.disabled : FlipperConfiguration.enabled
+# Flipper is an optional React Native debugging tool. Its legacy 0.182 build
+# does not compile on Xcode 27 and is not required to run the application.
+flipper_config = FlipperConfiguration.disabled
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
@@ -76,5 +93,13 @@ target 'MusicNavigatorFinal' do
       :mac_catalyst_enabled => false
     )
     __apply_Xcode_12_5_M1_post_install_workaround(installer)
+
+    # Some React Native 0.72 Pods retain their legacy (iOS 11/12) target even
+    # when the application target is newer. Xcode 27 rejects those targets.
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      end
+    end
   end
 end

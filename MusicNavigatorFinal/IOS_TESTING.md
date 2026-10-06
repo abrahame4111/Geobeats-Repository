@@ -2,6 +2,8 @@
 
 This project is a bare React Native app. It does not run in Expo Go. Run it from Xcode or with the React Native CLI instead.
 
+The iOS build targets iOS 15 or later because current Xcode releases no longer support the older iOS targets used by the original React Native 0.72 template.
+
 ## One-time setup
 
 1. Install the full version of Xcode from the Mac App Store, open it once, and accept its licence. CocoaPods cannot build iPhone dependencies with Command Line Tools alone. Make full Xcode the active developer directory:
