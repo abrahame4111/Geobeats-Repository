@@ -24,7 +24,7 @@ export const CONFIG = {
   
   // Spotify API Configuration (these should match your backend)
   SPOTIFY: {
-    CLIENT_ID: 'YOUR_SPOTIFY_CLIENT_ID', // Replace with your Spotify Client ID
+    CLIENT_ID: 'YOUR_SPOTIFY_CLIENT_ID',
     REDIRECT_URI: 'https://location-share-beta.preview.emergentagent.com/api/auth/callback',
     SCOPES: 'user-read-private user-read-email user-read-currently-playing user-read-playback-state playlist-read-private'
   },

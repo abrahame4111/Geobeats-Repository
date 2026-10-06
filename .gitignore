@@ -45,6 +45,10 @@ dump.rdb
 # System files
 .DS_Store
 *.pem
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
 
 # Python
 __pycache__/
@@ -81,15 +85,21 @@ android-sdk/ -e
 # Environment and credential files
 .env
 .env.*
+!.env.example
 *.env
 credentials.json
 *.pem
 *.key
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
 .credentials
 -e 
 # Environment and credential files
 .env
 .env.*
+!.env.example
 *.env
 credentials.json
 *.pem

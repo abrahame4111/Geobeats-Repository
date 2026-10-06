@@ -120,12 +120,12 @@ MusicNavigatorFinal/
 ## 🔑 Configuration
 
 ### Google Maps
-- API Key: `YOUR_GOOGLE_MAPS_API_KEY`
+- API key: configure `GOOGLE_MAPS_API_KEY` locally; never commit it.
 - Provider: GOOGLE
 - Configured in AndroidManifest.xml
 
 ### Spotify
-- Client ID: `YOUR_SPOTIFY_CLIENT_ID`
+- Client ID: configure `SPOTIFY_CLIENT_ID` locally; never commit it.
 - Redirect URI: Backend callback
 - Scopes: user-read-private, user-read-currently-playing, playlist-read-private
 
