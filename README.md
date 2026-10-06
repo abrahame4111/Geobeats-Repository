@@ -9,8 +9,7 @@ Everything runs locally. There is no cloud dependency for development.
 ```
 backend/    FastAPI + MongoDB API and WebSocket server
 frontend/   React web app
-docs/       Product requirements (product/), guides (guides/), old build notes (archive/)
-archive/    Earlier React Native attempts, kept only as reference for the new mobile app
+docs/       Product requirements (product/) and guides (guides/)
 ```
 
 A new mobile app (React Native, development builds, iOS + Android, background location) will live in `mobile/`. It will not use Expo Go.
