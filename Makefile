@@ -34,4 +34,4 @@ web:
 	cd frontend && yarn start
 
 test:
-	cd backend && ../$(PY) -m pytest tests -q --ignore=tests/legacy
+	cd backend && ../$(PY) -m pytest tests -q
