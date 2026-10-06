@@ -1,0 +1,110 @@
+apply plugin: "com.android.application"
+
+import com.android.build.OutputFile
+
+def enableSeparateBuildPerCPUArchitecture = false
+def enableProguardInReleaseBuilds = false
+def jscFlavor = 'org.webkit:android-jsc:+'
+def enableHermes = true
+
+android {
+    ndkVersion rootProject.ext.ndkVersion
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    namespace "com.musicnavigatorfinal"
+    defaultConfig {
+        applicationId "com.musicnavigatorfinal"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: project.findProperty("GOOGLE_MAPS_API_KEY") ?: ""]
+    }
+    
+    // Disable strict version checking
+    dependenciesInfo {
+        includeInApk false
+        includeInBundle false
+    }
+    
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+    }
+
+    splits {
+        abi {
+            reset()
+            enable enableSeparateBuildPerCPUArchitecture
+            universalApk false
+            include "armeabi-v7a", "x86", "arm64-v8a", "x86_64"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled enableProguardInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def versionCodes = ["armeabi-v7a": 1, "x86": 2, "arm64-v8a": 3, "x86_64": 4]
+            def abi = output.getFilter(OutputFile.ABI)
+            if (abi != null) {
+                output.versionCodeOverride =
+                        defaultConfig.versionCode * 1000 + versionCodes.get(abi)
+            }
+        }
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        // Force specific compatible versions
+        force 'androidx.core:core:1.9.0'
+        force 'androidx.core:core-ktx:1.9.0'
+        force 'androidx.appcompat:appcompat:1.5.1'
+        force 'androidx.appcompat:appcompat-resources:1.5.1'
+        force 'androidx.webkit:webkit:1.5.0'
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: "libs", include: ["*.jar"])
+    
+    // React Native from node_modules
+    implementation "com.facebook.react:react-android:0.72.6"
+    
+    implementation "androidx.swiperefreshlayout:swiperefreshlayout:1.0.0"
+    
+    // Google Play Services for Maps and Location (all same version)
+    implementation "com.google.android.gms:play-services-base:18.2.0"
+    implementation "com.google.android.gms:play-services-maps:18.2.0"
+    implementation "com.google.android.gms:play-services-location:21.0.1"
+    
+    debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}") {
+        exclude group:'com.facebook.fbjni'
+    }
+    debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {
+        exclude group:'com.facebook.fbjni'
+    }
+    debugImplementation("com.facebook.flipper:flipper-fresco-plugin:${FLIPPER_VERSION}") {
+        exclude group:'com.facebook.fbjni'
+    }
+
+    if (enableHermes) {
+        implementation("com.facebook.react:hermes-android:0.72.6")
+    } else {
+        implementation jscFlavor
+    }
+}
+
+apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+applyNativeModulesAppBuildGradle(project)
