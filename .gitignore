@@ -77,21 +77,21 @@ agenthub/agents/youtube/db
 .cache/
 
 # Mobile development
-android-sdk/ -e 
+android-sdk/
 # Environment and credential files
 .env
 .env.*
 *.env
+!.env.example
 credentials.json
-*.pem
 *.key
 .credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
+
+# Python / tests
+__pycache__/
+*.pyc
+.pytest_cache/
+test_reports/
+
+# Local data
+.data/

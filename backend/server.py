@@ -25,7 +25,11 @@ db = client[os.environ['DB_NAME']]
 # Spotify Configuration (Placeholders)
 SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', 'YOUR_SPOTIFY_CLIENT_ID_HERE')
 SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', 'YOUR_SPOTIFY_CLIENT_SECRET_HERE')
-SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'https://location-share-beta.preview.emergentagent.com/auth/callback')
+SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', 'http://127.0.0.1:8001/api/auth/callback')
+
+# Where the browser is sent after OAuth. Empty = same origin as the backend
+# (production behind one proxy). Locally the web app runs on its own port.
+FRONTEND_URL = os.environ.get('FRONTEND_URL', '').rstrip('/')
 
 # Google Maps Configuration (Placeholder)
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', 'YOUR_GOOGLE_MAPS_API_KEY_HERE')
@@ -313,8 +317,9 @@ async def spotify_callback(code: str = Query(...)):
             }
             
             # Redirect with hash params so mobile WebView can intercept
-            redirect_url = f"/#callback?{urlencode(auth_params)}"
-            logger.info(f"Redirecting to: {redirect_url}")
+            redirect_url = f"{FRONTEND_URL}/#callback?{urlencode(auth_params)}"
+            # Never log redirect_url: it contains the access and refresh tokens.
+            logger.info(f"OAuth complete for user {profile['id']}, redirecting to frontend")
             return RedirectResponse(url=redirect_url)
     except Exception as e:
         logger.error(f"OAuth callback error: {e}")

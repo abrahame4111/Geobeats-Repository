@@ -16,7 +16,7 @@ from datetime import datetime
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
     # Fallback for testing
-    BASE_URL = "https://location-share-beta.preview.emergentagent.com"
+    BASE_URL = "http://127.0.0.1:8001"
 
 WS_URL = BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://')
 
