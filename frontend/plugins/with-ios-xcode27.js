@@ -71,6 +71,7 @@ module.exports = function withIosXcode27(config) {
     let window = UIWindow(windowScene: windowScene)
     self.window = window
     reactNativeFactory.startReactNative(withModuleName: "main", in: window, launchOptions: nil)
+    window.makeKeyAndVisible()
 #endif
   }
 
