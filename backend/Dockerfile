@@ -20,4 +20,4 @@ RUN useradd --create-home --uid 10001 geobeats
 USER geobeats
 
 EXPOSE 8001
-CMD ["sh", "-c", "exec uvicorn server:app --host 0.0.0.0 --port \"${PORT:-8001}\" --proxy-headers"]
+CMD ["sh", "-c", "exec uvicorn server:app --host 0.0.0.0 --port \"${PORT:-8001}\" --proxy-headers --no-access-log"]
