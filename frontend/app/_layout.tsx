@@ -29,10 +29,25 @@ export default function RootLayout() {
     let cancelled = false;
     (async () => {
       try {
-        await Font.loadAsync({
-          ionicons: { uri: `${BACKEND}/api/assets/fonts/Ionicons.ttf` },
-          SpaceMono: { uri: `${BACKEND}/api/assets/fonts/SpaceMono-Regular.ttf` },
-        });
+        // Prefer bundled fonts for native builds so the app can render before
+        // the local API server is started. The remote fallback is retained for
+        // the Expo Go tunnel case where bundled font assets can be empty.
+        try {
+          await Font.loadAsync({
+            ionicons: require("../assets/fonts/Ionicons.ttf"),
+            SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+          });
+        } catch {
+          await Promise.race([
+            Font.loadAsync({
+              ionicons: { uri: `${BACKEND}/api/assets/fonts/Ionicons.ttf` },
+              SpaceMono: { uri: `${BACKEND}/api/assets/fonts/SpaceMono-Regular.ttf` },
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Font server unavailable")), 5000),
+            ),
+          ]);
+        }
         if (!cancelled) setFontsLoaded(true);
       } catch (e: any) {
         if (!cancelled) setFontsError(e);

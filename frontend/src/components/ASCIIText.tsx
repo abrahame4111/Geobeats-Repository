@@ -3,6 +3,7 @@ import {
   Platform,
   StyleSheet,
   View,
+  Text,
   ViewStyle,
   LayoutChangeEvent,
 } from "react-native";
@@ -41,6 +42,7 @@ export default function ASCIIText({
   style,
 }: Props) {
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
+  const [failed, setFailed] = useState(false);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -95,6 +97,14 @@ export default function ASCIIText({
     })();
   `;
 
+  if (failed) {
+    return (
+      <View style={[styles.wrap, styles.fallback, style]} pointerEvents="none">
+        <Text style={[styles.fallbackText, { color: textColor }]}>{text}</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.wrap, style]} pointerEvents="none" onLayout={onLayout}>
       {size.w > 0 && size.h > 0 ? (
@@ -102,6 +112,9 @@ export default function ASCIIText({
           // Re-mount when measured size changes drastically so canvas rebuilds.
           key={`${Math.round(size.w)}x${Math.round(size.h)}`}
           source={{ uri: url }}
+          onError={() => setFailed(true)}
+          onHttpError={() => setFailed(true)}
+          renderError={() => <View />}
           style={styles.webview}
           scrollEnabled={false}
           bounces={false}
@@ -123,4 +136,6 @@ export default function ASCIIText({
 const styles = StyleSheet.create({
   wrap: { width: "100%", height: 140, backgroundColor: "transparent" },
   webview: { flex: 1, width: "100%", height: "100%", backgroundColor: "transparent" },
+  fallback: { justifyContent: "center" },
+  fallbackText: { fontSize: 52, fontWeight: "900", letterSpacing: -2 },
 });
