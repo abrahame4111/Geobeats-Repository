@@ -4,7 +4,7 @@
  * itself targets iOS 15.1.  Keep those pod targets aligned during `expo
  * prebuild` so a fresh iOS project builds on current Xcode releases.
  */
-const { withAppDelegate, withInfoPlist, withPodfile } = require('@expo/config-plugins');
+const { withAppDelegate, withInfoPlist, withPodfile, withXcodeProject } = require('@expo/config-plugins');
 
 const MARKER = '# GeoBeats: keep CocoaPods compatible with Xcode 27';
 const POD_INSTALL_HOOK = `
@@ -85,6 +85,20 @@ module.exports = function withIosXcode27(config) {
       .replace('  var window: UIWindow?', '  public var window: UIWindow?')
       .replace(launchWindow, '')
       .replace('  // Linking API', `${sceneLifecycle}  // Linking API`);
+    return config;
+  });
+
+  config = withXcodeProject(config, (config) => {
+    // Xcode 27 enables script sandboxing by default. CocoaPods' generated
+    // resource-copy phase writes a temporary manifest under Pods/, so it must
+    // be opted out for the generated application target.
+    const configurations = config.modResults.pbxXCBuildConfigurationSection();
+    for (const key of Object.keys(configurations)) {
+      const buildConfiguration = configurations[key];
+      if (buildConfiguration && buildConfiguration.buildSettings) {
+        buildConfiguration.buildSettings.ENABLE_USER_SCRIPT_SANDBOXING = 'NO';
+      }
+    }
     return config;
   });
 
