@@ -60,7 +60,7 @@ export default function PeopleSearch({ auth, query, friends, onFriendsChanged, o
       try {
         const p = await lookupPerson(auth, trimmed);
         if (myReq !== reqIdRef.current) return;
-        setResult(p);
+        setResult(p.exact);
       } catch (e: any) {
         if (myReq !== reqIdRef.current) return;
         setResult(null);
