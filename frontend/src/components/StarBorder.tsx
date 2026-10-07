@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { Platform, StyleSheet, View, ViewStyle } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { WebView } from "react-native-webview";
 import { BACKEND_URL } from "../api";
 
@@ -38,6 +38,7 @@ export default function StarBorder({
   width,
   testID,
 }: Props) {
+  const [failed, setFailed] = useState(false);
   // Estimate width based on label length when not provided. Tuned for the
   // 14px / 900-weight / 1.5px letter-spacing label.
   const estimatedWidth = Math.max(
@@ -90,6 +91,21 @@ export default function StarBorder({
     );
   }
 
+  if (failed) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={busy}
+        onPress={onPress}
+        testID={testID}
+        style={[styles.fallback, { height, width: pillWidth, borderColor: color }, style]}
+      >
+        {busy ? <ActivityIndicator color={color} /> : <Text style={styles.label}>{label}</Text>}
+      </Pressable>
+    );
+  }
+
   return (
     <View
       style={[{ height, width: pillWidth, alignSelf: "center" }, style]}
@@ -99,6 +115,9 @@ export default function StarBorder({
         // Re-key on busy/label so the WebView reflects the new state cleanly.
         key={`${busy ? 1 : 0}-${label}`}
         source={{ uri: url }}
+        onError={() => setFailed(true)}
+        onHttpError={() => setFailed(true)}
+        renderError={() => <View />}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
@@ -118,6 +137,11 @@ export default function StarBorder({
 }
 
 const styles = StyleSheet.create({
+  fallback: {
+    alignSelf: "center", alignItems: "center", justifyContent: "center",
+    borderRadius: 25, borderWidth: 1, backgroundColor: "#181022",
+  },
+  label: { color: "#fdf9f3", fontSize: 13, fontWeight: "900", letterSpacing: 1.5 },
   webview: {
     flex: 1,
     width: "100%",

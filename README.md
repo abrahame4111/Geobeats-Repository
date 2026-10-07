@@ -4,6 +4,11 @@ Expo (SDK 54, React Native 0.81, expo-router) app: friends on a live map and wha
 
 Package: `live.geobeats.app`. `backend/` is the previous FastAPI + MongoDB backend, included temporarily for local testing while the backend is rebuilt.
 
+For an iPhone build that runs without Metro or Xcode, follow
+[iOS cloud testing](docs/IOS_CLOUD_TESTING.md). This branch includes EAS preview
+build profiles and a Render backend deployment template; hosting credentials
+and Apple device registration are still required.
+
 ## Local testing
 
 ### 1. Backend (Python 3.11+, MongoDB running locally)

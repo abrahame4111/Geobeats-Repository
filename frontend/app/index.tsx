@@ -27,10 +27,14 @@ export default function Login() {
 
   useEffect(() => {
     (async () => {
-      const a = await loadAuth();
-      if (a?.access_token && a.expires_at > Date.now()) {
-        router.replace("/map");
-      } else {
+      try {
+        const a = await loadAuth();
+        if (a?.access_token && a.expires_at > Date.now()) {
+          router.replace("/map");
+        }
+      } catch {
+        setErr("Could not restore your previous session. Please sign in again.");
+      } finally {
         setLoading(false);
       }
     })();
