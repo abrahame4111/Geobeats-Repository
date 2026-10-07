@@ -250,11 +250,12 @@ function buildHtml(apiKey: string): string {
 function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, onClusterPress, mapStyle = "geobeats" }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
-    const mbxToken = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "";
+    const mbxToken = ((process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "").trim();
+    const hasMapboxToken = /^pk\.[A-Za-z0-9._-]+$/.test(mbxToken);
     // Cache-buster + style key in the URL so when the user toggles theme the
     // WebView remounts to a fresh /api/mapbox.html with the new base style.
     const cacheBust = `&_v=${Date.now()}`;
-    if (mbxToken) {
+    if (hasMapboxToken) {
       return `${base}/api/mapbox.html?token=${encodeURIComponent(mbxToken)}&style=${encodeURIComponent(mapStyle)}${cacheBust}`;
     }
     return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}${cacheBust}`;
