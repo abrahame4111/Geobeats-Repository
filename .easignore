@@ -16,6 +16,7 @@ frontend/android/
 frontend/ios/
 .env
 .env.*
+*.env
 !.env.example
 *.p8
 *.p12
