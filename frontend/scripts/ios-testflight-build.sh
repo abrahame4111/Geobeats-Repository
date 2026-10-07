@@ -28,6 +28,9 @@ npx tsc --noEmit --pretty false
 
 echo
 echo "3/3 starting EAS build and TestFlight upload"
+if [[ -n "${WHAT_TO_TEST}" ]]; then
+  echo "Skipping TestFlight changelog note; EAS changelog submission requires an Expo Enterprise plan."
+fi
 "${EAS_CMD[@]}" build \
   --platform ios \
   --profile "${PROFILE}" \
@@ -35,8 +38,7 @@ echo "3/3 starting EAS build and TestFlight upload"
   --non-interactive \
   --no-wait \
   --build-logger-level warn \
-  --message "${MESSAGE}" \
-  --what-to-test "${WHAT_TO_TEST}"
+  --message "${MESSAGE}"
 
 echo
 echo "Build queued. Check concise status with:"
