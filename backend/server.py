@@ -755,7 +755,7 @@ async def spotify_callback(request: Request, code: str = Query(...), state: Opti
                     mobile_redirect = base64.urlsafe_b64decode(state.encode()).decode()
                     sep = "&" if "?" in mobile_redirect else "?"
                     redirect_url = f"{mobile_redirect}{sep}{ue(auth_params)}"
-                    logger.info(f"Mobile OAuth redirect → {mobile_redirect}")
+                    logger.info("Mobile OAuth redirect issued")
                     return RedirectResponse(url=redirect_url)
                 except Exception:
                     pass
@@ -763,11 +763,11 @@ async def spotify_callback(request: Request, code: str = Query(...), state: Opti
             # Web fallback — route to /auth-success (handles both popup
             # postMessage-to-opener and top-level redirect flows).
             redirect_url = f"{_resolve_public_base(request)}/auth-success?{ue(auth_params)}"
-            logger.info(f"Web OAuth redirect → {redirect_url}")
+            logger.info("Web OAuth redirect issued")
             return RedirectResponse(url=redirect_url)
 
     except Exception as e:
-        logger.error(f"OAuth callback error: {e}")
+        logger.error("OAuth callback error: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail=str(e))
 
 

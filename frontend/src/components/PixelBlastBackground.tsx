@@ -47,6 +47,7 @@ type Props = {
 export default function PixelBlastBackground(props: Props) {
   const { width: winW, height: winH } = useWindowDimensions();
   const [size, setSize] = useState<{ w: number; h: number }>({ w: winW, h: winH });
+  const [failed, setFailed] = useState(false);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -111,6 +112,10 @@ export default function PixelBlastBackground(props: Props) {
     })();
   `;
 
+  if (failed) {
+    return <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#05050A" }]} pointerEvents="none" />;
+  }
+
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none" onLayout={onLayout}>
       <WebView
@@ -118,6 +123,9 @@ export default function PixelBlastBackground(props: Props) {
         // can rebuild buffers cleanly.
         key={`${Math.round(size.w)}x${Math.round(size.h)}`}
         source={{ uri: url }}
+        onError={() => setFailed(true)}
+        onHttpError={() => setFailed(true)}
+        renderError={() => <View />}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
