@@ -10,6 +10,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test:ios-config": "node --test tests/ios-config.test.js",
+    "ios:testflight:build": "bash scripts/ios-testflight-build.sh",
+    "ios:testflight:status": "bash scripts/ios-testflight-status.sh",
     "eas-build-pre-install": "node scripts/check-cloud-env.js"
   },
   "dependencies": {
