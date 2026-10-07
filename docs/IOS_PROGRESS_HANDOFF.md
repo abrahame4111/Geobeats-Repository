@@ -80,10 +80,24 @@ Both passed after the iOS OAuth fix.
 From `frontend/`:
 
 ```bash
-npx eas-cli@latest submit:view 52ce08cb-3e06-44da-b9fa-40267a426ffc --json
+npm run ios:testflight:status
 ```
 
-Only summarize the status fields. Do not paste full signed artifact/log URLs into issues or chat unless needed.
+This prints only concise build/submission fields. Do not paste full signed artifact/log URLs into issues or chat unless needed.
+
+## How to start the next TestFlight build
+
+From `frontend/`:
+
+```bash
+npm run ios:testflight:build
+```
+
+The script runs targeted validation, starts an iOS production EAS build, enables auto-submit to TestFlight, and uses `--no-wait` to avoid long terminal logs. Check progress later with:
+
+```bash
+npm run ios:testflight:status
+```
 
 ## Next test plan
 
