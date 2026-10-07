@@ -150,7 +150,6 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(5,5,12,0.85)",
-    backdropFilter: "blur(12px)" as any,
   },
   center: {
     flex: 1,
