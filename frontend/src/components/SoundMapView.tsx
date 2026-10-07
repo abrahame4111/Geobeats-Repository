@@ -250,11 +250,12 @@ function buildHtml(apiKey: string): string {
 function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, onClusterPress, mapStyle = "geobeats" }: Props, ref: React.Ref<SoundMapHandle>) {
   const mapUrl = useMemo(() => {
     const base = (process.env.EXPO_PUBLIC_BACKEND_URL as string) || "";
-    const mbxToken = (process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "";
+    const mbxToken = ((process.env.EXPO_PUBLIC_MAPBOX_TOKEN as string) || "").trim();
+    const hasMapboxToken = /^pk\.[A-Za-z0-9._-]+$/.test(mbxToken);
     // Cache-buster + style key in the URL so when the user toggles theme the
     // WebView remounts to a fresh /api/mapbox.html with the new base style.
     const cacheBust = `&_v=${Date.now()}`;
-    if (mbxToken) {
+    if (hasMapboxToken) {
       return `${base}/api/mapbox.html?token=${encodeURIComponent(mbxToken)}&style=${encodeURIComponent(mapStyle)}${cacheBust}`;
     }
     return `${base}/api/map.html?key=${encodeURIComponent(apiKey)}${cacheBust}`;
@@ -291,6 +292,18 @@ function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, onClust
     if (myLocation) postToMap({ type: "center", lat: myLocation.lat, lng: myLocation.lng });
   }, [myLocation?.lat, myLocation?.lng]);
 
+  // Keep Hook ordering identical on web and native. The previous web-only
+  // conditional Hook violated React's Rules of Hooks, which can cause an
+  // unstable render tree when this component is shared across platforms.
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const onMsg = (e: MessageEvent) => {
+      if (typeof e.data === "string") handleMessage(e.data);
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
   const handleMessage = (dataRaw: string) => {
     try {
       const d = JSON.parse(dataRaw);
@@ -317,13 +330,6 @@ function SoundMapViewInner({ apiKey, markers, myLocation, onMarkerPress, onClust
   };
 
   if (Platform.OS === "web") {
-    useEffect(() => {
-      const onMsg = (e: MessageEvent) => {
-        if (typeof e.data === "string") handleMessage(e.data);
-      };
-      window.addEventListener("message", onMsg);
-      return () => window.removeEventListener("message", onMsg);
-    }, []);
     return (
       <View style={styles.container}>
         {React.createElement("iframe", {

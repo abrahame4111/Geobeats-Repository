@@ -1,0 +1,74 @@
+/**
+ * Xcode 27 no longer supports simulator targets below iOS 15.  A few
+ * transitive CocoaPods still declare older targets, even though GeoBeats
+ * itself targets iOS 15.1.  Keep those pod targets aligned during `expo
+ * prebuild` so a fresh iOS project builds on current Xcode releases.
+ */
+const { withAppDelegate, withInfoPlist, withPodfile, withXcodeProject } = require('@expo/config-plugins');
+const { withSceneLifecycle } = require('./ios-scene-lifecycle');
+
+const MARKER = '# GeoBeats: keep CocoaPods compatible with Xcode 27';
+const POD_INSTALL_HOOK = `
+    ${MARKER}
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |build_config|
+        build_config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+      end
+    end
+`;
+
+module.exports = function withIosXcode27(config) {
+  config = withInfoPlist(config, (config) => {
+    // Apps built with Xcode 27 must use UIKit's scene lifecycle.  Expo's
+    // current generated AppDelegate is application-lifecycle-only. A separate
+    // scene delegate must use the factory initialized by the app delegate.
+    config.modResults.UIApplicationSceneManifest = {
+      UIApplicationSupportsMultipleScenes: false,
+      UISceneConfigurations: {
+        UIWindowSceneSessionRoleApplication: [
+          {
+            UISceneConfigurationName: 'Default Configuration',
+            UISceneDelegateClassName: '$(PRODUCT_MODULE_NAME).SceneDelegate',
+          },
+        ],
+      },
+    };
+    return config;
+  });
+
+  config = withAppDelegate(config, (config) => {
+    config.modResults.contents = withSceneLifecycle(config.modResults.contents);
+    return config;
+  });
+
+  config = withXcodeProject(config, (config) => {
+    // Xcode 27 enables script sandboxing by default. CocoaPods' generated
+    // resource-copy phase writes a temporary manifest under Pods/, so it must
+    // be opted out for the generated application target.
+    const configurations = config.modResults.pbxXCBuildConfigurationSection();
+    for (const key of Object.keys(configurations)) {
+      const buildConfiguration = configurations[key];
+      if (buildConfiguration && buildConfiguration.buildSettings) {
+        buildConfiguration.buildSettings.ENABLE_USER_SCRIPT_SANDBOXING = 'NO';
+      }
+    }
+    return config;
+  });
+
+  return withPodfile(config, (config) => {
+    const podfile = config.modResults.contents;
+
+    if (podfile.includes(MARKER)) {
+      return config;
+    }
+
+    const postInstallEnd = podfile.lastIndexOf('  end\nend');
+    if (postInstallEnd === -1) {
+      throw new Error('Could not find the CocoaPods post_install hook.');
+    }
+
+    config.modResults.contents =
+      podfile.slice(0, postInstallEnd) + POD_INSTALL_HOOK + podfile.slice(postInstallEnd);
+    return config;
+  });
+};

@@ -16,8 +16,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "live.geobeats.app",
+      "buildNumber": "105",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Identify songs playing around you",
+        "NSLocationWhenInUseUsageDescription": "GeoBeats uses your location to place you on the live map and share it with friends when sharing is enabled.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -65,6 +67,13 @@
       ],
       "expo-web-browser",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "GeoBeats uses your location to place you on the live map and share it with friends when sharing is enabled."
+        }
+      ],
+      "./plugins/with-ios-xcode27",
+      [
         "expo-font",
         {
           "fonts": [
@@ -79,11 +88,11 @@
     "experiments": {
       "typedRoutes": true
     },
-    "owner": "workwork",
     "extra": {
       "eas": {
         "projectId": "58113eb6-df79-48cb-b65d-afa6623e5ccc"
       }
-    }
+    },
+    "owner": "workwork"
   }
 }

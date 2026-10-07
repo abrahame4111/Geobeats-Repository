@@ -18,6 +18,24 @@ import StarBorder from "../src/components/StarBorder";
 
 WebBrowser.maybeCompleteAuthSession();
 
+const MOBILE_AUTH_REDIRECT = "geobeats://auth-success";
+const LOGIN_URL_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
+}
+
 export default function Login() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -27,10 +45,14 @@ export default function Login() {
 
   useEffect(() => {
     (async () => {
-      const a = await loadAuth();
-      if (a?.access_token && a.expires_at > Date.now()) {
-        router.replace("/map");
-      } else {
+      try {
+        const a = await loadAuth();
+        if (a?.access_token && a.expires_at > Date.now()) {
+          router.replace("/map");
+        }
+      } catch {
+        setErr("Could not restore your previous session. Please sign in again.");
+      } finally {
         setLoading(false);
       }
     })();
@@ -107,11 +129,17 @@ export default function Login() {
           }
         }, 800);
       } else {
-        // Mobile / Expo Go – open in-app browser and capture redirect
-        const redirectUri = Linking.createURL("auth-success");
-        const url = await getLoginUrl({ mobile_redirect: redirectUri });
+        // Mobile / TestFlight – use the native app scheme directly so the
+        // Spotify callback can return to this app reliably.
+        const redirectUri = MOBILE_AUTH_REDIRECT;
+        const url = await withTimeout(
+          getLoginUrl({ mobile_redirect: redirectUri }),
+          LOGIN_URL_TIMEOUT_MS,
+          "Spotify login",
+        );
         const result = await WebBrowser.openAuthSessionAsync(url, redirectUri, {
           showInRecents: true,
+          preferEphemeralSession: false,
         });
         if (result.type === "success" && (result as any).url) {
           const parsed = parseTokenUrl((result as any).url);

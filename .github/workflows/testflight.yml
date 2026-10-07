@@ -47,11 +47,12 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Queue EAS production build and TestFlight upload
         working-directory: frontend
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          IOS_BUNDLE_ID: ${{ vars.IOSBUNDLEID }}
           WHAT_TO_TEST: ${{ inputs.what_to_test }}
         run: npm run ios:testflight:build -- "${{ inputs.profile }}"
