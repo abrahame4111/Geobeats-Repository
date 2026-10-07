@@ -99,6 +99,10 @@ The script runs targeted validation, starts an iOS production EAS build, enables
 npm run ios:testflight:status
 ```
 
+There is also a manual GitHub Action named **TestFlight build**. It requires a repository secret named `EXPO_TOKEN`. Do not store Render runtime secrets or Spotify/MongoDB secrets in GitHub unless a workflow truly needs them.
+
+The **PR safety** workflow runs a redacted secret scan plus iOS config and TypeScript checks. Its scanner reports only file names, line numbers, and rule names; it does not print matching values.
+
 ## Next test plan
 
 After Apple processing finishes and build `107` appears in TestFlight:
